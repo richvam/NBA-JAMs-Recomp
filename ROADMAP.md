@@ -839,3 +839,4 @@ green on its processor.
   emulation shows up as desyncs between a phone and a PC and nowhere else.
 * **Touch controls are a compromise** for a game built around a stick and turbo button; a
   controller is the intended way to play on Android.
+
