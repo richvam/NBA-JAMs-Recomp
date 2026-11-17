@@ -318,7 +318,11 @@ void upnp_mapper::run(u16 port)
 	sockaddr_in to{};
 	to.sin_family = AF_INET;
 	to.sin_port = htons(u16(atoi(target.c_str() + target.find(':') + 1)));
-	inet_pton(AF_INET, target.substr(0, target.find(':')).c_str(), &to.sin_addr);
+	{
+		unsigned a = 0, b = 0, c = 0, d = 0;      // no inet_pton: older MinGW headers lack it
+		sscanf(target.c_str(), "%u.%u.%u.%u", &a, &b, &c, &d);
+		to.sin_addr.s_addr = htonl(a << 24 | (b & 255) << 16 | (c & 255) << 8 | (d & 255));
+	}
 	sock_t u = socket(AF_INET, SOCK_DGRAM, 0);
 	if (u == kBad) return fail("no socket");
 	{
