@@ -280,6 +280,7 @@ void update_mods(screen &s, const mods_state &st, int mod)
 			lines(m.description, 5);
 			items.push_back(toggle(md_enabled, "Mod enabled", m.enabled));
 			items.push_back(picker(md_apply, "Apply to", { "All games", "Selected games" }, m.all_games ? 0 : 1));
+			if (st.in_game) lines("On or off and the games apply next game.", 2);
 			std::string group = "\x01";
 			for (size_t i = 0; i < m.options.size() && i < 50; i++)
 			{
@@ -287,7 +288,7 @@ void update_mods(screen &s, const mods_state &st, int mod)
 				if (o.group != group) { group = o.group; items.push_back(header(group.empty() ? "OPTIONS" : group)); }
 				if (o.kind == 2)
 				{
-					items.push_back(label(o.label + (o.greyed ? " (off: another option is set)" : "")));
+					items.push_back(label(o.label + (o.greyed ? " (off: another option is set)" : "") + (st.in_game && !o.live ? " (next game)" : "")));
 					for (int p = 0; p < 4; p++)
 					{
 						item t = toggle(md_ply0 + 4 * int(i) + p, "   Player " + std::to_string(p + 1), (o.value >> p) & 1);
@@ -299,6 +300,7 @@ void update_mods(screen &s, const mods_state &st, int mod)
 				item it = o.kind == 1 ? toggle(md_opt0 + int(i), o.label, o.value != 0) : picker(md_opt0 + int(i), o.label, o.values, o.value);
 				it.disabled = o.greyed;
 				items.push_back(it);
+				if (st.in_game && !o.live) items.push_back(label("   applies next game"));
 			}
 			items.push_back(header("GAMES"));
 			for (size_t i = 0; i < m.games.size(); i++)

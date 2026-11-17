@@ -5,6 +5,7 @@
 #include <memory>
 #include "mods.h"
 #include <cstdio>
+#include <cstring>
 #include <fstream>
 #include <iterator>
 
@@ -69,6 +70,9 @@ int main(int argc, char **argv)
 	const char *watch = getenv("WATCH");
 	bool play = getenv("PLAY") != nullptr;
 	int p0 = getenv("PLAYAT") ? atoi(getenv("PLAYAT")) : 400;   // first frame of the presses
+	// LIVE=<frame>:<id>=<value> changes an option at that frame, as the pause menu does (roadmap 1.4)
+	const char *live = getenv("LIVE");
+	int live_at = live ? atoi(live) : -1;
 	for (int f = 0; f < frames; f++)
 	{
 		cabinet_inputs in{};
@@ -79,6 +83,22 @@ int main(int argc, char **argv)
 			in.p[0].shoot = getenv("NOPICK") == nullptr && f >= p0 + 800 && t >= 20 && t < 24;
 		}
 		m.set_inputs(in);
+		if (f == live_at)
+		{
+			std::string kv = strchr(live, ':') + 1;
+			auto eq = kv.find('=');
+			for (auto &sc : mods.mods())
+				for (auto &o : sc.options)
+					if (o.id == kv.substr(0, eq))
+						for (size_t i = 0; i < o.values.size(); i++)
+							if (o.values[i] == atof(kv.c_str() + eq + 1))
+							{
+								auto before = mod_manager::used_values(sc);
+								sc.opt[o.id] = int(i);
+								mods.options_changed(sc, before);
+								printf("  frame %6d  option %s set to %g%s\n", f, o.id.c_str(), o.values[i], o.live ? " (live)" : " (next game)");
+							}
+		}
 		m.run_frame();
 		mods.frame();
 		if (watch && f % 500 == 0)
