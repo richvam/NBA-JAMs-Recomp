@@ -153,16 +153,28 @@ Up to four players, each on their own computer.
    or `N`).
 2. One player chooses **Host a game** and waits in the lobby, which lists who has joined,
    then chooses **Start the game**. They are player 1.
-3. The others choose **Join a game** and type the host's address, on the on-screen keyboard
-   with a controller or on the keyboard (Ctrl+V pastes). They become players 2, 3 and 4 in
-   the order they arrive. A host joined before is listed under **Join again**.
+3. The host's lobby shows a **code** such as `6BR0E-7C2YD`. **Copy my code** puts it on the
+   clipboard to send in a chat.
+4. The others choose **Join a game** and type the code (or, on the same network, the host's
+   address), on the on-screen keyboard with a controller or on the keyboard (Ctrl+V
+   pastes). They become players 2, 3 and 4 in the order they arrive. A host joined before
+   is listed under **Join again**.
+5. If a player gets no answer after a few seconds, the screen shows that player's own code.
+   They send it to the host, who chooses **Let a player in** and types it.
 
 Good to know:
 
 * Everybody plays with their own player 1 keys or first controller.
 * Everybody needs the same ROMs and the same version of the program; you are told if they differ.
-* Over the internet the host forwards UDP port 7845 on their router, or everybody joins a
-  virtual network (Tailscale, ZeroTier, Radmin VPN).
+* Over the internet no router settings are needed in most homes. When hosting, the program
+  asks the router to open UDP port 7845 (UPnP). If the router does not allow that, the
+  codes let the two computers reach each other directly ("hole punching").
+  * Codes are found by asking a public STUN server (`stun.l.google.com` by default, the
+    `stun_server=` setting), which sees your IP address. Both can be switched off on the
+    Online screen.
+  * It cannot work when both routers are of the strictest kind (common on mobile networks
+    and at some workplaces). Then the host forwards UDP port 7845 by hand, or everybody
+    joins a virtual network (Tailscale, ZeroTier, Radmin VPN).
 * Input delay: 3 to 4 on a home network, 5 to 7 over the internet. If the game keeps
   stopping with "Waiting for the network...", raise it (on the Online screen or in the lobby).
 * The pause menu opens online too, but the game goes on for everybody while it is open.
@@ -201,7 +213,7 @@ nothing. To write your own, see [`mods/README.txt`](dist/NBAJamRecomp/mods/READM
 | A controller does nothing | Open **Controls**: the top line shows the pad the program sees. Select an action and press the button you want. |
 | I cannot find my saves or settings | Open **About**: the "Data" line shows the folder. |
 | Online: "your ROMs (or Lua mods) are not the same as the host's" | Use the same ROM files and switch the same mods on, with the same options. |
-| Online: the others cannot join | The host's UDP port 7845 must be reachable: forward it on the router or use a virtual network. |
+| Online: the others cannot join | Join with the host's code, not a `10.`, `192.168.` or `172.16`-`31` address: those only work on the same network. If there is still no answer, the player sends their own code and the host chooses **Let a player in**. If that fails too, forward UDP port 7845 on the host's router or use a virtual network. |
 | The menu never mentions new versions | News needs an internet connection and "News and updates: on". With no connection it stays quiet. |
 
 Something else? Open an issue on this repository and say which game and which version

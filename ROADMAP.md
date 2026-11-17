@@ -607,8 +607,8 @@ What this buys and what it does not:
 ## What exists today
 
 * Lockstep with input delay over UDP, star topology, up to four players, one game per
-  host. The host must forward UDP port 7845 or everyone must use a virtual LAN. Joining
-  means typing the host's IP address.
+  host. Joining means typing the host's code or IP address. Since N2.1 and the first part
+  of N2.2 (pulled forward, below), most homes need neither a port forward nor a virtual LAN.
 * Every game starts from power-on on all machines with the same NVRAM and settings.
 * The emulator has no save states: `save_item` in `src/emu/emu.h` is an empty stub. So
   nobody can join a game in progress, reconnect after a drop, or recover from a desync.
@@ -640,6 +640,29 @@ Opus.
 | N2.3 | **Peer relay:** when two members cannot connect directly, a third member both can reach forwards their packets. Chosen automatically, shown in the room, bandwidth capped. | Symmetric-to-symmetric pair plays through a relay in the simulator |
 | N2.4 | **Connection report:** each player sees their own connection type (open, moderate, strict) and, per opponent, ping, jitter and whether the path is direct or relayed, as the wired and wireless icons in the reference. | Screenshot; values match the simulator's settings |
 | N2.5 | **Mesh for four players:** inputs go directly between all players instead of through the host where that is faster, falling back to the host as hub. | `nettest` with four peers at uneven latencies: delay follows the worst direct pair, not the sum through the host |
+
+**Status (pulled forward at the owner's request on 2026-11-17, after a first try from two
+places stopped at "Waiting for an answer"):** N2.1 is done for UPnP IGD: when hosting, the
+program finds the router (SSDP), asks it to forward the UDP port (lease 3600 s renewed every
+20 minutes, or permanent when the router only takes that), reads its public address, and
+removes the forward when the session ends. NAT-PMP and PCP are not done. N2.2 is done in
+part: STUN through the game's own socket gives each computer a **connection code** (public
+address and port as ten letters and digits); the player joins with the host's code, and if no
+answer comes the host lets them in by the player's code ("Let a player in"), which punches
+both ways; a player also follows a host whose router answers from another port. The STUN
+question is repeated every 20 s while waiting, which keeps the mapping open. Instead of the
+meeting point (N3) the codes are exchanged by the players themselves (a chat); IPv6 is not
+done. UPnP and STUN can be switched off on the Online screen; the STUN server is a setting
+(`stun.l.google.com:19302` by default) and the help says it sees the player's IP address.
+`nattest` (14 checks, in CI): codes, STUN messages, UPnP against a test router run in the
+test (mapping, removal, a router that only takes permanent forwards, a device without the
+service, no router), and the router matrix of N2.2's check: 12 of 16 pairs of full cone,
+restricted, port restricted and symmetric routers connect by codes, and the 4 that cannot
+(symmetric with port restricted or symmetric) do not; a host with a forwarded port is joined
+by its code alone from behind any router. Against the real internet: `nattest --stun` gave the
+same public address as a web service. **Not checked:** a real router's UPnP (the owner's
+router was not changed from here), and two real computers in different places; that is
+the owner's test.
 
 ## Phase N3: meeting point
 

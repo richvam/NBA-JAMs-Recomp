@@ -26,13 +26,16 @@ class udp_socket
 {
 public:
 	~udp_socket() { close(); }
-	bool open(u16 port, std::string &err);        // port 0 = any
+	bool open(u16 port, std::string &err, u32 bind_ip = 0);   // port 0 = any; bind_ip 0 = every interface
 	void close();
 	bool is_open() const { return m_fd >= 0; }
 	void send(const net_addr &to, const void *data, size_t len);
 	int recv(net_addr &from, void *data, size_t cap);   // -1 when nothing pending
 	static bool resolve(const std::string &host, u16 port, net_addr &out, std::string &err);
 	double loss = 0.0;                             // test hook: drop this fraction of sends
+	// test hook (the NAT simulator in nattest): when set, every packet goes to `via` with the
+	// real destination in front (6 bytes), and packets from `via` carry the real source
+	net_addr via;
 private:
 	long long m_fd = -1;
 	u32 m_lossrng = 12345;
@@ -49,7 +52,7 @@ public:
 	~netplay();
 
 	bool host(u16 port, std::string &err);
-	bool join(const std::string &host, u16 port, std::string &err);
+	bool join(const std::string &host, u16 port, std::string &err);   // host: an address, a name or a connection code (port ignored then)
 	void stop(const char *reason = nullptr);      // sends BYE
 
 	void poll();                                  // receive + periodic sends; call every loop iteration
@@ -87,6 +90,18 @@ public:
 
 	udp_socket &socket() { return m_sock; }
 
+	// --- reaching players behind routers (roadmap N2.2, first part) ---
+	// STUN through the game socket: the address and port the internet sees for it. Asked
+	// again every 20 s while waiting, which also keeps the router's mapping open.
+	void stun_begin(const net_addr &server);
+	enum class stun_state { off, asking, found, failed };
+	stun_state stun_status() const { return m_stun; }
+	net_addr public_addr() const { return m_public; }
+	// host: send to a player's address (from their code) for 60 s so the host's router lets
+	// their packets in; the player's own packets to the host do the same on their side
+	void invite(const net_addr &player);
+	int invites() const { return int(m_invites.size()); }
+
 private:
 	struct peer
 	{
@@ -111,6 +126,13 @@ private:
 	bool has_input(int slot, u32 f) const;
 
 	udp_socket m_sock;
+	net_addr m_stun_server, m_public;
+	stun_state m_stun = stun_state::off;
+	u8 m_stun_tx[12] = {};
+	u32 m_stun_t = 0, m_stun_tries = 0;
+	struct invite_t { net_addr to; u32 until; };
+	std::vector<invite_t> m_invites;
+	void tick_stun(u32 now);
 	mode m_mode = mode::off;
 	phase m_phase = phase::lobby;
 	std::string m_error;

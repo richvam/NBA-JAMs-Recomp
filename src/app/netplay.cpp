@@ -1,5 +1,6 @@
 // netplay.cpp - see netplay.h
 #include "netplay.h"
+#include "nat.h"
 
 #include <algorithm>
 #include <chrono>
@@ -59,7 +60,7 @@ std::string net_addr_str(const net_addr &a)
 	return b;
 }
 
-bool udp_socket::open(u16 port, std::string &err)
+bool udp_socket::open(u16 port, std::string &err, u32 bind_ip)
 {
 	sock_init();
 	close();
@@ -78,7 +79,7 @@ bool udp_socket::open(u16 port, std::string &err)
 	setsockopt(decltype(socket(0, 0, 0))(m_fd), SOL_SOCKET, SO_REUSEADDR, (const char *)&one, sizeof(one));
 	sockaddr_in a{};
 	a.sin_family = AF_INET;
-	a.sin_addr.s_addr = htonl(INADDR_ANY);
+	a.sin_addr.s_addr = htonl(bind_ip ? bind_ip : INADDR_ANY);
 	a.sin_port = htons(port);
 	if (bind(decltype(socket(0, 0, 0))(m_fd), (sockaddr *)&a, sizeof(a)) != 0)
 	{
@@ -105,6 +106,16 @@ void udp_socket::send(const net_addr &to, const void *data, size_t len)
 	}
 	sockaddr_in a{};
 	a.sin_family = AF_INET;
+	if (via.ip)
+	{
+		std::vector<u8> w(6 + len);
+		w[0] = u8(to.ip >> 24); w[1] = u8(to.ip >> 16); w[2] = u8(to.ip >> 8); w[3] = u8(to.ip); w[4] = u8(to.port >> 8); w[5] = u8(to.port);
+		memcpy(w.data() + 6, data, len);
+		a.sin_addr.s_addr = htonl(via.ip);
+		a.sin_port = htons(via.port);
+		sendto(decltype(socket(0, 0, 0))(m_fd), (const char *)w.data(), int(w.size()), 0, (sockaddr *)&a, sizeof(a));
+		return;
+	}
 	a.sin_addr.s_addr = htonl(to.ip);
 	a.sin_port = htons(to.port);
 	sendto(decltype(socket(0, 0, 0))(m_fd), (const char *)data, int(len), 0, (sockaddr *)&a, sizeof(a));
@@ -119,6 +130,14 @@ int udp_socket::recv(net_addr &from, void *data, size_t cap)
 	if (n < 0) return -1;
 	from.ip = ntohl(a.sin_addr.s_addr);
 	from.port = ntohs(a.sin_port);
+	if (via.ip && from == via && n >= 6)
+	{
+		u8 *b = (u8 *)data;
+		from.ip = u32(b[0]) << 24 | u32(b[1]) << 16 | u32(b[2]) << 8 | b[3];
+		from.port = u16(b[4] << 8 | b[5]);
+		memmove(b, b + 6, size_t(n - 6));
+		n -= 6;
+	}
 	return n;
 }
 
@@ -226,7 +245,7 @@ bool netplay::join(const std::string &host, u16 port, std::string &err)
 {
 	stop();
 	net_addr a;
-	if (!udp_socket::resolve(host, port, a, err)) return false;
+	if (!net_code_parse(host, a) && !udp_socket::resolve(host, port, a, err)) return false;
 	reset_state();
 	if (!m_sock.open(0, err)) return false;
 	m_mode = mode::client;
@@ -249,6 +268,8 @@ void netplay::stop(const char *reason)
 	}
 	m_sock.close();
 	m_mode = mode::off;
+	m_stun = stun_state::off;
+	m_invites.clear();
 	m_phase = phase::ended;
 	if (reason) m_error = reason;
 }
@@ -383,9 +404,27 @@ void netplay::poll()
 	net_addr from;
 	int n;
 	while ((n = m_sock.recv(from, buf, sizeof(buf))) >= 0)
+	{
 		if (n >= 10 && buf[1] == MAGIC) handle(from, buf, n);
+		else if (m_stun != stun_state::off && from == m_stun_server)
+		{
+			net_addr pub;
+			if (stun_parse(buf, n, m_stun_tx, pub)) { m_public = pub; m_stun = stun_state::found; m_stun_tries = 0; }
+		}
+	}
 	if (m_mode == mode::off) return;
 	u32 now = net_now_ms();
+	tick_stun(now);
+	for (size_t i = 0; i < m_invites.size();)
+	{
+		if (int(now - m_invites[i].until) > 0) { m_invites.erase(m_invites.begin() + long(i)); continue; }
+		if (now - m_hello_t >= 100)
+		{
+			std::vector<u8> b{ u8('p'), MAGIC, 0, 0, 0, 0, 0, 0, 0, 0 };
+			send_raw(m_invites[i].to, b);
+		}
+		i++;
+	}
 	if (m_phase == phase::running && !m_merged.count(m_frame)) { if (!m_stall_since) m_stall_since = now; }
 	else m_stall_since = 0;
 	if (m_mode == mode::host) tick_host(now); else tick_client(now);
@@ -482,6 +521,9 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 	}
 
 	// ---- client ----
+	// Until the host has answered, a packet from the host's IP address on another port is the
+	// host behind a router that gives each destination its own port: talk to that port.
+	if (!pp && m_slot < 0 && !m_peers.empty() && from.ip == m_peers[0].addr.ip) { m_peers[0].addr = from; pp = &m_peers[0]; }
 	if (!pp) return;    // only talk to our host
 	pp->last_seen = now;
 	pp->echo = tsend;
@@ -624,9 +666,10 @@ void netplay::tick_host(u32 now)
 void netplay::tick_client(u32 now)
 {
 	peer &h = m_peers[0];
-	if (now - h.last_seen > TIMEOUT_MS)
+	// before the first answer the host may still have to let us in by our code: wait 2 minutes
+	if (now - h.last_seen > (m_slot < 0 ? 120000u : TIMEOUT_MS))
 	{
-		stop(m_slot < 0 ? "no answer from the host (IP, port or firewall?)" : "lost the connection with the host");
+		stop(m_slot < 0 ? "no answer from the host (address, port, or a router that lets nothing in?)" : "lost the connection with the host");
 		return;
 	}
 	bool fast = now - m_last_tick >= 8;
@@ -679,4 +722,37 @@ void netplay::tick_client(u32 now)
 		w.u32_(hf); w.u32_(hv);
 		send_raw(h.addr, w.b);
 	}
+}
+
+// ---------------------------------------------------------------------------
+// STUN and invitations (roadmap N2.2, first part)
+// ---------------------------------------------------------------------------
+void netplay::stun_begin(const net_addr &server)
+{
+	m_stun_server = server;
+	m_stun = stun_state::asking;
+	m_stun_t = 0;
+	m_stun_tries = 0;
+}
+
+void netplay::tick_stun(u32 now)
+{
+	if (m_stun == stun_state::off || m_stun == stun_state::failed) return;
+	// asking: every 300 ms, 10 times; found: once every 20 s, which keeps the mapping open
+	u32 every = m_stun == stun_state::found ? 20000 : 300;
+	if (m_stun_t && now - m_stun_t < every) return;
+	if (m_stun == stun_state::asking && m_stun_tries >= 10) { m_stun = stun_state::failed; return; }
+	m_stun_t = now;
+	m_stun_tries++;
+	static u32 seed = net_now_ms() * 2654435761u;
+	for (auto &b : m_stun_tx) { seed = seed * 1103515245u + 12345u; b = u8(seed >> 16); }
+	u8 req[20];
+	stun_request(req, m_stun_tx);
+	m_sock.send(m_stun_server, req, sizeof req);
+}
+
+void netplay::invite(const net_addr &player)
+{
+	for (auto &i : m_invites) if (i.to == player) { i.until = net_now_ms() + 60000; return; }
+	m_invites.push_back({ player, net_now_ms() + 60000 });
 }

@@ -415,8 +415,9 @@ screen make_online(const online_state &st)
 	t.name = "Play online";
 	panel play;
 	play.r = { 0.0f, 0.0f, 0.5f, 1.0f };
-	play.items = { button(on_host, "Host a game"), button(on_join, "Join a game"), header("CONNECTION"), button(on_address, "Address"),
-	               button(on_port, "UDP port"), slider(on_delay, "Delay", float(st.delay), 1, 10, 1) };
+	play.items = { button(on_host, "Host a game"), button(on_join, "Join a game"), header("CONNECTION"), button(on_address, "Address or code"),
+	               button(on_port, "UDP port"), slider(on_delay, "Delay", float(st.delay), 1, 10, 1),
+	               toggle(on_upnp, "Open the port (UPnP)", st.upnp), toggle(on_stun, "Find my code (STUN)", st.stun) };
 	panel help;
 	help.title = "How it works";
 	help.r = { 0.52f, 0.0f, 0.48f, 1.0f };
@@ -436,18 +437,24 @@ void update_online(screen &s, const online_state &st)
 	if (item *i = s.find(on_address)) i->value_text = st.typing == 1 ? st.typed + "_" : st.address.empty() ? "not set" : st.address;
 	if (item *i = s.find(on_port)) i->value_text = st.typing == 2 ? st.typed + "_" : std::to_string(st.port);
 	if (item *i = s.find(on_delay)) i->value = float(std::clamp(st.delay, 1, 10));
+	if (item *i = s.find(on_upnp)) i->on = st.upnp;
+	if (item *i = s.find(on_stun)) i->on = st.stun;
 	panel &help = s.tabs[0].panels[1];
 	const int px = int(s.panel_rect(1).w) - 30;
 	std::vector<item> items;
 	add_text(items, "The host picks the game and plays as player 1. Everybody needs the same ROMs.", px);
 	items.push_back(header("THE HOST"));
-	add_text(items, "Opens the UDP port on the router, or everybody uses a virtual LAN (Tailscale, ZeroTier, Radmin VPN).", px);
+	add_text(items, "Tells the others a code. The router's port is opened by UPnP when it allows it; if not, the host lets each player in by the player's own code.", px);
+	items.push_back(header("JOINING"));
+	add_text(items, "Type the host's code (or address). If no answer comes, send the host your code.", px);
+	items.push_back(header("STUN"));
+	add_text(items, "Finding a code asks " + (st.stun_server.empty() ? std::string("a STUN server") : st.stun_server) + ", which sees your IP address. Off: only addresses, as before.", px);
 	items.push_back(header("INPUT DELAY"));
 	add_text(items, "3 or 4 on a LAN, 5 to 7 over the internet. The host decides.", px);
 	help.items = items;
 	// under the connection: this computer's own address, for the host to tell the others
 	panel &play = s.tabs[0].panels[0];
-	play.items.resize(6);
+	play.items.resize(8);
 	if (!st.recent.empty())
 	{
 		play.items.push_back(header("JOIN AGAIN"));
@@ -468,8 +475,9 @@ screen make_lobby(const lobby_state &st)
 	who.r = { 0.0f, 0.0f, 1.0f, 0.38f };
 	panel acts;
 	acts.r = { 0.0f, 0.4f, 0.5f, 0.6f };
-	if (st.host) acts.items = { slider(lb_delay, "Delay", float(st.delay), 1, 10, 1), button(lb_start, "Start the game"), button(lb_leave, "Close the game") };
-	else acts.items = { button(lb_leave, "Leave") };
+	if (st.host) acts.items = { slider(lb_delay, "Delay", float(st.delay), 1, 10, 1), button(lb_start, "Start the game"), button(lb_invite, "Let a player in"),
+	                            button(lb_copy, "Copy my code"), button(lb_leave, "Close the game") };
+	else acts.items = { button(lb_copy, "Copy my code"), button(lb_leave, "Leave") };
 	panel info;
 	info.title = "This game";
 	info.r = { 0.52f, 0.4f, 0.48f, 0.6f };
@@ -492,21 +500,26 @@ void update_lobby(screen &s, const lobby_state &st)
 	{
 		who.title = "Players: " + std::to_string(st.players.size()) + " of 4";
 		for (auto &p : st.players) w.push_back(label(p.name + "   " + p.status));
+		if (st.inviting) w.push_back(label("Letting in " + std::to_string(st.inviting) + (st.inviting == 1 ? " player" : " players") + " by code..."));
 		if (st.players.size() < 2) { w.push_back(label("")); add_text(w, "Nobody has joined yet. You can start alone to try it.", int(s.panel_rect(0).w) - 30, 3); }
 		if (item *d = s.find(lb_delay)) d->value = float(std::clamp(st.delay, 1, 10));
 		i.push_back(header("GAME"));
 		add_text(i, st.game, px, 2);
 		i.push_back(header("TELL THE OTHERS"));
-		add_text(i, "Address: " + joined(st.local_ips, "not known"), px, 3);
-		i.push_back(label("UDP port: " + std::to_string(st.port)));
-		add_text(i, "Over the internet: your public or virtual LAN address.", px, 3);
+		i.push_back(label("Code: " + (st.code.empty() ? std::string("none") : st.code)));
+		add_text(i, st.code_note, px, 3);
+		add_text(i, "Same network: " + joined(st.local_ips, "not known") + ", port " + std::to_string(st.port), px, 3);
 	}
 	else
 	{
 		who.title = "Connection";
 		w.push_back(row("Host", st.address));
 		w.push_back(row("UDP port", std::to_string(st.port)));
-		if (st.slot < 0) w.push_back(label("Waiting for an answer..."));
+		if (st.slot < 0)
+		{
+			w.push_back(label("Waiting for an answer..."));
+			if (st.no_answer) add_text(w, "No answer yet. Send the host your code: " + (st.code.empty() ? std::string("(none found)") : st.code) + ". They choose Let a player in.", int(s.panel_rect(0).w) - 30, 3);
+		}
 		else
 		{
 			w.push_back(row("You are", "player " + std::to_string(st.slot + 1)));
@@ -516,6 +529,9 @@ void update_lobby(screen &s, const lobby_state &st)
 		}
 		i.push_back(header("GAME"));
 		add_text(i, "The host picks the game. It starts here when the host starts it.", px, 4);
+		i.push_back(header("YOUR CODE"));
+		i.push_back(label(st.code.empty() ? std::string("none") : st.code));
+		add_text(i, st.code_note, px, 3);
 		i.push_back(header("YOUR CONTROLS"));
 		add_text(i, "The player 1 keys, or the first controller.", px, 3);
 	}

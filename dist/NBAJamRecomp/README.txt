@@ -127,16 +127,25 @@ ONLINE PLAY
   Highlight the game and choose "Online game" in the menu (or X on a pad, N).
   * The host chooses "Host a game": they are player 1 and wait in the lobby,
     which lists who has joined. "Start the game" starts it.
-  * The others choose "Join a game" and type the host's address: on the
-    on-screen keyboard with a pad, or on the keyboard (Ctrl+V pastes). They
-    become players 2, 3 and 4 in order of arrival. Hosts joined before are
-    listed under "Join again".
+  * The host's lobby shows a code like 6BR0E-7C2YD ("Copy my code" copies
+    it). The others choose "Join a game" and type the code (on the same
+    network the host's address works too): on the on-screen keyboard with a
+    pad, or on the keyboard (Ctrl+V pastes). They become players 2, 3 and 4
+    in order of arrival. Hosts joined before are listed under "Join again".
+  * No answer after a few seconds: the player sends the host their own code
+    (shown on their screen); the host chooses "Let a player in" and types it.
   * Everybody plays with their player 1 controls (P1 keys or first pad).
   * Everybody needs the same ROMs; the app tells you if they differ.
   * Input delay: 3-4 on a LAN, 5-7 over the internet. If the game stalls now
     and then ("Waiting for the network..."), raise the delay.
-  * Over the internet the host must forward UDP port 7845 on the router, or
-    use a virtual LAN (Tailscale, ZeroTier, Radmin VPN).
+  * Over the internet most homes need no router settings: the program asks
+    the router to open UDP port 7845 (UPnP), and codes let two computers
+    reach each other directly when it does not. Codes come from a public
+    STUN server (stun.l.google.com unless stun_server= says otherwise),
+    which sees your IP address; both can be switched off on the Online
+    screen. When both routers are of the strictest kind (mobile networks,
+    some workplaces), forward UDP port 7845 by hand or use a virtual LAN
+    (Tailscale, ZeroTier, Radmin VPN).
   * The pause menu opens online too; the game goes on for everybody.
   * If "DESYNC" appears, leave (pause menu, "Leave the online game") and host
     the game again.
