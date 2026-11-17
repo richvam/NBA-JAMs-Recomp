@@ -34,6 +34,9 @@ constexpr float kIntegerUnusedWarning = 0.15f;
 // src_w x src_h: the game picture in pixels (400 x 254 today). true_wide: the running game
 // draws a wider picture itself (W3); its src_w already is that wider picture.
 view_rect compute_view(int win_w, int win_h, int src_w, int src_h, view_shape shape, view_scaling scaling, bool true_wide = false);
+// Where the 400 x 300 menus go (U7.2): 4:3, as large as fits; with tv_margins 5 % in from each
+// edge, for TVs that cut their edges off.
+view_rect menu_view(int win_w, int win_h, int menu_w, int menu_h, bool tv_margins);
 
 const char *view_shape_name(view_shape s);       // for messages and the settings file
 const char *view_scaling_name(view_scaling s);

@@ -110,6 +110,15 @@ void input::feed(const raw_event &e, unsigned now)
 	}
 	case raw_event::mouse_move:
 	{
+		// one motion on its own is not the mouse being used: a window that moves or goes
+		// fullscreen under a still pointer sends one, and it must not take the focus from a
+		// controller. Two within a quarter of a second are.
+		if (m_dev != device::mouse)
+		{
+			bool alone = m_last_move == 0 || now - m_last_move > 250;
+			m_last_move = now ? now : 1;
+			if (alone) break;
+		}
 		m_dev = device::mouse;
 		event o; o.ptr = event::hover; o.x = e.x; o.y = e.y;
 		m_q.push_back(o);

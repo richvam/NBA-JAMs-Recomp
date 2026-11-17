@@ -233,8 +233,10 @@ int main(int argc, char **argv)
 		rectf rt = slot_of(m, g_toast);
 		raw_event mm; mm.kind = raw_event::mouse_move; mm.x = rt.x + 10; mm.y = rt.y + 5;
 		mi.feed(mm, 0);
+		bool lone = !mi.next(e) && mi.last_device() != device::mouse;    // one motion alone: a window moving under a still pointer
+		mm.x += 1; mi.feed(mm, 16);
 		while (mi.next(e)) m.handle(e);
-		CHECK(m.focused()->id == g_toast && mi.last_device() == device::mouse, "mouse: hovering an item gives it the focus");
+		CHECK(lone && m.focused()->id == g_toast && mi.last_device() == device::mouse, "mouse: hovering an item gives it the focus; one motion alone (a window moving under a still pointer) does not");
 		mm.kind = raw_event::mouse_down; mi.feed(mm, 10); mm.kind = raw_event::mouse_up; mi.feed(mm, 20);
 		result mr; while (mi.next(e)) { result r = m.handle(e); if (r.what != result::none) mr = r; }
 		CHECK(mr.what == result::activated && mr.id == g_toast, "mouse: clicking presses it");
@@ -1221,6 +1223,10 @@ int main(int argc, char **argv)
 		show_settings(s, a);
 		read_settings(s, b);
 		CHECK(b.menu_music && !b.menu_sounds && std::fabs(b.menu_volume - 0.9f) < 1e-4f, "Settings: a change from elsewhere shows in the widgets and reads back");
+		a.tv_margins = true;
+		show_settings(s, a);
+		read_settings(s, b);
+		CHECK(s.find(st_tv) && b.tv_margins, "Settings: the TV safe area switch round-trips (U7.2)");
 
 		// "Music on" at the right of the status line, only when it is set
 		theme th5;

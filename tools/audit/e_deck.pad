@@ -1,0 +1,18 @@
+# U7.2: at 1280 x 800 (Steam Deck), the menus, then inside a TV's safe area
+wait 6000
+expect menu
+shot
+tap down 5
+tap down
+tap a
+expect settings
+tap down 6
+tap right
+wait 300
+shot
+tap b
+expect menu
+shot
+tap b
+tap left
+tap a

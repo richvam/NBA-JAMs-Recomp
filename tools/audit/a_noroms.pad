@@ -1,0 +1,54 @@
+# U7.1 audit A: first start with no ROMs, every setting changed, quit - controller only
+wait 4000
+expect menu
+shot
+tap down 5
+tap a
+expect settings
+# Video: shape, scaling, look, scanlines, sides, fullscreen
+tap right
+tap down
+tap right
+tap down
+tap right
+tap down
+tap left
+tap down
+tap right
+tap down
+tap right
+shot
+tap right
+tap rb
+expect settings
+# Sound: volume, music, sounds, menu volume
+tap left
+tap down
+tap right
+tap down
+tap right
+tap down
+tap left
+shot
+tap rb
+# Game: free play, four players, country, clips
+tap right
+tap down
+tap right
+tap down
+tap right
+tap down
+tap right
+shot
+tap rb
+# Program: news, pause buttons
+tap right
+tap down
+tap right
+shot
+tap b
+expect menu
+tap b
+tap left
+tap a
+wait 1000

@@ -2,7 +2,7 @@ NBA JAM Recomp - Lua mods
 =========================
 
 Every .lua file in this folder appears in the main menu under "Lua mods".
-Left/Right turns a mod on or off. Enter opens its page:
+X (Delete) turns the highlighted mod on or off. A (Enter) opens its page:
   * Apply to: All games / Selected games (then tick the games you want)
   * the mod's own options
 Settings are saved in mods.ini next to the program.

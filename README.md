@@ -55,10 +55,16 @@ Repository ZIPs are downloaded on GitHub with "Code", then "Download ZIP".
 ## 3. First run
 
 1. Run `NBAJamRecomp` (`NBAJamRecomp.exe` on Windows).
-2. Pick a game with the arrow keys and Enter, or with a controller. A game shown in grey
-   is missing files; selecting it tells you which.
-3. Press `5` to insert a coin and `1` to start (Back and Start on a controller). `F1`
-   shows the keys at any time, and `Esc` opens the pause menu (on a controller: hold Start and Back, or press Guide), which has "Quit to the game list".
+2. Pick a game with a controller, the keyboard or the mouse. A game shown in grey is missing
+   files; the panel beside the list says which.
+3. Insert a coin and press Start (on the keyboard: `5`, then `1`; on a controller: Back,
+   then Start).
+4. In a game, open the **pause menu** with `Esc`, the Guide button, or by holding Start and
+   Back for half a second. It has everything the program can do during a game: settings,
+   controls, coins, the TEST switch, reset, help, and "Quit to the game list".
+
+Everything works with a controller alone: menus, settings, button binding, Lua mods, online
+games (the host's address is typed on an on-screen keyboard), the pause menu.
 
 The downloads are **portable**: settings, saves, screenshots, controller profiles, mods and
 ROMs all stay in the unpacked folder, because it contains a file called `portable.txt`.
@@ -73,28 +79,40 @@ be switched off there).
 
 ## 4. Controls
 
-Keyboard:
+In the menus: the directions move, A (Enter) chooses, B (Esc) goes back, the shoulder
+buttons (Q and E) change tab, X (Delete) is the extra action a screen names at the bottom.
+The mouse and touch work too. The bottom line always says which button does what, in the
+names of the device you used last.
+
+In a game, by default:
 
 | | Move | Shoot | Pass | Turbo | Start | Coin |
 |---|---|---|---|---|---|---|
-| Player 1 | arrow keys | Z | X | C | 1 | 5 |
-| Player 2 | W S A D | F | G | V | 2 | 6 |
-| Player 3 | numpad 8 2 4 6 | numpad 0 | numpad . | numpad Enter | 3 | 7 |
-| Player 4 | I K J L | H | ; | U | 4 | 8 |
+| Controller | stick or d-pad | A | B | X, a shoulder or a trigger | Start | Back |
+| Keyboard, player 1 | arrow keys | Z | X | C | 1 | 5 |
+| Keyboard, player 2 | W S A D | F | G | V | 2 | 6 |
+| Keyboard, player 3 | numpad 8 2 4 6 | numpad 0 | numpad . | numpad Enter | 3 | 7 |
+| Keyboard, player 4 | I K J L | H | ; | U | 4 | 8 |
 
-Controllers: each pad is one player. By default A shoots, B passes, X or a shoulder button
-is turbo, Start starts and Back inserts a coin.
+Each controller is one player. To change its buttons, open **Controls** in the main menu:
+choose the player, choose or create a profile, choose an action and press the button for
+it. Any game can have its own profile. One button can hold several arcade buttons at once
+(shove, turbo shot and two shortcuts of your choice). Profiles can be exported and imported
+as `.ini` files. **About and help**, tab Controls, lists what every action is on right now.
+Keyboard keys are changed in `nbajam_recomp.ini`.
 
-To change them, open **Controls** in the main menu. Each player has a profile for all
-games, and any game can be given its own. One button can hold several arcade buttons at
-once (shove, turbo shot and two shortcuts of your choice). Profiles can be exported and
-imported as `.ini` files.
+**Settings** (main menu, or "Video and sound" in the pause menu) has the picture (shape,
+scaling, look, scanlines, what fills the sides of a 4:3 picture, fullscreen, the TV safe
+area), the sound (volume, the menus' music and sounds), the cabinet switches and the
+program's own options. The menus play the highlighted game's own music and sounds, from its
+ROMs; without them they are silent.
 
-Other keys:
+The keyboard also has shortcuts for what is in those menus:
 
 | Key | Does |
 |---|---|
-| F1 | on-screen help |
+| Esc | pause menu |
+| F1 | help over the game |
 | F2 | test switch (the game's service menu) |
 | F3 | reset the game |
 | F4 | picture: sharp, smooth, scanlines, CRT, curved CRT |
@@ -104,19 +122,16 @@ Other keys:
 | F8 | around the 4:3 picture on a wider screen: black, the picture blurred and dimmed, then each overlay in the `overlays` folder (see [Overlays](#overlays-and-borders)) |
 | F11 or Alt+Enter | fullscreen |
 | F12 or Print Screen | screenshot, saved in `screenshots` |
-| P | pause |
+| P | pause without the menu |
 | - and + | volume |
 | 9 | service credit |
-| Esc | pause menu |
-
-Keyboard keys are changed in `nbajam_recomp.ini`.
 
 ### Overlays and borders
 
-On a screen wider than 4:3, F8 puts a picture around the game, as RetroArch's overlays do.
+On a screen wider than 4:3, Settings (Video, "Sides of a 4:3 picture") or F8 puts a picture around the game, as RetroArch's overlays do.
 Two come with the program (`cabinet_purple`, `tube_shadow`). To use your own, put a PNG in
 the `overlays` folder (next to the program in the portable download; About shows the data
-folder otherwise) and press F8 until its name appears.
+folder otherwise) and choose it in Settings, or press F8 until its name appears.
 
 * The usual border is a 16:9 image, for example 1920x1080, with a transparent 4:3 opening
   in the middle (1440x1080). The game shows through the opening and the border is drawn
@@ -126,7 +141,7 @@ folder otherwise) and press F8 until its name appears.
 * **RetroArch border overlays work:** copy the `.cfg` and its `.png` into `overlays`. The
   image named by `overlay0_overlay` is used; button layouts are ignored.
 * A PNG with no transparency is drawn behind the game instead.
-* Use scaling Fit or Smooth (F5), so the picture fills the opening. `overlay_opacity=` in
+* Use scaling Fit or Smooth, so the picture fills the opening. `overlay_opacity=` in
   `nbajam_recomp.ini` makes a border see-through (0.1 to 1).
 * PNGs must be 8 bits per channel and not interlaced.
 
@@ -134,11 +149,13 @@ folder otherwise) and press F8 until its name appears.
 
 Up to four players, each on their own computer.
 
-1. Highlight the game in the menu and press `N` (or Y on a controller).
-2. One player chooses **Host a game**, waits in the lobby and presses Enter to start. They
-   are player 1.
-3. The others choose **Join**, type the host's IP address (Ctrl+V pastes) and press Enter.
-   They become players 2, 3 and 4 in the order they arrive.
+1. Highlight the game and choose **Online game** in the menu (or press X on a controller,
+   or `N`).
+2. One player chooses **Host a game** and waits in the lobby, which lists who has joined,
+   then chooses **Start the game**. They are player 1.
+3. The others choose **Join a game** and type the host's address, on the on-screen keyboard
+   with a controller or on the keyboard (Ctrl+V pastes). They become players 2, 3 and 4 in
+   the order they arrive. A host joined before is listed under **Join again**.
 
 Good to know:
 
@@ -147,8 +164,9 @@ Good to know:
 * Over the internet the host forwards UDP port 7845 on their router, or everybody joins a
   virtual network (Tailscale, ZeroTier, Radmin VPN).
 * Input delay: 3 to 4 on a home network, 5 to 7 over the internet. If the game keeps
-  stopping with "Waiting for the network...", raise it.
-* If "DESYNC" appears, leave (Esc, then "Leave the online game") and host the game again.
+  stopping with "Waiting for the network...", raise it (on the Online screen or in the lobby).
+* The pause menu opens online too, but the game goes on for everybody while it is open.
+* If "DESYNC" appears, leave (pause menu, "Leave the online game") and host the game again.
 * Lua mods: mods that only change the game when it loads work online if every player has
   the same ones switched on with the same options. A mod that writes memory or runs every
   frame stops an online game from starting, and the program names it. Of the two included
@@ -156,9 +174,9 @@ Good to know:
 
 ## 6. Lua mods
 
-Scripts in the `mods` folder appear in the main menu under **Lua mods**. Left/Right turns a
-mod on or off. Enter opens its page, where you choose the games it applies to and set its
-options. Your choices are saved in `mods.ini`. Mods cannot touch your files or your system.
+Scripts in the `mods` folder appear in the main menu under **Lua mods**. X (Delete) turns
+the highlighted script on or off; A (Enter) opens its page, where you choose the games it
+applies to and set its options. Your choices are saved in `mods.ini`. Mods cannot touch your files or your system.
 
 Included:
 

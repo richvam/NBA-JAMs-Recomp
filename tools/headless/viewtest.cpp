@@ -55,8 +55,33 @@ static void check(bool cond, const std::string &what)
 	if (!cond) { g_fail++; printf("FAIL  %s\n", what.c_str()); }
 }
 
+// U7.2: the menus on small screens and TVs. The smallest lettering is 7 menu pixels tall and a
+// row 12; at 1280 x 800 (Steam Deck) and 1280 x 720 they must stay readable and touchable,
+// and the safe area must keep 5 % free on each edge.
+static void small_screens()
+{
+	static const int sizes[][2] = { { 1280, 800 }, { 1280, 720 }, { 1024, 600 }, { 1920, 1080 }, { 3840, 2160 } };
+	for (auto &sz : sizes)
+		for (bool tv : { false, true })
+		{
+			view_rect v = menu_view(sz[0], sz[1], 400, 300, tv);
+			const double scale = double(v.h) / 300.0, text = 7 * scale, row = 12 * scale;
+			std::string t = std::to_string(sz[0]) + "x" + std::to_string(sz[1]) + (tv ? " with the TV safe area" : "");
+			printf("menus at %-30s %dx%d at %d,%d: smallest text %.1f px, a row %.1f px\n", t.c_str(), v.w, v.h, v.x, v.y, text, row);
+			check(v.x >= 0 && v.y >= 0 && v.x + v.w <= sz[0] && v.y + v.h <= sz[1] && std::abs(v.w * 3 - v.h * 4) <= 8, t + ": the menus fit, 4:3");
+			// the safe area is for TVs, which are 720 lines or more
+			if (sz[0] <= 1280 && (!tv || sz[1] >= 720)) check(text >= 12 && row >= 24, t + ": smallest text at least 12 px, a row at least 24 px");
+			if (tv)
+			{
+				view_rect full = menu_view(sz[0], sz[1], 400, 300, false);
+				check(v.x - full.x >= full.w / 20 - 1 && v.y - full.y >= full.h / 20 - 1, t + ": 5 % kept free on each edge");
+			}
+		}
+}
+
 static int rects()
 {
+	small_screens();
 	printf("%-11s %-11s %-8s %-22s %s\n", "window", "shape", "scaling", "picture (x,y wxh)", "unused");
 	for (auto &sz : kSizes)
 		for (view_shape sh : kShapes)

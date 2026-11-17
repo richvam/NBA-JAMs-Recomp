@@ -1,7 +1,8 @@
 NBA JAM Recomp - overlays (borders)
 ===================================
-Pictures shown around the 4:3 game picture on a wider screen. Press F8 in a game
-to go through: black, blurred picture, then every image in this folder.
+Pictures shown around the 4:3 game picture on a wider screen. Choose one in
+Settings, Video, "Sides of a 4:3 picture" (or press F8 in a game to go through
+them): black, blurred picture, then every image in this folder.
 
 Use your own
 ------------
@@ -21,7 +22,7 @@ are ignored. PNGs must be 8 bits per channel and not interlaced.
 Settings (nbajam_recomp.ini): side_fill=overlay, overlay=<name without .png>,
 overlay_opacity=0.1 to 1.
 
-Use scaling "Fit" or "Smooth" (F5): the opening lines up with a picture that
+Use scaling "Fit" or "Smooth" (Settings, Video, or F5): the opening lines up with a picture that
 fills the height of the screen. With "Integer" the picture is smaller than the
 opening.
 

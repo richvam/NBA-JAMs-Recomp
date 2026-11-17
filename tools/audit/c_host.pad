@@ -1,0 +1,32 @@
+# U7.1 audit C, host: host an online game, start it, leave from the pause menu
+wait 6000
+expect menu
+tap down 5
+tap a
+expect online
+tap a
+wait 1000
+expect lobby
+wait 30000
+shot
+tap a
+wait 8000
+expect game
+shot
+wait 15000
+tap guide
+wait 500
+expect pause
+wait 5000
+shot
+tap down 3
+tap a
+wait 300
+tap left
+tap a
+wait 1500
+expect menu
+tap b
+tap left
+tap a
+wait 500

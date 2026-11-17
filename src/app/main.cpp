@@ -12,6 +12,7 @@
 #include "ui/screens.h"
 #include "ui/keyboard.h"
 #include "menu_sound.h"
+#include "pad_script.h"
 #include "ui/ui_sdl.h"
 #include "miniz.h"
 #include "gl_present.h"
@@ -49,6 +50,7 @@ struct config
 {
 	int scale = 0;                // window size in multiples of 400x300; 0 = from the screen size
 	bool fullscreen = false;
+	bool tv_margins = false;      // the menus inside a TV's safe area: 5 % in from each edge (U7.2)
 	bool smooth = false;          // legacy (SDL renderer fallback)
 	bool scanlines = false;       // legacy
 	int shader = 3;               // 0 sharp, 1 smooth, 2 scanlines, 3 CRT, 4 CRT curved
@@ -96,7 +98,7 @@ static SDL_Scancode *key_slot(key_map &k, int i)
 static void save_config(const std::string &path, config &c)
 {
 	std::ofstream f(path);
-	f << "# NBA JAM Recomp - configuration\n[general]\n# news=1 asks github.com once at start for the latest release (only to tell you; nothing is downloaded)\nnews=" << c.news << "\n# pause_buttons: held half a second on a controller for the pause menu (Esc and Guide always work): start+back or l3+r3\npause_buttons=" << (c.pause_buttons == 1 ? "l3+r3" : "start+back") << "\n# the menus play the highlighted game's own music and sounds, from its ROMs\nmenu_music=" << c.menu_music << "\nmenu_sounds=" << c.menu_sounds << "\nmenu_volume=" << c.menu_volume << "\n\n[video]\n# scale: size of the window in multiples of 400x300; 0 = chosen from the screen size\nscale=" << c.scale << "\nfullscreen=" << c.fullscreen
+	f << "# NBA JAM Recomp - configuration\n[general]\n# news=1 asks github.com once at start for the latest release (only to tell you; nothing is downloaded)\nnews=" << c.news << "\n# pause_buttons: held half a second on a controller for the pause menu (Esc and Guide always work): start+back or l3+r3\npause_buttons=" << (c.pause_buttons == 1 ? "l3+r3" : "start+back") << "\n# the menus play the highlighted game's own music and sounds, from its ROMs\nmenu_music=" << c.menu_music << "\nmenu_sounds=" << c.menu_sounds << "\nmenu_volume=" << c.menu_volume << "\n\n[video]\n# scale: size of the window in multiples of 400x300; 0 = chosen from the screen size\nscale=" << c.scale << "\nfullscreen=" << c.fullscreen << "\n# tv_margins=1 keeps the menus 5% in from each edge, for TVs that cut the edges off\ntv_margins=" << c.tv_margins
 	  << "\n# shader: 0 sharp, 1 smooth, 2 scanlines, 3 CRT, 4 curved CRT\nshader=" << c.shader
 	  << "\n# view: original (4:3) or stretch (fills the window, distorted). A true widescreen view does not exist yet.\nview=" << view_shape_id(c.shape)
 	  << "\n# scaling: integer (whole multiples of the game's lines), fit (fills the height, crisp pixels), smooth (fills the height, filtered)\nscaling=" << view_scaling_id(c.scaling) << "\n# side_fill: around a 4:3 picture on a wider screen: black, blur (the picture, blurred and dimmed), overlay (an image from overlays/ in the data folder)\nside_fill=" << (c.side_fill == 1 ? "blur" : c.side_fill == 2 ? "overlay" : "black") << "\noverlay=" << c.overlay << "\n# overlay_opacity: 0.1 to 1, for overlays with a transparent opening\noverlay_opacity=" << c.overlay_opacity << "\nscanline_strength=" << c.scan_strength
@@ -140,6 +142,7 @@ static void load_config(const std::string &path, config &c)
 		else if (k == "menu_volume") c.menu_volume = std::clamp(float(atof(v.c_str())), 0.0f, 1.0f);
 		else if (k == "scale") c.scale = std::clamp(atoi(v.c_str()), 0, 8);
 		else if (k == "fullscreen") c.fullscreen = atoi(v.c_str()) != 0;
+		else if (k == "tv_margins") c.tv_margins = atoi(v.c_str()) != 0;
 		else if (k == "smooth") c.smooth = atoi(v.c_str()) != 0;
 		else if (k == "scanlines") c.scanlines = atoi(v.c_str()) != 0;
 		else if (k == "shader") c.shader = std::clamp(atoi(v.c_str()), 0, kNumShaders - 1);
@@ -217,6 +220,20 @@ public:
 	void show_rom_art() { m_rom_art = true; }      // --rom-art: what the art reader finds in the ROMs
 private:
 	bool m_gallery = false, m_rom_art = false;
+public:
+	// --pad-script <file>: the controller-only audit (U7.1). A virtual controller follows the
+	// script and the keyboard is ignored.
+	void use_pad_script(const std::string &path) { m_script_path = path; }
+private:
+	std::string m_script_path;
+	pad_script m_script;
+	bool m_scripted = false;
+	SDL_Joystick *m_vpad = nullptr;
+	unsigned m_script_t0 = 0;
+	int m_script_pass = 0, m_script_fail = 0;
+	bool start_pad_script();
+	void script_tick();
+	const char *screen_name() const;
 	void gallery_loop();
 	void rom_art_loop();
 	enum class screen { menu, settings, net_menu, net_lobby, game, about, mods, mod_detail, controls, news, pause };
@@ -284,8 +301,8 @@ private:
 	// where the picture goes: the game uses the player's settings, menus are always 4:3 and fitted
 	view_rect view_for(int win_w, int win_h, int w, int h, bool game) const
 	{
-		return game ? compute_view(win_w, win_h, w, h, m_cfg.shape, m_cfg.scaling)
-		            : compute_view(win_w, win_h, w, h, view_shape::original, view_scaling::fit);
+		if (game) return compute_view(win_w, win_h, w, h, m_cfg.shape, m_cfg.scaling);
+		return menu_view(win_w, win_h, w, h, m_cfg.tv_margins);
 	}
 	void say_view(bool scaling_changed);
 	// overlays / borders (overlay.h)
@@ -520,9 +537,11 @@ void app::present(const u32 *pixels, int w, int h, bool game)
 void app::poll_events()
 {
 	m_menu_up = m_menu_down = m_menu_left = m_menu_right = m_menu_ok = m_menu_back = m_menu_net = m_menu_clear = m_menu_guide = false;
+	if (m_scripted) script_tick();
 	SDL_Event e;
 	while (SDL_PollEvent(&e))
 	{
+		if (m_scripted && (e.type == SDL_KEYDOWN || e.type == SDL_KEYUP || e.type == SDL_TEXTINPUT)) continue;   // the keyboard is unplugged
 		// the rebuilt screens take their input through the toolkit's one layer (U1.3); releases
 		// are always passed on, so nothing stays "held" after a screen change
 		// not while a button is being bound; while text is typed, keys type and only the
@@ -657,6 +676,80 @@ void app::poll_events()
 				break;
 			}
 		}
+	}
+}
+
+// ---------------------------------------------------------------- the controller-only audit (U7.1)
+const char *app::screen_name() const
+{
+	if (m_editing) return "typing";
+	switch (m_screen)
+	{
+	case screen::menu: return "menu";
+	case screen::settings: return "settings";
+	case screen::net_menu: return "online";
+	case screen::net_lobby: return "lobby";
+	case screen::game: return "game";
+	case screen::about: return "about";
+	case screen::mods: case screen::mod_detail: return "mods";
+	case screen::controls: return "controls";
+	case screen::news: return "news";
+	case screen::pause: return "pause";
+	}
+	return "?";
+}
+
+bool app::start_pad_script()
+{
+	std::vector<u8> text;
+	std::string err;
+	if (!read_whole_file(m_script_path, text)) { SDL_Log("pad script: cannot read %s", m_script_path.c_str()); return false; }
+	if (!m_script.load(std::string(text.begin(), text.end()), err)) { SDL_Log("pad script: %s", err.c_str()); return false; }
+	SDL_VirtualJoystickDesc d;
+	SDL_zero(d);
+	d.version = SDL_VIRTUAL_JOYSTICK_DESC_VERSION;
+	d.type = SDL_JOYSTICK_TYPE_GAMECONTROLLER;
+	d.naxes = SDL_CONTROLLER_AXIS_MAX;
+	d.nbuttons = SDL_CONTROLLER_BUTTON_MAX;
+	d.name = "Scripted controller";
+	int idx = SDL_JoystickAttachVirtualEx(&d);
+	if (idx < 0 || !(m_vpad = SDL_JoystickOpen(idx))) { SDL_Log("pad script: no virtual controller: %s", SDL_GetError()); return false; }
+	m_scripted = true;
+	m_script_t0 = SDL_GetTicks();
+	SDL_Log("pad script: %s, keyboard ignored", m_script_path.c_str());
+	return true;
+}
+
+void app::script_tick()
+{
+	for (const pad_script::action &a : m_script.step(SDL_GetTicks() - m_script_t0))
+		switch (a.kind)
+		{
+		case pad_script::action::press:
+		case pad_script::action::release:
+			for (int b : a.buttons)
+			{
+				if (b >= 100) SDL_JoystickSetVirtualAxis(m_vpad, b == 100 ? SDL_CONTROLLER_AXIS_TRIGGERLEFT : SDL_CONTROLLER_AXIS_TRIGGERRIGHT, a.kind == pad_script::action::press ? 32767 : 0);
+				else SDL_JoystickSetVirtualButton(m_vpad, b, a.kind == pad_script::action::press ? 1 : 0);
+			}
+			break;
+		case pad_script::action::shot: m_shot = true; break;
+		case pad_script::action::expect:
+		{
+			bool ok = a.text == screen_name();
+			(ok ? m_script_pass : m_script_fail)++;
+			SDL_Log("pad script line %d: %s expect %s (on %s)", a.line, ok ? "PASS" : "FAIL", a.text.c_str(), screen_name());
+			break;
+		}
+		case pad_script::action::log: SDL_Log("pad script line %d: %s", a.line, a.text.c_str()); break;
+		case pad_script::action::quit: m_quit = true; break;
+		default: break;
+		}
+	if (m_quit || m_script.done())
+	{
+		SDL_Log("pad script: done, %d passed, %d failed", m_script_pass, m_script_fail);
+		m_scripted = false;
+		m_quit = true;
 	}
 }
 
@@ -908,7 +1001,7 @@ void app::ui_frame_begin()
 	if (m_gl.ok()) m_gl.drawable_size(dw, dh); else if (m_ren) SDL_GetRendererOutputSize(m_ren, &dw, &dh);
 	SDL_GetWindowSize(m_win, &m_ui_ww, &m_ui_wh);
 	// the menu picture's place, in the units the mouse reports (window points, not pixels)
-	m_ui_shown = compute_view(dw, dh, ui::screen::kW, ui::screen::kH, view_shape::original, view_scaling::fit);
+	m_ui_shown = view_for(dw, dh, ui::screen::kW, ui::screen::kH, false);
 	if (dw > 0 && dh > 0)
 	{
 		m_ui_shown.x = m_ui_shown.x * m_ui_ww / dw; m_ui_shown.w = m_ui_shown.w * m_ui_ww / dw;
@@ -1075,6 +1168,7 @@ ui::settings_state app::settings_now()
 	if (m_cfg.side_fill == 2)
 		for (size_t i = 0; i < m_overlays.size(); i++) if (m_overlays[i].name == m_cfg.overlay) st.sides = int(i) + 2;
 	st.fullscreen = m_cfg.fullscreen;
+	st.tv_margins = m_cfg.tv_margins;
 	st.volume = m_cfg.volume;
 	st.free_play = m_cfg.dips.free_play; st.four_players = m_cfg.dips.four_players; st.video_clips = m_cfg.dips.video_clips; st.country = m_cfg.dips.country;
 	st.news = m_cfg.news;
@@ -1095,6 +1189,7 @@ void app::apply_settings(const ui::settings_state &want)
 	m_cfg.dips.country = std::clamp(want.country, 0, 2);
 	m_cfg.pause_buttons = std::clamp(want.pause_buttons, 0, 1);
 	m_cfg.menu_music = want.menu_music; m_cfg.menu_sounds = want.menu_sounds; m_cfg.menu_volume = std::clamp(want.menu_volume, 0.0f, 1.0f);
+	m_cfg.tv_margins = want.tv_margins;
 	if (want.fullscreen != had.fullscreen)
 	{
 		m_cfg.fullscreen = want.fullscreen;
@@ -2203,6 +2298,7 @@ int app::run()
 	// start on the first available game
 	for (size_t i = 0; i < m_avail.size(); i++) if (m_avail[i]) { m_sel = int(i); break; }
 
+	if (!m_script_path.empty() && !start_pad_script()) return 2;
 	if (m_gallery) { gallery_loop(); m_quit = true; }
 	if (m_rom_art) { rom_art_loop(); m_quit = true; }
 
@@ -2272,6 +2368,7 @@ int main(int argc, char **argv)
 		app a;
 		if (argc > 1 && std::string(argv[1]) == "--ui-gallery") a.show_gallery();
 		if (argc > 1 && std::string(argv[1]) == "--rom-art") a.show_rom_art();
+		if (argc > 2 && std::string(argv[1]) == "--pad-script") a.use_pad_script(argv[2]);
 		return a.run();
 	}
 	catch (const std::exception &e)

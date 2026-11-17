@@ -85,6 +85,7 @@ private:
 	int m_stick_x = 0, m_stick_y = 0;        // -1, 0, 1 after the dead zone
 	bool m_mouse_down = false, m_touch = false, m_dragged = false;
 	float m_down_x = 0, m_down_y = 0, m_last_y = 0;
+	unsigned m_last_move = 0;                // the last mouse motion while another device was in use
 };
 
 // What to print for an action on a device: "A", "Cross", "Enter"... (U1.4)
