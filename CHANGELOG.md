@@ -36,6 +36,8 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
   the game, drawn over it where they have a transparent opening. RetroArch border overlays
   (`.cfg` with its `.png`) can be copied in as they are. Two original borders are included.
 - A Settings screen (from the main menu): picture shape, scaling, look, scanline strength, what fills the sides of a 4:3 picture, fullscreen, volume, the cabinet switches (free play, four players, country, video clips) and the check for new versions. The keys F4 to F8, F11, - and + still work.
+- An on-screen keyboard, so a controller is enough to type the host's address, the UDP port and a new profile's name. A physical keyboard still types, and Ctrl+V pastes.
+- The Online screen remembers the last five hosts you joined, under "Join again".
 
 ### Changed
 - The CRT mask is as coarse at 4K as at 1080p (it was twice as fine at 4K), and it lines up

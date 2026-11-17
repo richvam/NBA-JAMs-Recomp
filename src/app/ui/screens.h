@@ -136,9 +136,10 @@ struct online_state
 	std::vector<std::string> local_ips;
 	int typing = 0;                      // 1: the address is being typed, 2: the port
 	std::string typed;
+	std::vector<std::string> recent;     // hosts joined before, the last one first (U4.2)
 };
 
-enum online_id { on_host = 1, on_join, on_address, on_port, on_delay };
+enum online_id { on_host = 1, on_join, on_address, on_port, on_delay, on_recent0 = 20 };
 
 screen make_online(const online_state &st);
 void update_online(screen &s, const online_state &st);

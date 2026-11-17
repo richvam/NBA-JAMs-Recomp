@@ -414,6 +414,11 @@ void update_online(screen &s, const online_state &st)
 	// under the connection: this computer's own address, for the host to tell the others
 	panel &play = s.tabs[0].panels[0];
 	play.items.resize(6);
+	if (!st.recent.empty())
+	{
+		play.items.push_back(header("JOIN AGAIN"));
+		for (size_t i = 0; i < st.recent.size(); i++) play.items.push_back(button(on_recent0 + int(i), st.recent[i]));
+	}
 	play.items.push_back(header("YOUR LOCAL ADDRESS"));
 	add_text(play.items, joined(st.local_ips, "not known"), int(s.panel_rect(0).w) - 30, 4);
 	s.fix_focus();
