@@ -16,6 +16,7 @@
 // is away from its default, and then the script reads its default.
 //   function on_load() ... end     -- game loaded, before the first reset (patch ROM here)
 //   function on_frame(n) ... end   -- after every emulated frame
+//   function on_option(id, v) ... end  -- a live = true option was changed during the game
 //
 // The `nba` table gives scripts access to the running game (see mods.cpp / mods/README.txt).
 //
@@ -38,6 +39,7 @@ struct mod_option
 	kind type = list;
 	std::string id, label, format, group;
 	std::vector<std::string> conflicts;  // option ids that grey this one out when set
+	bool live = false;                   // live = true: changed during a game through on_option (roadmap 1.4)
 	std::vector<double> values;
 	std::vector<std::string> labels;     // optional text for each value
 	int def = 0;                         // index into values
@@ -84,6 +86,13 @@ public:
 	// game session
 	void start(const std::string &game_id, arcade_machine &m);  // runs on_load for every applicable mod
 	void frame();                                                // runs on_frame
+	// Changing options during a game (roadmap 1.4). Take used_values() before a change and
+	// pass it to options_changed() after: on_option(id, value) runs for every live option
+	// whose value as the script reads it has changed (a conflict can change another one).
+	// Other options, and turning mods on or off, apply next game.
+	static std::map<std::string, int> used_values(const mod_script &m);
+	void options_changed(mod_script &m, const std::map<std::string, int> &before);
+	bool is_running(const mod_script &m) const;
 	void stop();
 	std::vector<std::string> take_log();                         // messages for the UI
 	int active_count() const { return int(m_running.size()); }

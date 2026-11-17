@@ -269,6 +269,49 @@ end
 		fs::remove_all(td);
 	}
 
+	// ---- live options (roadmap 1.4) ----
+	{
+		fs::path ld = fs::temp_directory_path() / "nbajam_luatest_live";
+		fs::remove_all(ld);
+		fs::create_directories(ld);
+		write_file(ld / "live.lua", R"(
+mod = { name = "Live", options = {
+  { id = "fast", type = "toggle", live = true },
+  { id = "who", type = "players", live = true, conflicts = { "block" } },
+  { id = "block", type = "toggle" },
+  { id = "later", values = { 1, 2 } },
+} }
+function on_option(id, v)
+  nba.log("opt", id, tostring(v))
+  if id == "fast" then nba.write16(0x01000000, v and 7 or 3) end
+end
+)");
+		mod_manager lm;
+		lm.scan(ld.string(), "");
+		mod_script *l = find(lm, "live.lua");
+		auto mach = make_machine(10, nullptr, 0);
+		if (l)
+		{
+			l->enabled = true;
+			lm.start("nbajamte", *mach);
+			lm.take_log();
+			auto set = [&](const char *id, int v) { auto b = mod_manager::used_values(*l); l->opt[id] = v; lm.options_changed(*l, b); return lm.take_log(); };
+			auto lg = set("fast", 1);
+			CHECK(lg.size() == 1 && lg[0].find("opt fast true") != std::string::npos && mach->peek16(0x01000000) == 7, "live: a live option calls on_option(id, value) at once, and its write lands");
+			lg = set("later", 1);
+			CHECK(lg.empty(), "live: an option without live = true does not call on_option (it applies next game)");
+			set("who", 6);
+			lg = set("block", 1);
+			CHECK(lg.size() == 1 && lg[0].find("opt who 0") != std::string::npos, "live: a live option greyed out by a conflict reports its default");
+			lg = set("block", 0);
+			CHECK(lg.size() == 1 && lg[0].find("opt who 6") != std::string::npos, "live: and its kept choice when the conflict ends");
+			CHECK(lm.is_running(*l), "live: the script keeps running");
+			lm.stop();
+		}
+		CHECK(l != nullptr, "live: script found");
+		fs::remove_all(ld);
+	}
+
 	// ---- shared libraries (roadmap 1.1) ----
 	{
 		fs::path ld = fs::temp_directory_path() / "nbajam_luatest_lib";

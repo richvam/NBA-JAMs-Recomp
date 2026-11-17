@@ -832,6 +832,15 @@ int main(int argc, char **argv)
 			CHECK(ticks && page(tm).find("On fire") != std::string::npos, "Lua mods: a players option is a tick per player, from its bit mask");
 			const item *g = tm.find(md_opt0 + 3);
 			CHECK(g && g->disabled && !g->focusable(), "Lua mods: an option in conflict is greyed out and cannot be changed");
+			CHECK(page(tm).find("next game") == std::string::npos, "Lua mods: from the main menu nothing says next game");
+			ts.in_game = true;
+			ts.mods[0].options[1].live = true;
+			update_mods(tm, ts, 0);
+			std::string pg = page(tm);
+			size_t n = 0;
+			for (size_t at = pg.find("applies next game"); at != std::string::npos; at = pg.find("applies next game", at + 1)) n++;
+			CHECK(pg.find("On or off and the games apply next game") != std::string::npos && n == 3 && pg.find("On fire (next game)") != std::string::npos,
+			      "Lua mods: from the pause menu, every option that is not live says it applies next game");
 		}
 
 		// Controls

@@ -6,6 +6,9 @@ X (Delete) turns the highlighted mod on or off. A (Enter) opens its page:
   * Apply to: All games / Selected games (then tick the games you want)
   * the mod's own options
 Settings are saved in mods.ini next to the program.
+During an offline game the same page opens from the pause menu (Esc, Guide, or Start + Back
+held). There, options marked live change the game at once; the others, and turning a mod on
+or off, apply next game, and the page says so. Online the page is not offered.
 
 Writing a mod
 -------------
@@ -42,6 +45,16 @@ Every type can also have:
   conflicts = { "fire" }    this option is greyed out while one of those options is set away
                             from its default, and nba.option then gives this option's default
                             (the choice is kept for when the other is set back)
+
+Live options
+------------
+  { id = "fast", type = "toggle", label = "Fast mode", live = true }
+  function on_option(id, value)   -- called when a live option is changed during a game
+    if id == "fast" then ... end
+  end
+value is what nba.option(id) now gives. If a change greys out a live option (conflicts), it is
+called for that option too, with its default. Options without live = true are read by the
+script at the next game's start, as before.
 
 Game ids: nbajam, nbajamte, nbajamse (T-Unit), nbahangt, nbamht (Wolf Unit).
 
