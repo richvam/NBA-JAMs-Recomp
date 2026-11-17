@@ -64,6 +64,7 @@ struct config
 	int net_delay = 4;
 	std::string net_host;
 	std::vector<std::string> net_recent;   // hosts joined before, the last one first (U4.2)
+	int pause_buttons = 0;        // held on a controller to open the pause menu: 0 Start + Back, 1 L3 + R3 (U5.1)
 	std::string pad_profile[4] = { "Default", "Default", "Default", "Default" };   // controller profile of each player
 	std::map<std::string, std::array<std::string, 4>> game_profiles;   // per-game override ("" = use pad_profile)
 	dip_settings dips;
@@ -92,7 +93,7 @@ static SDL_Scancode *key_slot(key_map &k, int i)
 static void save_config(const std::string &path, config &c)
 {
 	std::ofstream f(path);
-	f << "# NBA JAM Recomp - configuration\n[general]\n# news=1 asks github.com once at start for the latest release (only to tell you; nothing is downloaded)\nnews=" << c.news << "\n\n[video]\n# scale: size of the window in multiples of 400x300; 0 = chosen from the screen size\nscale=" << c.scale << "\nfullscreen=" << c.fullscreen
+	f << "# NBA JAM Recomp - configuration\n[general]\n# news=1 asks github.com once at start for the latest release (only to tell you; nothing is downloaded)\nnews=" << c.news << "\n# pause_buttons: held half a second on a controller for the pause menu (Esc and Guide always work): start+back or l3+r3\npause_buttons=" << (c.pause_buttons == 1 ? "l3+r3" : "start+back") << "\n\n[video]\n# scale: size of the window in multiples of 400x300; 0 = chosen from the screen size\nscale=" << c.scale << "\nfullscreen=" << c.fullscreen
 	  << "\n# shader: 0 sharp, 1 smooth, 2 scanlines, 3 CRT, 4 curved CRT\nshader=" << c.shader
 	  << "\n# view: original (4:3) or stretch (fills the window, distorted). A true widescreen view does not exist yet.\nview=" << view_shape_id(c.shape)
 	  << "\n# scaling: integer (whole multiples of the game's lines), fit (fills the height, crisp pixels), smooth (fills the height, filtered)\nscaling=" << view_scaling_id(c.scaling) << "\n# side_fill: around a 4:3 picture on a wider screen: black, blur (the picture, blurred and dimmed), overlay (an image from overlays/ in the data folder)\nside_fill=" << (c.side_fill == 1 ? "blur" : c.side_fill == 2 ? "overlay" : "black") << "\noverlay=" << c.overlay << "\n# overlay_opacity: 0.1 to 1, for overlays with a transparent opening\noverlay_opacity=" << c.overlay_opacity << "\nscanline_strength=" << c.scan_strength
@@ -130,6 +131,7 @@ static void load_config(const std::string &path, config &c)
 		std::string k = trim(line.substr(0, eq)), v = trim(line.substr(eq + 1));
 		if (k == "language") continue;       // from older versions: the program is English only for now
 		else if (k == "news") c.news = atoi(v.c_str()) != 0;
+		else if (k == "pause_buttons") c.pause_buttons = v == "l3+r3" ? 1 : 0;
 		else if (k == "scale") c.scale = std::clamp(atoi(v.c_str()), 0, 8);
 		else if (k == "fullscreen") c.fullscreen = atoi(v.c_str()) != 0;
 		else if (k == "smooth") c.smooth = atoi(v.c_str()) != 0;
@@ -211,7 +213,7 @@ private:
 	bool m_gallery = false, m_rom_art = false;
 	void gallery_loop();
 	void rom_art_loop();
-	enum class screen { menu, settings, net_menu, net_lobby, game, about, mods, mod_detail, controls, news };
+	enum class screen { menu, settings, net_menu, net_lobby, game, about, mods, mod_detail, controls, news, pause };
 
 	void open_window();
 	void present(const u32 *pixels, int w, int h, bool game);
@@ -220,6 +222,21 @@ private:
 	// the screens rebuilt on the menu toolkit (roadmap U3): the game picker and Settings
 	ui::input m_ui_in;
 	ui::screen m_picker, m_settings, m_mods_scr, m_ctl_scr, m_online_scr, m_lobby_scr, m_about_scr, m_news_scr;
+	// the pause menu (U5)
+	ui::screen m_pause_scr;
+	screen m_back_to = screen::menu;   // where Settings, Controls, Lua mods and About return: the picker, or the pause menu
+	int m_coin_pulse[4] = { 0, 0, 0, 0 }, m_service_pulse = 0;   // coins from the menu: 8 frames each, the coin held for 4 of them
+	unsigned m_combo_since = 0;
+	bool m_combo_wait = false;         // the shortcut acted: wait for its buttons to be let go
+	bool m_menu_guide = false;
+	bool pause_held(SDL_GameController *c);
+	bool pause_shortcut();
+	void open_pause();
+	void resume_game();
+	bool pause_frame();
+	bool step_game(bool menu_open);
+	cabinet_inputs menu_inputs();
+	void add_pulses(cabinet_inputs &in);
 	int m_edit_what = 0;               // online: 1 the address is being typed, 2 the port
 	bool m_edit_join = false;          // join as soon as the address is typed
 	int m_about_player = 0;
@@ -493,7 +510,7 @@ void app::present(const u32 *pixels, int w, int h, bool game)
 
 void app::poll_events()
 {
-	m_menu_up = m_menu_down = m_menu_left = m_menu_right = m_menu_ok = m_menu_back = m_menu_net = m_menu_clear = false;
+	m_menu_up = m_menu_down = m_menu_left = m_menu_right = m_menu_ok = m_menu_back = m_menu_net = m_menu_clear = m_menu_guide = false;
 	SDL_Event e;
 	while (SDL_PollEvent(&e))
 	{
@@ -553,6 +570,7 @@ void app::poll_events()
 				if (e.cbutton.button == SDL_CONTROLLER_BUTTON_DPAD_LEFT) m_menu_left = true;
 				if (e.cbutton.button == SDL_CONTROLLER_BUTTON_DPAD_RIGHT) m_menu_right = true;
 				if (e.cbutton.button == SDL_CONTROLLER_BUTTON_A || e.cbutton.button == SDL_CONTROLLER_BUTTON_START) m_menu_ok = true;
+				if (e.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE) m_menu_guide = true;
 				if (e.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE || (m_screen != screen::game && e.cbutton.button == SDL_CONTROLLER_BUTTON_B)) m_menu_back = true;
 				if (e.cbutton.button == SDL_CONTROLLER_BUTTON_Y) m_menu_net = true;
 				break;
@@ -648,6 +666,8 @@ cabinet_inputs app::gather_inputs()
 	{
 		SDL_GameController *c = m_pads[i];
 		unsigned m = active_profile(int(i)).buttons(c);      // shortcuts already expanded to cabinet buttons
+		// while Start + Back is held for the pause menu, the game sees neither
+		if (m_cfg.pause_buttons == 0 && pause_held(c)) m &= ~((1u << A_START) | (1u << A_COIN));
 		auto &q = in.p[i];
 		auto on = [&](int a) { return ((m >> a) & 1u) != 0; };
 		q.up |= on(A_UP); q.down |= on(A_DOWN); q.left |= on(A_LEFT); q.right |= on(A_RIGHT);
@@ -655,6 +675,25 @@ cabinet_inputs app::gather_inputs()
 	}
 	in.test = m_test;
 	in.service = ks[SDL_SCANCODE_9] != 0;
+	add_pulses(in);
+	return in;
+}
+
+// Coins and service credits from the pause menu go in as short presses, one after the
+// other, while the game runs.
+void app::add_pulses(cabinet_inputs &in)
+{
+	for (int p = 0; p < 4; p++) if (m_coin_pulse[p] % 8 >= 4) in.p[p].coin = true;
+	if (m_service_pulse % 8 >= 4) in.service = true;
+}
+
+// What this computer sends while the pause menu is open online: nothing pressed, except a
+// coin asked for in the menu. The others' games go on with that.
+cabinet_inputs app::menu_inputs()
+{
+	cabinet_inputs in{};
+	in.test = m_test;
+	add_pulses(in);
 	return in;
 }
 
@@ -684,7 +723,7 @@ bool app::start_game(int index, bool net_client)
 	m_paused = false;
 	m_test = false;
 	m_screen = screen::game;
-	SDL_SetWindowTitle(m_win, (std::string("NBA JAM Recomp - ") + g.title + (m_net_game ? "   [ONLINE]" : "   [Esc: menu  F1: help]")).c_str());
+	SDL_SetWindowTitle(m_win, (std::string("NBA JAM Recomp - ") + g.title + (m_net_game ? "   [ONLINE]" : "   [Esc: pause menu  F1: help]")).c_str());
 	SDL_ClearQueuedAudio(m_audio);
 	if (!m_net_game) message("Press F1 to see the controls", 3000);
 	if (m_mods.active_count() > 0)
@@ -741,7 +780,7 @@ void app::draw_overlay(canvas &cv)
 			line("Pad P1 (" + pp.name + "): " + pp.action_text(4) + " shoot " + pp.action_text(5) + " pass");
 		}
 		y += 3;
-		line("Esc  back to menu          P  pause", 0xffa0e0ff);
+		line("Esc  pause menu            P  pause", 0xffa0e0ff);
 		line("F2   TEST switch           F3 reset", 0xffa0e0ff);
 		line("F4   video: sharp/smooth/scanl./CRT", 0xffa0e0ff);
 		line("F5   scaling: integer/fit/smooth", 0xffa0e0ff);
@@ -912,6 +951,7 @@ void app::open_online()
 
 void app::menu_frame()
 {
+	m_back_to = screen::menu;
 	const auto &list = game_list();
 	const int ng = int(list.size());
 	m_sel = std::clamp(m_sel, 0, ng - 1);
@@ -1003,6 +1043,7 @@ ui::settings_state app::settings_now()
 	st.volume = m_cfg.volume;
 	st.free_play = m_cfg.dips.free_play; st.four_players = m_cfg.dips.four_players; st.video_clips = m_cfg.dips.video_clips; st.country = m_cfg.dips.country;
 	st.news = m_cfg.news;
+	st.pause_buttons = m_cfg.pause_buttons;
 	return st;
 }
 
@@ -1016,6 +1057,7 @@ void app::apply_settings(const ui::settings_state &want)
 	m_cfg.volume = std::clamp(want.volume, 0.0f, 1.0f);
 	m_cfg.dips.free_play = want.free_play; m_cfg.dips.four_players = want.four_players; m_cfg.dips.video_clips = want.video_clips;
 	m_cfg.dips.country = std::clamp(want.country, 0, 2);
+	m_cfg.pause_buttons = std::clamp(want.pause_buttons, 0, 1);
 	if (want.fullscreen != had.fullscreen)
 	{
 		m_cfg.fullscreen = want.fullscreen;
@@ -1050,7 +1092,7 @@ void app::settings_frame()
 	while (m_ui_in.next(ev))
 	{
 		ui::result r = m_settings.handle(ev);
-		if (r.what == ui::result::back) { save_config(m_cfgpath, m_cfg); m_screen = screen::menu; return; }
+		if (r.what == ui::result::back) { save_config(m_cfgpath, m_cfg); m_screen = m_back_to; return; }
 		if (r.what == ui::result::changed)
 		{
 			ui::settings_state want = settings_now();
@@ -1117,7 +1159,7 @@ void app::mods_frame()
 			// from a script's page back to the list; from the list back to the menu
 			if (m_mods_scr.cur_panel == 1) { m_mods_scr.cur_panel = 0; continue; }
 			m_mods.save();
-			m_screen = screen::menu;
+			m_screen = m_back_to;
 			return;
 		}
 		if (m_mod_sel < 0 || m_mod_sel >= int(mods.size())) continue;
@@ -1290,7 +1332,7 @@ void app::about_frame()
 	while (m_ui_in.next(ev))
 	{
 		ui::result r = m_about_scr.handle(ev);
-		if (r.what == ui::result::back) { m_screen = screen::menu; return; }
+		if (r.what == ui::result::back) { m_screen = m_back_to; return; }
 		if (r.what == ui::result::changed && r.id == ui::ab_player)
 			if (const ui::item *it = m_about_scr.find(r.id)) m_about_player = it->choice;
 	}
@@ -1400,7 +1442,7 @@ void app::controls_frame()
 			ui::result r = m_ctl_scr.handle(ev);
 			const ui::item *it = m_ctl_scr.find(r.id);
 			const bool on_action = r.id >= ui::ct_act0 && r.id < ui::ct_act0 + int(kNumActions);
-			if (r.what == ui::result::back) { save_config(m_cfgpath, m_cfg); m_screen = screen::menu; return; }
+			if (r.what == ui::result::back) { save_config(m_cfgpath, m_cfg); m_screen = m_back_to; return; }
 			if (r.what == ui::result::changed && it)
 			{
 				if (r.id == ui::ct_game) { m_ctl_game = it->choice - 1; return; }
@@ -1697,9 +1739,10 @@ void app::net_lobby_frame()
 	ui_show(m_lobby_scr);
 }
 
-bool app::game_frame()
+// One frame of the game, when it is due. menu_open: the pause menu is up, so offline nothing
+// runs and online this computer sends neutral inputs.
+bool app::step_game(bool menu_open)
 {
-	if (m_menu_back) { stop_game(); return false; }
 	bool ran = false;
 	if (m_net_game)
 	{
@@ -1707,7 +1750,7 @@ bool app::game_frame()
 		if (!m_net.active()) { stop_game(); return false; }
 		if (m_net.can_run())
 		{
-			cabinet_inputs local = gather_inputs();
+			cabinet_inputs local = menu_open ? menu_inputs() : gather_inputs();
 			cabinet_inputs in = m_net.frame_inputs(local.p[0]);
 			m_mach->set_inputs(in);
 			m_mach->run_frame();
@@ -1716,7 +1759,7 @@ bool app::game_frame()
 			ran = true;
 		}
 	}
-	else if (!m_paused)
+	else if (!m_paused && !menu_open)
 	{
 		m_mach->set_inputs(gather_inputs());
 		m_mach->run_frame();
@@ -1726,6 +1769,8 @@ bool app::game_frame()
 	for (const auto &l : m_mods.take_log()) message(l, 4000);
 	if (ran)
 	{
+		for (int &c : m_coin_pulse) c = std::max(0, c - 1);
+		m_service_pulse = std::max(0, m_service_pulse - 1);
 		m_abuf.clear();
 		m_mach->take_audio(m_abuf);
 		if (m_audio && !m_abuf.empty())
@@ -1736,12 +1781,153 @@ bool app::game_frame()
 				SDL_QueueAudio(m_audio, m_abuf.data(), Uint32(m_abuf.size() * sizeof(float)));
 		}
 	}
+	return ran;
+}
+
+bool app::game_frame()
+{
+	// Esc, the Guide button, or the held shortcut: the pause menu (U5.1)
+	if (m_menu_back || pause_shortcut()) { open_pause(); return false; }
+	bool ran = step_game(false);
+	if (m_screen != screen::game) return ran;
 	int w = m_mach->width(), h = m_mach->height();
 	canvas cv(w, h);
 	std::memcpy(cv.px.data(), m_mach->frame(), size_t(w) * h * 4);
 	if (m_shot) save_screenshot(cv.px.data(), w, h);      // the game picture, without the overlay
 	draw_overlay(cv);
 	present(cv.px.data(), w, h, true);
+	return ran;
+}
+
+// ---------------------------------------------------------------- pause menu (U5)
+bool app::pause_held(SDL_GameController *c)
+{
+	auto b = [&](SDL_GameControllerButton x) { return SDL_GameControllerGetButton(c, x) != 0; };
+	if (m_cfg.pause_buttons == 1) return b(SDL_CONTROLLER_BUTTON_LEFTSTICK) && b(SDL_CONTROLLER_BUTTON_RIGHTSTICK);
+	return b(SDL_CONTROLLER_BUTTON_START) && b(SDL_CONTROLLER_BUTTON_BACK);
+}
+
+// The held shortcut, on any controller: true once it has been held half a second, then not
+// again until its buttons are let go.
+bool app::pause_shortcut()
+{
+	bool held = false;
+	for (SDL_GameController *c : m_pads) held = held || pause_held(c);
+	const unsigned now = SDL_GetTicks();
+	if (!held) { m_combo_since = 0; m_combo_wait = false; return false; }
+	if (m_combo_wait) return false;
+	if (!m_combo_since) m_combo_since = now ? now : 1;
+	if (now - m_combo_since < 500) return false;
+	m_combo_wait = true;
+	return true;
+}
+
+void app::open_pause()
+{
+	ui::pause_state st;
+	st.game = game_list()[size_t(m_cur_game)].title;
+	st.online = m_net_game;
+	m_pause_scr = ui::make_pause(st);
+	m_screen = screen::pause;
+	m_show_help = false;
+	if (!m_net_game) SDL_ClearQueuedAudio(m_audio);     // offline the game stops: so does its sound
+	SDL_Log("pause menu opened, game state %08x", m_mach->state_hash());
+}
+
+void app::resume_game()
+{
+	save_config(m_cfgpath, m_cfg);                        // the volume may have changed
+	SDL_Log("pause menu closed, game state %08x", m_mach->state_hash());
+	m_screen = screen::game;
+}
+
+bool app::pause_frame()
+{
+	ui_frame_begin();
+	const unsigned now = SDL_GetTicks();
+	// online the game goes on for everybody, with nothing pressed here
+	bool ran = m_net_game ? step_game(true) : false;
+	if (m_screen != screen::pause || !m_mach) return ran;     // the online game ended
+	auto state = [&]()
+	{
+		ui::pause_state st;
+		st.game = game_list()[size_t(m_cur_game)].title;
+		st.online = m_net_game;
+		st.volume = m_cfg.volume;
+		st.test = m_test;
+		for (int p = 0; p < 4; p++) st.coins[p] = (m_coin_pulse[p] + 7) / 8;
+		st.service = (m_service_pulse + 7) / 8;
+		return st;
+	};
+	if (m_menu_guide || pause_shortcut()) { resume_game(); return ran; }
+	ui::event ev;
+	while (m_ui_in.next(ev))
+	{
+		ui::result r = m_pause_scr.handle(ev);
+		const ui::item *it = m_pause_scr.find(r.id);
+		if (r.what == ui::result::back) { resume_game(); return ran; }
+		if (r.what == ui::result::yes && r.id == ui::ps_quit) { stop_game(); return ran; }
+		if (r.what == ui::result::changed && it)
+		{
+			if (r.id == ui::ps_volume) m_cfg.volume = std::clamp(std::round(it->value * 10.0f) / 10.0f, 0.0f, 1.0f);
+			if (r.id == ui::ps_test && !m_net_game) { m_test = it->on; message(m_test ? "TEST switch: ON (service menu)" : "TEST switch: OFF", 2000); }
+		}
+		if (r.what != ui::result::activated) continue;
+		switch (r.id)
+		{
+		case ui::ps_resume: resume_game(); return ran;
+		case ui::ps_shot:
+		{
+			int w = m_mach->width(), h = m_mach->height();
+			canvas g(w, h);
+			std::memcpy(g.px.data(), m_mach->frame(), size_t(w) * h * 4);
+			save_screenshot(g.px.data(), w, h);           // the game picture, without the menu
+			break;
+		}
+		case ui::ps_quit:
+			if (m_net_game) m_pause_scr.ask("Leave the online game? It ends for you.", ui::ps_quit);
+			else { stop_game(); return ran; }
+			break;
+		case ui::ps_service: if (!m_net_game) m_service_pulse += 8; break;
+		case ui::ps_reset: if (!m_net_game) { m_mach->reset(); message("Reset", 1500); resume_game(); return ran; } break;
+		// the full screens, offline only; Back there returns here
+		case ui::ps_video:
+			m_overlays = list_overlays(m_base);
+			m_settings = ui::make_settings(settings_now());
+			m_back_to = screen::pause; m_screen = screen::settings; return ran;
+		case ui::ps_controls: m_ctl_scr = ui::screen(); m_back_to = screen::pause; m_screen = screen::controls; return ran;
+		case ui::ps_mods: m_mod_sel = 0; m_mods_scr = ui::screen(); m_back_to = screen::pause; m_screen = screen::mods; return ran;
+		case ui::ps_help:
+			m_about_scr = ui::make_about(about_now());
+			m_about_scr.cur_tab = 1;
+			m_about_scr.fix_focus();
+			m_back_to = screen::pause; m_screen = screen::about; return ran;
+		default:
+			if (r.id >= ui::ps_coin0 && r.id < ui::ps_coin0 + 4 && (!m_net_game || r.id == ui::ps_coin0)) m_coin_pulse[r.id - ui::ps_coin0] += 8;
+			break;
+		}
+	}
+	ui::update_pause(m_pause_scr, state());
+
+	// drawn over the game picture, darkened
+	follow_theme(game_list()[size_t(m_cur_game)].id, now);
+	ui::theme th = m_theme;
+	const int w = m_mach->width(), h = m_mach->height();
+	const u32 *src = m_mach->frame();
+	th.backdrop.assign(size_t(ui::screen::kW) * ui::screen::kH, 0);
+	for (int y = 0; y < ui::screen::kH; y++)
+		for (int x = 0; x < ui::screen::kW; x++)
+		{
+			u32 c = src[size_t(y * h / ui::screen::kH) * size_t(w) + size_t(x * w / ui::screen::kW)];
+			th.backdrop[size_t(y) * ui::screen::kW + size_t(x)] = 0xff000000 | ((c >> 1) & 0x7f7f7f);
+		}
+	th.panel_alpha = 215;
+	canvas cv(ui::screen::kW, ui::screen::kH);
+	m_pause_scr.draw(cv, th, m_ui_in.last_device(), now);
+	if (m_net_game && m_net.desynced()) m_pause_scr.toast("DESYNC: restart the online game", now, 500);
+	if (m_shot) save_screenshot(cv.px.data(), cv.w, cv.h);
+	if (!m_message.empty() && now < m_message_until) menu_message(cv, m_message);
+	present(cv.px.data(), cv.w, cv.h, false);
 	return ran;
 }
 
@@ -1990,10 +2176,10 @@ int app::run()
 			case screen::mods: mods_frame(); next = clock::now(); continue;
 			case screen::mod_detail: m_screen = screen::mods; continue;
 			case screen::controls: controls_frame(); next = clock::now(); continue;
-			case screen::game: break;
+			case screen::game: case screen::pause: break;
 		}
-		bool ran = game_frame();
-		if (m_screen != screen::game) continue;
+		bool ran = m_screen == screen::pause ? pause_frame() : game_frame();
+		if (m_screen != screen::game && m_screen != screen::pause) continue;
 		if (m_net_game && !ran)
 		{
 			// waiting for the network: don't advance the clock, poll again shortly
@@ -2010,7 +2196,7 @@ int app::run()
 		if (next > now && !behind) std::this_thread::sleep_for(next - now);
 		else if (now - next > std::chrono::milliseconds(100)) next = now;
 	}
-	if (m_screen == screen::game) stop_game();
+	if (m_mach) stop_game();
 	m_net.stop();
 	save_config(m_cfgpath, m_cfg);
 	for (auto *c : m_pads) SDL_GameControllerClose(c);

@@ -38,6 +38,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - A Settings screen (from the main menu): picture shape, scaling, look, scanline strength, what fills the sides of a 4:3 picture, fullscreen, volume, the cabinet switches (free play, four players, country, video clips) and the check for new versions. The keys F4 to F8, F11, - and + still work.
 - An on-screen keyboard, so a controller is enough to type the host's address, the UDP port and a new profile's name. A physical keyboard still types, and Ctrl+V pastes.
 - The Online screen remembers the last five hosts you joined, under "Join again".
+- A pause menu in the game: Esc, the Guide button, or holding Start and Back on a controller. Resume, volume, screenshot, settings, controls, Lua mods, help, coins, service credit, TEST switch, reset, and quit to the game list. Online the game goes on while it is open, and what would change the game is greyed. The held buttons can be changed to L3 and R3 in Settings.
 
 ### Changed
 - The CRT mask is as coarse at 4K as at 1080p (it was twice as fine at 4K), and it lines up
@@ -63,6 +64,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - The main menu is rebuilt: the games in a list with the highlighted game's name in its own lettering beside it, and the reason when a game cannot be played. Colours, background and lettering follow the highlighted game when its ROMs are there. Everything on it works with a controller, keyboard or mouse. Quitting asks first. "Look for ROMs again" rescans the roms folder without a restart. The news on/off switch moved to Settings.
 - The Lua mods and Controls screens are rebuilt in the new style. Lua mods shows the list and the highlighted script's page side by side, with the whole description. Controls groups who (game, player, profile), the buttons and the profile; a button is still bound by pressing it.
 - The Online, lobby, About and News screens are rebuilt like the rest of the menus and work with a controller, keyboard or mouse. The lobby lists the players with their ping, and the host can change the input delay there. About is now "About and help": it lists the controls of each player as they are set now, and the program's keys. The UDP port is typed instead of stepped.
+- In a game, Esc opens the pause menu instead of leaving the game at once; "Quit to the game list" is in the menu.
 
 ### Fixed
 

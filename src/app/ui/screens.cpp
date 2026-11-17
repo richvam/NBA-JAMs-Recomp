@@ -172,8 +172,10 @@ screen make_settings(const settings_state &st)
 	prog.name = "Program";
 	panel p;
 	p.title = "Program";
-	p.r = { 0.1f, 0.0f, 0.8f, 0.3f };
-	p.items = { toggle(st_news, "Check for new versions", st.news), label("Asks the Releases page once at start."), label("Nothing is downloaded or installed.") };
+	p.r = { 0.1f, 0.0f, 0.8f, 0.62f };
+	p.items = { toggle(st_news, "Check for new versions", st.news), label("Asks the Releases page once at start."), label("Nothing is downloaded or installed."),
+	            header("PAUSE MENU IN A GAME"), picker(st_pause, "Hold on a controller", pause_button_names(), st.pause_buttons),
+	            label("Half a second. Esc and the Guide button"), label("open it too.") };
 	prog.panels = { p };
 
 	s.tabs = { video, sound, game, prog };
@@ -187,7 +189,7 @@ void show_settings(screen &s, const settings_state &st)
 	auto tog = [&](int id, bool v) { if (item *i = s.find(id)) i->on = v; };
 	auto sli = [&](int id, float v) { if (item *i = s.find(id)) i->value = std::clamp(v, i->min, i->max); };
 	if (item *i = s.find(st_sides)) i->choices = st.side_names;
-	pick(st_shape, st.shape); pick(st_scaling, st.scaling); pick(st_shader, st.shader); pick(st_sides, st.sides); pick(st_country, st.country);
+	pick(st_shape, st.shape); pick(st_scaling, st.scaling); pick(st_shader, st.shader); pick(st_sides, st.sides); pick(st_country, st.country); pick(st_pause, st.pause_buttons);
 	tog(st_fullscreen, st.fullscreen); tog(st_free_play, st.free_play); tog(st_players, st.four_players); tog(st_clips, st.video_clips); tog(st_news, st.news);
 	sli(st_scanlines, st.scanlines); sli(st_volume, st.volume);
 }
@@ -198,9 +200,15 @@ void read_settings(const screen &s, settings_state &st)
 	auto pick = [&](int id, int &v) { if (const item *i = m.find(id)) v = i->choice; };
 	auto tog = [&](int id, bool &v) { if (const item *i = m.find(id)) v = i->on; };
 	auto sli = [&](int id, float &v) { if (const item *i = m.find(id)) v = std::round(i->value * 10.0f) / 10.0f; };
-	pick(st_shape, st.shape); pick(st_scaling, st.scaling); pick(st_shader, st.shader); pick(st_sides, st.sides); pick(st_country, st.country);
+	pick(st_shape, st.shape); pick(st_scaling, st.scaling); pick(st_shader, st.shader); pick(st_sides, st.sides); pick(st_country, st.country); pick(st_pause, st.pause_buttons);
 	tog(st_fullscreen, st.fullscreen); tog(st_free_play, st.free_play); tog(st_players, st.four_players); tog(st_clips, st.video_clips); tog(st_news, st.news);
 	sli(st_scanlines, st.scanlines); sli(st_volume, st.volume);
+}
+
+const std::vector<std::string> &pause_button_names()
+{
+	static const std::vector<std::string> n = { "Start + Back", "L3 + R3" };
+	return n;
 }
 
 // ---------------------------------------------------------------- Lua mods (U3.4)
@@ -533,7 +541,7 @@ screen make_about(const about_state &st)
 	k.title = "The program's keys";
 	k.r = { 0.0f, 0.0f, 1.0f, 1.0f };
 	static const char *const kKeys[][2] = {
-		{ "Back to the menu, leave a game", "Esc" }, { "Pause", "P" }, { "Help over the game", "F1" }, { "TEST switch (service menu)", "F2" },
+		{ "Pause menu, in a game", "Esc" }, { "Pause without the menu", "P" }, { "Help over the game", "F1" }, { "TEST switch (service menu)", "F2" },
 		{ "Reset the game", "F3" }, { "Service credit", "9" }, { "Picture look", "F4" }, { "Scaling", "F5" },
 		{ "Scanline strength", "F6" }, { "Picture shape", "F7" }, { "Sides of a 4:3 picture", "F8" },
 		{ "Fullscreen", "F11 or Alt+Enter" }, { "Screenshot", "F12 or Print Screen" }, { "Volume", "- and +" }, { "Online game, from the menu", "N" },
@@ -621,6 +629,66 @@ screen make_news(const news_state &st)
 	s.tabs = { t };
 	s.fix_focus();
 	return s;
+}
+
+} // namespace ui
+
+namespace ui
+{
+
+// ---------------------------------------------------------------- pause menu (U5)
+screen make_pause(const pause_state &st)
+{
+	screen s;
+	s.title = "PAUSED";
+	tab t;
+	t.name = st.game;
+	panel game;
+	game.title = st.online ? "Online game: still running" : "Game";
+	game.r = { 0.0f, 0.0f, 0.5f, 1.0f };
+	game.items = { button(ps_resume, "Resume"), slider(ps_volume, "Volume", st.volume, 0, 1, 0.1f), button(ps_shot, "Screenshot"),
+	               header("SETTINGS"), button(ps_video, "Video and sound"), button(ps_controls, "Controls"), button(ps_mods, "Lua mods"), button(ps_help, "Help: the controls"),
+	               header(""), button(ps_quit, st.online ? "Leave the online game" : "Quit to the game list") };
+	panel coins;
+	coins.title = "Insert a coin";
+	coins.r = { 0.52f, 0.0f, 0.48f, 0.22f };
+	coins.cols = 2;
+	for (int i = 0; i < 4; i++) coins.items.push_back(button(ps_coin0 + i, "Player " + std::to_string(i + 1)));
+	panel cab;
+	cab.title = "Cabinet";
+	cab.r = { 0.52f, 0.24f, 0.48f, 0.76f };
+	cab.items = { button(ps_service, "Service credit"), toggle(ps_test, "TEST switch", st.test), button(ps_reset, "Reset the game") };
+	t.panels = { game, coins, cab };
+	s.tabs = { t };
+	s.fix_focus();
+	update_pause(s, st);
+	return s;
+}
+
+void update_pause(screen &s, const pause_state &st)
+{
+	if (s.tabs.empty() || s.tabs[0].panels.size() < 3) return;
+	// online: nothing that would change the game for the others; the full-screen settings
+	// would stop drawing a game that keeps running, so they wait for an offline game
+	for (int id : { (int)ps_video, (int)ps_controls, (int)ps_mods, (int)ps_help, (int)ps_service, (int)ps_test, (int)ps_reset })
+		if (item *i = s.find(id)) { i->disabled = st.online; }
+	for (int p = 0; p < 4; p++)
+		if (item *i = s.find(ps_coin0 + p))
+		{
+			i->disabled = st.online && p > 0;
+			// a grid cell shows its label only: the coins waiting go in it
+			i->label = (st.online && p == 0 ? std::string("You") : "Player " + std::to_string(p + 1)) + (st.coins[p] ? " +" + std::to_string(st.coins[p]) : "");
+		}
+	if (item *i = s.find(ps_service)) i->value_text = st.service ? "+" + std::to_string(st.service) : "";
+	if (item *i = s.find(ps_test)) i->on = st.test;
+	if (item *i = s.find(ps_volume)) i->value = st.volume;
+	panel &cab = s.tabs[0].panels[2];
+	while (cab.items.size() > 3) cab.items.pop_back();
+	cab.items.push_back(label(""));
+	const int px = int(s.panel_rect(2).w) - 30;
+	if (st.online) add_text(cab.items, "Online, the game goes on while this menu is open. Greyed: offline only.", px, 5);
+	else add_text(cab.items, "The game waits while this menu is open. Coins go in when it resumes.", px, 5);
+	s.fix_focus();
 }
 
 } // namespace ui

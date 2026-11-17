@@ -58,7 +58,7 @@ Repository ZIPs are downloaded on GitHub with "Code", then "Download ZIP".
 2. Pick a game with the arrow keys and Enter, or with a controller. A game shown in grey
    is missing files; selecting it tells you which.
 3. Press `5` to insert a coin and `1` to start (Back and Start on a controller). `F1`
-   shows the keys at any time, and `Esc` returns to the menu.
+   shows the keys at any time, and `Esc` opens the pause menu (on a controller: hold Start and Back, or press Guide), which has "Quit to the game list".
 
 The downloads are **portable**: settings, saves, screenshots, controller profiles, mods and
 ROMs all stay in the unpacked folder, because it contains a file called `portable.txt`.
@@ -107,7 +107,7 @@ Other keys:
 | P | pause |
 | - and + | volume |
 | 9 | service credit |
-| Esc | back to the menu |
+| Esc | pause menu |
 
 Keyboard keys are changed in `nbajam_recomp.ini`.
 
@@ -148,7 +148,7 @@ Good to know:
   virtual network (Tailscale, ZeroTier, Radmin VPN).
 * Input delay: 3 to 4 on a home network, 5 to 7 over the internet. If the game keeps
   stopping with "Waiting for the network...", raise it.
-* If "DESYNC" appears, leave with Esc and host the game again.
+* If "DESYNC" appears, leave (Esc, then "Leave the online game") and host the game again.
 * Lua mods: mods that only change the game when it loads work online if every player has
   the same ones switched on with the same options. A mod that writes memory or runs every
   frame stops an online game from starting, and the program names it. Of the two included
