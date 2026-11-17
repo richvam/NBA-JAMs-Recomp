@@ -65,8 +65,9 @@ a symbol file is only used on the exact revision it was made from. For a game bu
 its source the file is made by tools/map2sym.py from the assembler's .map; it holds names
 and addresses only. An entry can also be { addr = a, pattern = { words }, at = b }: it is
 used only when the ROM holds those words at b (the code that proves the address).
-Shipped now: NBA JAM T.E. Special Edition 5.02 (4176 names). Example:
-  local scores = nba.sym("scores")      -- 0x010F2F30 on SE 5.02
+Shipped now: T.E. 4.0 (4144 names), T.E. Special Edition 5.02 (4176) and Maximum
+Hangtime 1.3 (8089), the three games built from source. Example:
+  local scores = nba.sym("scores")      -- 0x010EAFD0 on T.E. 4.0, nil on a revision without a file
   if scores then nba.log(nba.read16(scores)) end
 
 Each instruction of the original source assembles to fixed words (e.g. "movi X,a0" is
