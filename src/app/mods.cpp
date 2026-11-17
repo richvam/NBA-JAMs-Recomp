@@ -177,19 +177,21 @@ struct mod_api
 		if (mod_manager *m = mgr(L)) m->report(*script(L), s);
 		return 0;
 	}
+public:
+	// an option's value as the script reads it: toggle a boolean, players the mask, else a number
+	static void push_option(lua_State *L, const mod_script &s, const mod_option &o)
+	{
+		double v = o.values.empty() ? 0 : o.values[size_t(s.option_used(o))];
+		if (o.type == mod_option::toggle) lua_pushboolean(L, v != 0);
+		else if (o.type == mod_option::players) lua_pushinteger(L, lua_Integer(v));
+		else lua_pushnumber(L, v);
+	}
 	static int option(lua_State *L)
 	{
 		const char *id = luaL_checkstring(L, 1);
 		mod_script *s = script(L);
 		for (const auto &o : s->options)
-			if (o.id == id)
-			{
-				double v = o.values.empty() ? 0 : o.values[size_t(s->option_used(o))];
-				if (o.type == mod_option::toggle) lua_pushboolean(L, v != 0);
-				else if (o.type == mod_option::players) lua_pushinteger(L, lua_Integer(v));
-				else lua_pushnumber(L, v);
-				return 1;
-			}
+			if (o.id == id) { push_option(L, *s, o); return 1; }
 		return luaL_error(L, "unknown option '%s'", id);
 	}
 	static int frame(lua_State *L) { lua_pushinteger(L, mgr(L)->m_frame); return 1; }
@@ -460,6 +462,9 @@ bool mod_manager::load_meta(mod_script &m)
 						for (lua_Integer k = 1; k <= luaL_len(L, -1); k++) { lua_geti(L, -1, k); if (lua_isstring(L, -1)) op.conflicts.push_back(lua_tostring(L, -1)); lua_pop(L, 1); }
 					lua_pop(L, 1);
 					auto num = [&](const char *f, double d) { lua_getfield(L, o, f); double v = lua_isnumber(L, -1) ? lua_tonumber(L, -1) : d; lua_pop(L, 1); return v; };
+					lua_getfield(L, o, "live");
+					op.live = lua_toboolean(L, -1);
+					lua_pop(L, 1);
 					if (ty == "toggle") { op.type = mod_option::toggle; op.values = { 0, 1 }; }
 					else if (ty == "players") { op.type = mod_option::players; for (int k = 0; k < 16; k++) op.values.push_back(k); }
 					else if (ty == "range")
@@ -772,6 +777,46 @@ void mod_manager::frame()
 			}
 		}
 		i++;
+	}
+}
+
+std::map<std::string, int> mod_manager::used_values(const mod_script &m)
+{
+	std::map<std::string, int> r;
+	for (const auto &o : m.options) r[o.id] = m.option_used(o);
+	return r;
+}
+
+bool mod_manager::is_running(const mod_script &m) const
+{
+	for (const auto &r : m_running) if (r.mod == &m) return true;
+	return false;
+}
+
+void mod_manager::options_changed(mod_script &m, const std::map<std::string, int> &before)
+{
+	for (size_t i = 0; i < m_running.size(); i++)
+	{
+		running &r = m_running[i];
+		if (r.mod != &m) continue;
+		for (const auto &o : m.options)
+		{
+			auto b = before.find(o.id);
+			if (!o.live || (b != before.end() && b->second == m.option_used(o))) continue;
+			lua_getglobal(r.L, "on_option");
+			if (!lua_isfunction(r.L, -1)) { lua_pop(r.L, 1); return; }
+			lua_pushstring(r.L, o.id.c_str());
+			mod_api::push_option(r.L, m, o);
+			std::string err;
+			if (!call(r.L, 2, kFrameBudget, err))
+			{
+				report(m, "error, mod stopped: " + err);
+				lua_close(r.L);
+				m_running.erase(m_running.begin() + long(i));
+				return;
+			}
+		}
+		return;
 	}
 }
 

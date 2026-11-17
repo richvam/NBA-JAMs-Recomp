@@ -1260,6 +1260,7 @@ ui::mods_state app::mods_now()
 {
 	ui::mods_state st;
 	st.folder = path_join(m_base, "mods");
+	st.in_game = m_back_to == screen::pause && m_mach;
 	for (const mod_script &m : m_mods.mods())
 	{
 		ui::mod_view v;
@@ -1274,6 +1275,7 @@ ui::mods_state app::mods_now()
 			for (size_t k = 0; k < o.values.size(); k++) vo.values.push_back(o.value_text(int(k)));
 			vo.value = m.option_index(o);
 			vo.greyed = m.option_greyed(o);
+			vo.live = o.live;
 			v.options.push_back(vo);
 		}
 		for (const game_info &g : game_list())
@@ -1317,6 +1319,7 @@ void app::mods_frame()
 		{
 			const ui::item *it = m_mods_scr.find(r.id);
 			if (!it) continue;
+			const auto before = mod_manager::used_values(m);
 			auto supported = [&]() { m.games.clear(); for (const auto &g : games) if (m.supports(g.id)) m.games.push_back(g.id); };
 			if (r.id == ui::md_enabled) m.enabled = it->on;
 			else if (r.id == ui::md_apply)
@@ -1336,6 +1339,7 @@ void app::mods_frame()
 				const int mask = m.option_index(o);                                     // a players option's values are 0 to 15
 				m.opt[o.id] = it->on ? (mask | bit) : (mask & ~bit);
 			}
+			if (m_mach && m_back_to == screen::pause) m_mods.options_changed(m, before);   // live options act now
 			else if (r.id >= ui::md_game0 && r.id < ui::md_game0 + int(games.size()))
 			{
 				const game_info &g = games[size_t(r.id - ui::md_game0)];
