@@ -1,10 +1,12 @@
 // luatest.cpp - tests of the Lua mod engine that need no game data at all.
 // A synthetic, all-zero program ROM stands in for the game; the scripts are written to a
 // temporary folder by the test itself. Covers: option parsing, the sandbox, the instruction
-// budget, the ROM patch API, per-frame hooks and the mods.ini round trip.
+// budget, the ROM patch API, per-frame hooks, the mods.ini round trip, shared libraries
+// (nba.include, roadmap 1.1) and symbols (nba.sym, roadmap 1.2).
 // usage: luatest        (exit code 0 = all passed)
 #include "tunit.h"
 #include "mods.h"
+#include "romload.h"
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -213,6 +215,102 @@ function on_frame(n) if n == 2 then error("boom") end end
 	m3.scan(d, ini);
 	mod_script *o3 = find(m3, "opts.lua");
 	CHECK(o3 && o3->enabled && o3->option_index(o3->options[0]) == 2 && o3->option_index(o3->options[1]) == 1, "invalid option value falls back to the default");
+
+	// ---- shared libraries (roadmap 1.1) ----
+	{
+		fs::path ld = fs::temp_directory_path() / "nbajam_luatest_lib";
+		fs::remove_all(ld);
+		fs::create_directories(ld / "lib" / "sub");
+		std::string l = ld.string();
+		write_file(ld / "lib" / "util.lua", "loads = (loads or 0) + 1\nlocal M = {}\nfunction M.twice(x) return 2 * x end\nreturn M\n");
+		write_file(ld / "lib" / "sub" / "deep.lua", "return { v = 7 }\n");
+		write_file(ld / "lib" / "noreturn.lua", "x_from_lib = 5\n");
+		write_file(ld / "lib" / "ramlib.lua", "local M = {}\nfunction M.poke() nba.write16(0x01000000, 1) end\nreturn M\n");
+		write_file(ld / "lib" / "loop_a.lua", "return nba.include('lib/loop_b.lua')\n");
+		write_file(ld / "lib" / "loop_b.lua", "return nba.include('lib/loop_a.lua')\n");
+		write_file(ld / "outside.lua", "mod = { name = 'Outside' }\nreturn 1\n");
+		write_file(ld / "user.lua", R"(
+mod = { name = "User" }
+local u = nba.include("lib/util.lua")
+local u2 = nba.include("lib/util.lua")
+assert(u.twice(21) == 42, "library function works")
+assert(u == u2 and loads == 1, "a library runs once per script")
+assert(nba.include("lib/sub/deep.lua").v == 7, "sub-folders of lib/ work")
+assert(nba.include("lib/noreturn.lua") == true and x_from_lib == 5, "a library that returns nothing gives true")
+for _, bad in ipairs({ "../outside.lua", "lib/../outside.lua", "outside.lua", "/etc/passwd", "lib/x.txt", "lib\\util.lua", "C:/x/lib/util.lua", "lib//util.lua" }) do
+  assert(not pcall(nba.include, bad), "path accepted: " .. bad)
+end
+assert(not pcall(nba.include, "lib/missing.lua"), "a missing library is an error")
+assert(nba.include("lib/loop_a.lua") ~= nil, "libraries that include each other stop")
+)");
+		write_file(ld / "uses_ramlib.lua", "mod = { name = 'UsesRamLib' }\nlocal r = nba.include(\"lib/ramlib.lua\")\n");
+		mod_manager lm;
+		lm.scan(l, "");
+		bool listed_lib = false;
+		for (auto &s : lm.mods()) listed_lib = listed_lib || s.file == "util.lua" || s.file == "deep.lua" || s.file == "noreturn.lua";
+		CHECK(lm.mods().size() == 3 && !listed_lib, "include: files in mods/lib/ are not listed as mods");
+		mod_script *u = find(lm, "user.lua");
+		CHECK(u && u->error.empty(), ("include: a script uses a library, once, with sub-folders; ../, absolute and non-.lua paths are refused" + std::string(u && !u->error.empty() ? " - " + u->error : "")).c_str());
+		for (auto &s : lm.mods()) s.enabled = true;
+		auto blk = lm.netplay_blockers("nbajamte");
+		bool ramlib = false, user = false;
+		for (auto &b : blk) { ramlib = ramlib || b == "UsesRamLib"; user = user || b == "User"; }
+		CHECK(ramlib && !user, "include: a library that writes RAM makes the script that includes it block an online game");
+		fs::remove_all(ld);
+	}
+
+	// ---- symbols (roadmap 1.2) ----
+	{
+		fs::path sd = fs::temp_directory_path() / "nbajam_luatest_sym";
+		fs::remove_all(sd);
+		fs::create_directories(sd / "sym");
+		const u16 code[4] = { 0x09e0, 0x1111, 0x2222, 0x0300 };
+		auto sm = make_machine(200, code, 4);
+		const std::vector<u8> &prog = *sm->program_rom();
+		char crc[16];
+		snprintf(crc, sizeof crc, "%08x", crc32_of(prog.data(), prog.size()));
+		const unsigned at = 0xff800000u + 200 * 16;
+		char tbl[512];
+		snprintf(tbl, sizeof tbl, "return {\n  scores = 0x010F2F30,\n  found = { addr = 0x01001000, pattern = { 0x09E0, -1, 0x2222 }, at = 0x%08X },\n"
+		                          "  wrong = { addr = 0x01002000, pattern = { 0x09E0, 0x5555 }, at = 0x%08X },\n  [\"odd name\"] = 0x10,\n}\n", at, at);
+		write_file(sd / "sym" / ("nbajamte_" + std::string(crc) + ".lua"), tbl);
+		write_file(sd / "sym" / "nbajamte_00000000.lua", "return { scores = 1 }\n");
+		write_file(sd / "symuser.lua", R"(
+mod = { name = "SymUser" }
+function on_load()
+  assert(nba.sym("scores") == 0x010F2F30, "plain entry")
+  assert(nba.sym("found") == 0x01001000, "entry whose pattern is in the ROM")
+  assert(nba.sym("wrong") == nil, "entry whose pattern is not in the ROM is left out")
+  assert(nba.sym("odd name") == 0x10 and nba.sym("nothing") == nil, "any name; unknown is nil")
+  nba.log("symbols ok")
+end
+)");
+		mod_manager sm2;
+		sm2.scan(sd.string(), "");
+		for (auto &s : sm2.mods()) s.enabled = true;
+		sm2.start("nbajamte", *sm);
+		auto lg = sm2.take_log();
+		bool ok = false;
+		std::string why;
+		for (auto &x : lg) { ok = ok || x.find("symbols ok") != std::string::npos; if (x.find("error") != std::string::npos) why = x; }
+		CHECK(ok, ("sym: the file is chosen by the program's CRC-32; plain and pattern-checked entries; a pattern not in the ROM is left out " + why).c_str());
+		CHECK(sm2.symbols_file().find("nbajamte_" + std::string(crc)) != std::string::npos, "sym: the file name is <game>_<CRC-32 of the program>.lua");
+		sm2.stop();
+		// another revision (other CRC): no file, so no symbols, and no error
+		const u16 other[1] = { 0x4242 };
+		auto om = make_machine(10, other, 1);
+		write_file(sd / "symnone.lua", "mod = { name = 'SymNone' }\nfunction on_load() assert(nba.sym('scores') == nil); nba.log('none ok') end\n");
+		mod_manager sm3;
+		sm3.scan(sd.string(), "");
+		for (auto &s : sm3.mods()) s.enabled = s.file == "symnone.lua";
+		sm3.start("nbajamte", *om);
+		lg = sm3.take_log();
+		ok = false;
+		for (auto &x : lg) ok = ok || x.find("none ok") != std::string::npos;
+		CHECK(ok, "sym: a revision with no symbol file gives nil, not an error");
+		sm3.stop();
+		fs::remove_all(sd);
+	}
 
 	fs::remove_all(dir);
 	printf("\n%d checks, %d failed\n", g_run, g_fail);

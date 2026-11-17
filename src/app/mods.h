@@ -14,6 +14,11 @@
 //   function on_frame(n) ... end   -- after every emulated frame
 //
 // The `nba` table gives scripts access to the running game (see mods.cpp / mods/README.txt).
+//
+// Shared code (roadmap 1.1): nba.include("lib/name.lua") runs a file from mods/lib/ once per
+// script and returns what it returns. Files in lib/ are not mods themselves.
+// Symbols (roadmap 1.2): nba.sym("name") is the bit address of a name of the game's source
+// for the running revision, from mods/sym/<game>_<program CRC-32>.lua, or nil.
 #pragma once
 #include "machine.h"
 #include <map>
@@ -59,6 +64,10 @@ class mod_manager
 {
 public:
 	void scan(const std::string &mods_dir, const std::string &ini_path);
+	// the symbols of the running game (roadmap 1.2): loaded when a script first asks
+	const std::map<std::string, u32> &symbols();
+	std::string symbols_file() const;                            // the file they come from, for this game and revision
+	static bool lib_path_ok(const std::string &rel);             // "lib/name.lua", nothing that leaves mods/lib/
 	void save() const;
 	std::vector<mod_script> &mods() { return m_mods; }
 
@@ -87,7 +96,9 @@ private:
 	};
 	std::vector<mod_script> m_mods;
 	std::vector<running> m_running;
-	std::string m_ini;
+	std::string m_ini, m_dir;
+	std::map<std::string, u32> m_syms;
+	bool m_syms_loaded = false;
 	std::string m_game;
 	arcade_machine *m_mach = nullptr;
 	u32 m_frame = 0;

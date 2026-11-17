@@ -41,6 +41,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - A pause menu in the game: Esc, the Guide button, or holding Start and Back on a controller. Resume, volume, screenshot, settings, controls, Lua mods, help, coins, service credit, TEST switch, reset, and quit to the game list. Online the game goes on while it is open, and what would change the game is greyed. The held buttons can be changed to L3 and R3 in Settings.
 - Menu music and sounds: the menus play the highlighted game's own tune and its cursor, confirm and back sounds, from its ROMs. Switches and a volume for them in Settings, Sound tab; "Music on" shows in the status line. Without the game's ROMs the menus are silent.
 - Settings, Video: "Menus inside a TV's safe area" keeps the menus away from the edges a TV cuts off.
+- Lua mods can share code: `nba.include("lib/name.lua")` runs a file from `mods/lib/`. And `nba.sym("name")` gives the address of a name from the game's source, on T.E. 4.0, T.E. Special Edition 5.02 and Maximum Hangtime 1.3.
 
 ### Changed
 - The CRT mask is as coarse at 4K as at 1080p (it was twice as fine at 4K), and it lines up

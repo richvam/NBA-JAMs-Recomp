@@ -11,6 +11,7 @@ extern "C" {
 }
 
 #include <algorithm>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
@@ -149,6 +150,40 @@ struct mod_api
 		return luaL_error(L, "unknown option '%s'", id);
 	}
 	static int frame(lua_State *L) { lua_pushinteger(L, mgr(L)->m_frame); return 1; }
+	// nba.include("lib/name.lua"): a shared file from mods/lib/, run once per script; returns
+	// what the file returns (true when it returns nothing), as require does
+	static int include(lua_State *L)
+	{
+		std::string rel = luaL_checkstring(L, 1);
+		if (!mod_manager::lib_path_ok(rel)) return luaL_error(L, "nba.include: only \"lib/<name>.lua\" files from mods/lib/ (got \"%s\")", rel.c_str());
+		mod_manager *m = mgr(L);
+		lua_getfield(L, LUA_REGISTRYINDEX, "nba_included");
+		if (!lua_istable(L, -1)) { lua_pop(L, 1); lua_newtable(L); lua_pushvalue(L, -1); lua_setfield(L, LUA_REGISTRYINDEX, "nba_included"); }
+		int cache = lua_gettop(L);
+		lua_getfield(L, cache, rel.c_str());
+		if (!lua_isnil(L, -1)) return 1;
+		lua_pop(L, 1);
+		// marked while it runs, so two files that include each other stop instead of looping
+		lua_pushboolean(L, 1);
+		lua_setfield(L, cache, rel.c_str());
+		if (load_script(L, m->m_dir + "/" + rel, rel) != LUA_OK) return lua_error(L);
+		lua_call(L, 0, 1);
+		if (lua_isnil(L, -1)) { lua_pop(L, 1); lua_pushboolean(L, 1); }
+		lua_pushvalue(L, -1);
+		lua_setfield(L, cache, rel.c_str());
+		return 1;
+	}
+	// nba.sym("name"): the bit address of a symbol of the running revision, or nil
+	static int sym(lua_State *L)
+	{
+		const char *n = luaL_checkstring(L, 1);
+		mod_manager *m = mgr(L);
+		if (!m || !m->m_mach) return luaL_error(L, "nba.sym: no game is running");
+		auto &t = m->symbols();
+		auto it = t.find(n);
+		if (it == t.end()) lua_pushnil(L); else lua_pushinteger(L, lua_Integer(it->second));
+		return 1;
+	}
 	static int rom_size(lua_State *L) { lua_pushinteger(L, lua_Integer(rom(L).size() / 2)); return 1; }
 	static int rom_read16(lua_State *L) { size_t w = rom_word(L, 1); lua_pushinteger(L, rw(rom(L), w)); return 1; }
 	static int rom_read32(lua_State *L)
@@ -278,7 +313,7 @@ lua_State *mod_manager::new_state(mod_script *mod, bool with_game)
 	lua_setfield(L, LUA_REGISTRYINDEX, "nba_mod");
 
 	static const luaL_Reg api[] = {
-		{ "log", mod_api::log }, { "option", mod_api::option }, { "frame", mod_api::frame },
+		{ "log", mod_api::log }, { "option", mod_api::option }, { "frame", mod_api::frame }, { "include", mod_api::include }, { "sym", mod_api::sym },
 		{ "rom_size", mod_api::rom_size }, { "rom_read16", mod_api::rom_read16 }, { "rom_read32", mod_api::rom_read32 },
 		{ "rom_write16", mod_api::rom_write16 }, { "rom_write32", mod_api::rom_write32 }, { "rom_find", mod_api::rom_find },
 		{ "read8", mod_api::read8 }, { "write8", mod_api::write8 }, { "read16", mod_api::read16 }, { "write16", mod_api::write16 },
@@ -308,7 +343,9 @@ static std::string field_str(lua_State *L, int t, const char *k)
 // Does the script text mention write8 / write16 / write32 other than as rom_write*? A text
 // scan on purpose: it also catches writes behind an alias (local w = nba.write16) or inside
 // a branch that has not run yet. A mention in a comment counts too; that errs on the safe side.
-static bool source_writes_ram(const std::string &path)
+// Libraries a script includes count as part of it: every "lib/....lua" named in its text is
+// scanned too (an include through a variable is not followed; a name in a comment is).
+static bool source_writes_ram(const std::string &path, const std::string &dir, std::vector<std::string> &seen)
 {
 	std::ifstream f(P(path), std::ios::binary);
 	std::string s((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
@@ -319,6 +356,15 @@ static bool source_writes_ram(const std::string &path)
 			bool rom = p >= 4 && s.compare(p - 4, 4, "rom_") == 0;
 			if (!rom && !isalnum(static_cast<unsigned char>(after)) && after != '_') return true;
 		}
+	for (size_t p = s.find("lib/"); p != std::string::npos; p = s.find("lib/", p + 1))
+	{
+		size_t e = s.find(".lua", p);
+		if (e == std::string::npos) break;
+		std::string rel = s.substr(p, e + 4 - p);
+		if (!mod_manager::lib_path_ok(rel) || std::find(seen.begin(), seen.end(), rel) != seen.end()) continue;
+		seen.push_back(rel);
+		if (source_writes_ram(dir + "/" + rel, dir, seen)) return true;
+	}
 	return false;
 }
 
@@ -392,8 +438,94 @@ bool mod_manager::load_meta(mod_script &m)
 	m.has_frame = lua_isfunction(L, -1);
 	lua_pop(L, 1);
 	lua_close(L);
-	m.writes_ram = source_writes_ram(m.path);
+	std::vector<std::string> seen;
+	m.writes_ram = source_writes_ram(m.path, m_dir, seen);
 	return true;
+}
+
+bool mod_manager::lib_path_ok(const std::string &rel)
+{
+	if (rel.size() < 9 || rel.size() > 128 || rel.compare(0, 4, "lib/") != 0 || rel.compare(rel.size() - 4, 4, ".lua") != 0) return false;
+	if (rel.find("..") != std::string::npos || rel.find("//") != std::string::npos) return false;
+	for (char c : rel)
+		if (!(isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-' || c == '.' || c == '/')) return false;
+	return true;
+}
+
+std::string mod_manager::symbols_file() const
+{
+	if (!m_mach) return "";
+	std::vector<u8> *r = m_mach->program_rom();
+	if (!r || r->empty()) return "";
+	char crc[16];
+	snprintf(crc, sizeof crc, "%08x", crc32_of(r->data(), r->size()));
+	return m_dir + "/sym/" + m_game + "_" + crc + ".lua";
+}
+
+// mods/sym/<game>_<crc>.lua returns a table: name = address, or name = { addr = a, pattern =
+// { words... }, at = b } for an address found by hand, which is used only when the ROM holds
+// those words at `at` (default: addr). It runs in a sandbox with nothing but the base library.
+const std::map<std::string, u32> &mod_manager::symbols()
+{
+	if (m_syms_loaded) return m_syms;
+	m_syms_loaded = true;
+	m_syms.clear();
+	std::string file = symbols_file();
+	if (file.empty()) return m_syms;
+	lua_State *L = luaL_newstate();
+	if (!L) return m_syms;
+	luaL_requiref(L, LUA_GNAME, luaopen_base, 1);
+	lua_pop(L, 1);
+	for (const char *g : { "dofile", "loadfile", "load" }) { lua_pushnil(L); lua_setglobal(L, g); }
+	std::string name = file.substr(file.find_last_of('/') + 1);
+	if (load_script(L, file, "sym/" + name) != LUA_OK) { lua_close(L); return m_syms; }      // no file: no symbols
+	lua_sethook(L, budget_hook, LUA_MASKCOUNT, kLoadBudget);
+	if (lua_pcall(L, 0, 1, 0) != LUA_OK || !lua_istable(L, -1)) { fprintf(stderr, "mod: %s: not a symbol table\n", name.c_str()); lua_close(L); return m_syms; }
+	lua_sethook(L, nullptr, 0, 0);
+	std::vector<u8> *rom = m_mach->program_rom();
+	int t = lua_gettop(L), dropped = 0;
+	lua_pushnil(L);
+	while (lua_next(L, t))
+	{
+		if (lua_type(L, -2) == LUA_TSTRING)
+		{
+			std::string k = lua_tostring(L, -2);
+			if (lua_isinteger(L, -1)) m_syms[k] = u32(lua_tointeger(L, -1));
+			else if (lua_istable(L, -1))
+			{
+				int e = lua_gettop(L);
+				lua_getfield(L, e, "addr");
+				bool have = lua_isinteger(L, -1);
+				u32 addr = have ? u32(lua_tointeger(L, -1)) : 0;
+				lua_pop(L, 1);
+				lua_getfield(L, e, "at");
+				u32 at = lua_isinteger(L, -1) ? u32(lua_tointeger(L, -1)) : addr;
+				lua_pop(L, 1);
+				lua_getfield(L, e, "pattern");
+				if (have && lua_istable(L, -1) && rom)
+				{
+					// the words must be in the ROM at `at`, or the entry is not used
+					lua_Integer n = luaL_len(L, -1);
+					size_t w0 = at >= kRomBase ? size_t(at - kRomBase) >> 4 : SIZE_MAX;
+					for (lua_Integer i = 1; have && i <= n; i++)
+					{
+						lua_geti(L, -1, i);
+						size_t w = w0 + size_t(i - 1);
+						long v = lua_isinteger(L, -1) ? long(lua_tointeger(L, -1)) : -1;
+						if (v >= 0 && (w0 == SIZE_MAX || w >= rom->size() / 2 || u16((*rom)[w * 2] | ((*rom)[w * 2 + 1] << 8)) != u16(v))) have = false;
+						lua_pop(L, 1);
+					}
+					if (!have) dropped++;
+				}
+				lua_pop(L, 1);
+				if (have) m_syms[k] = addr;
+			}
+		}
+		lua_pop(L, 1);
+	}
+	lua_close(L);
+	fprintf(stderr, "mod: %zu symbols from %s%s\n", m_syms.size(), name.c_str(), dropped ? (" (" + std::to_string(dropped) + " left out: their code is not in this ROM)").c_str() : "");
+	return m_syms;
 }
 
 std::vector<std::string> mod_manager::netplay_blockers(const std::string &game_id) const
@@ -409,6 +541,7 @@ void mod_manager::scan(const std::string &dir, const std::string &ini)
 	stop();
 	m_mods.clear();
 	m_ini = ini;
+	m_dir = dir;
 	std::error_code ec;
 	std::vector<fs::path> files;
 	for (auto it = fs::directory_iterator(P(dir), ec); !ec && it != fs::directory_iterator(); it.increment(ec))
@@ -523,6 +656,7 @@ void mod_manager::start(const std::string &game_id, arcade_machine &mach)
 	m_game = game_id;
 	m_mach = &mach;
 	m_frame = 0;
+	m_syms_loaded = false;
 	for (auto &m : m_mods)
 	{
 		if (!m.applies_to(game_id)) continue;
@@ -579,4 +713,6 @@ void mod_manager::stop()
 	for (auto &r : m_running) lua_close(r.L);
 	m_running.clear();
 	m_mach = nullptr;
+	m_syms.clear();
+	m_syms_loaded = false;
 }
