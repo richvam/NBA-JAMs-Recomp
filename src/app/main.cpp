@@ -11,6 +11,7 @@
 #include "ui/themes.h"
 #include "ui/screens.h"
 #include "ui/keyboard.h"
+#include "menu_sound.h"
 #include "ui/ui_sdl.h"
 #include "miniz.h"
 #include "gl_present.h"
@@ -65,6 +66,8 @@ struct config
 	std::string net_host;
 	std::vector<std::string> net_recent;   // hosts joined before, the last one first (U4.2)
 	int pause_buttons = 0;        // held on a controller to open the pause menu: 0 Start + Back, 1 L3 + R3 (U5.1)
+	bool menu_music = true, menu_sounds = true;   // U6: from the highlighted game's sound board
+	float menu_volume = 0.6f;
 	std::string pad_profile[4] = { "Default", "Default", "Default", "Default" };   // controller profile of each player
 	std::map<std::string, std::array<std::string, 4>> game_profiles;   // per-game override ("" = use pad_profile)
 	dip_settings dips;
@@ -93,7 +96,7 @@ static SDL_Scancode *key_slot(key_map &k, int i)
 static void save_config(const std::string &path, config &c)
 {
 	std::ofstream f(path);
-	f << "# NBA JAM Recomp - configuration\n[general]\n# news=1 asks github.com once at start for the latest release (only to tell you; nothing is downloaded)\nnews=" << c.news << "\n# pause_buttons: held half a second on a controller for the pause menu (Esc and Guide always work): start+back or l3+r3\npause_buttons=" << (c.pause_buttons == 1 ? "l3+r3" : "start+back") << "\n\n[video]\n# scale: size of the window in multiples of 400x300; 0 = chosen from the screen size\nscale=" << c.scale << "\nfullscreen=" << c.fullscreen
+	f << "# NBA JAM Recomp - configuration\n[general]\n# news=1 asks github.com once at start for the latest release (only to tell you; nothing is downloaded)\nnews=" << c.news << "\n# pause_buttons: held half a second on a controller for the pause menu (Esc and Guide always work): start+back or l3+r3\npause_buttons=" << (c.pause_buttons == 1 ? "l3+r3" : "start+back") << "\n# the menus play the highlighted game's own music and sounds, from its ROMs\nmenu_music=" << c.menu_music << "\nmenu_sounds=" << c.menu_sounds << "\nmenu_volume=" << c.menu_volume << "\n\n[video]\n# scale: size of the window in multiples of 400x300; 0 = chosen from the screen size\nscale=" << c.scale << "\nfullscreen=" << c.fullscreen
 	  << "\n# shader: 0 sharp, 1 smooth, 2 scanlines, 3 CRT, 4 curved CRT\nshader=" << c.shader
 	  << "\n# view: original (4:3) or stretch (fills the window, distorted). A true widescreen view does not exist yet.\nview=" << view_shape_id(c.shape)
 	  << "\n# scaling: integer (whole multiples of the game's lines), fit (fills the height, crisp pixels), smooth (fills the height, filtered)\nscaling=" << view_scaling_id(c.scaling) << "\n# side_fill: around a 4:3 picture on a wider screen: black, blur (the picture, blurred and dimmed), overlay (an image from overlays/ in the data folder)\nside_fill=" << (c.side_fill == 1 ? "blur" : c.side_fill == 2 ? "overlay" : "black") << "\noverlay=" << c.overlay << "\n# overlay_opacity: 0.1 to 1, for overlays with a transparent opening\noverlay_opacity=" << c.overlay_opacity << "\nscanline_strength=" << c.scan_strength
@@ -132,6 +135,9 @@ static void load_config(const std::string &path, config &c)
 		if (k == "language") continue;       // from older versions: the program is English only for now
 		else if (k == "news") c.news = atoi(v.c_str()) != 0;
 		else if (k == "pause_buttons") c.pause_buttons = v == "l3+r3" ? 1 : 0;
+		else if (k == "menu_music") c.menu_music = atoi(v.c_str()) != 0;
+		else if (k == "menu_sounds") c.menu_sounds = atoi(v.c_str()) != 0;
+		else if (k == "menu_volume") c.menu_volume = std::clamp(float(atof(v.c_str())), 0.0f, 1.0f);
 		else if (k == "scale") c.scale = std::clamp(atoi(v.c_str()), 0, 8);
 		else if (k == "fullscreen") c.fullscreen = atoi(v.c_str()) != 0;
 		else if (k == "smooth") c.smooth = atoi(v.c_str()) != 0;
@@ -222,6 +228,9 @@ private:
 	// the screens rebuilt on the menu toolkit (roadmap U3): the game picker and Settings
 	ui::input m_ui_in;
 	ui::screen m_picker, m_settings, m_mods_scr, m_ctl_scr, m_online_scr, m_lobby_scr, m_about_scr, m_news_scr;
+	// menu music and sounds (U6)
+	std::unique_ptr<menu_sound> m_msound;
+	bool ui_next(ui::event &ev);       // the next menu event, with its sound
 	// the pause menu (U5)
 	ui::screen m_pause_scr;
 	screen m_back_to = screen::menu;   // where Settings, Controls, Lua mods and About return: the picker, or the pause menu
@@ -723,6 +732,7 @@ bool app::start_game(int index, bool net_client)
 	m_paused = false;
 	m_test = false;
 	m_screen = screen::game;
+	if (m_msound) m_msound->silence();
 	SDL_SetWindowTitle(m_win, (std::string("NBA JAM Recomp - ") + g.title + (m_net_game ? "   [ONLINE]" : "   [Esc: pause menu  F1: help]")).c_str());
 	SDL_ClearQueuedAudio(m_audio);
 	if (!m_net_game) message("Press F1 to see the controls", 3000);
@@ -869,8 +879,31 @@ static void menu_message(canvas &cv, const std::string &m)
 // ---------------------------------------------------------------------------
 // The game picker and Settings, on the menu toolkit (roadmap U3.1, U3.2; ui/screens.h)
 // ---------------------------------------------------------------------------
+bool app::ui_next(ui::event &ev)
+{
+	if (!m_ui_in.next(ev)) return false;
+	if (m_msound)
+	{
+		using ui::act;
+		if (ev.a == act::back) m_msound->play(menu_sound::back);
+		else if (ev.a == act::confirm || ev.ptr == ui::event::click) m_msound->play(menu_sound::confirm);
+		else if (ev.a == act::up || ev.a == act::down || ev.a == act::left || ev.a == act::right || ev.a == act::tab_prev || ev.a == act::tab_next ||
+		         ev.a == act::page_up || ev.a == act::page_down)
+			m_msound->play(menu_sound::cursor);
+	}
+	return true;
+}
+
 void app::ui_frame_begin()
 {
+	// the menus' music and sounds: the highlighted game's, and none while a game is loaded
+	// (the pause menu, and the screens opened from it)
+	if (m_msound)
+	{
+		const std::string id = m_mach ? std::string() : game_list()[size_t(std::clamp(m_sel, 0, int(game_list().size()) - 1))].id;
+		const bool have = !id.empty() && size_t(m_sel) < m_avail.size() && m_avail[size_t(m_sel)];
+		m_msound->want(have ? id : std::string(), m_cfg.menu_music, m_cfg.menu_sounds, m_cfg.menu_volume * m_cfg.volume);
+	}
 	int dw = 0, dh = 0;
 	if (m_gl.ok()) m_gl.drawable_size(dw, dh); else if (m_ren) SDL_GetRendererOutputSize(m_ren, &dw, &dh);
 	SDL_GetWindowSize(m_win, &m_ui_ww, &m_ui_wh);
@@ -916,6 +949,7 @@ void app::follow_theme(const std::string &game_id, unsigned now)
 		m_theme = t >= 1 ? m_theme_to : ui::mix_themes(m_theme_from, m_theme_to, t);
 		m_theme_fading = t < 1;
 	}
+	m_theme.note = m_msound && m_msound->music_playing() ? "Music on" : "";
 }
 
 ui::picker_state app::picker_now()
@@ -965,7 +999,7 @@ void app::menu_frame()
 		m_picker.tabs[0].panels[0].focus = m_sel;        // the first game that can be played
 	}
 	ui::event ev;
-	while (m_ui_in.next(ev))
+	while (ui_next(ev))
 	{
 		ui::result r = m_picker.handle(ev);
 		m_sel = ui::picker_game_index(m_picker, m_sel);
@@ -1001,6 +1035,7 @@ void app::menu_frame()
 			else if (r.id == ui::pk_about) { m_about_scr = ui::screen(); m_screen = screen::about; return; }
 			else if (r.id == ui::pk_rescan)
 			{
+				if (m_msound) m_msound->silence();       // not while its worker reads a game
 				m_cat->rescan();
 				refresh_availability();
 				m_arts.clear();
@@ -1044,6 +1079,7 @@ ui::settings_state app::settings_now()
 	st.free_play = m_cfg.dips.free_play; st.four_players = m_cfg.dips.four_players; st.video_clips = m_cfg.dips.video_clips; st.country = m_cfg.dips.country;
 	st.news = m_cfg.news;
 	st.pause_buttons = m_cfg.pause_buttons;
+	st.menu_music = m_cfg.menu_music; st.menu_sounds = m_cfg.menu_sounds; st.menu_volume = m_cfg.menu_volume;
 	return st;
 }
 
@@ -1058,6 +1094,7 @@ void app::apply_settings(const ui::settings_state &want)
 	m_cfg.dips.free_play = want.free_play; m_cfg.dips.four_players = want.four_players; m_cfg.dips.video_clips = want.video_clips;
 	m_cfg.dips.country = std::clamp(want.country, 0, 2);
 	m_cfg.pause_buttons = std::clamp(want.pause_buttons, 0, 1);
+	m_cfg.menu_music = want.menu_music; m_cfg.menu_sounds = want.menu_sounds; m_cfg.menu_volume = std::clamp(want.menu_volume, 0.0f, 1.0f);
 	if (want.fullscreen != had.fullscreen)
 	{
 		m_cfg.fullscreen = want.fullscreen;
@@ -1089,7 +1126,7 @@ void app::settings_frame()
 	if (m_settings.tabs.empty()) m_settings = ui::make_settings(settings_now());
 	ui::show_settings(m_settings, settings_now());       // a key (F4 to F8, F11, - and +) may have changed one
 	ui::event ev;
-	while (m_ui_in.next(ev))
+	while (ui_next(ev))
 	{
 		ui::result r = m_settings.handle(ev);
 		if (r.what == ui::result::back) { save_config(m_cfgpath, m_cfg); m_screen = m_back_to; return; }
@@ -1150,7 +1187,7 @@ void app::mods_frame()
 	const auto &games = game_list();
 	if (m_mods_scr.tabs.empty()) m_mods_scr = ui::make_mods(mods_now());
 	ui::event ev;
-	while (m_ui_in.next(ev))
+	while (ui_next(ev))
 	{
 		ui::result r = m_mods_scr.handle(ev);
 		m_mod_sel = ui::mods_index(m_mods_scr, m_mod_sel);
@@ -1215,7 +1252,7 @@ int app::kbd_step()
 {
 	int r = m_menu_ok ? 1 : m_menu_back ? 2 : 0;
 	ui::event ev;
-	while (!r && m_ui_in.next(ev))
+	while (!r && ui_next(ev))
 	{
 		ui::keyboard::outcome o = m_kbd.handle(ev);
 		if (o == ui::keyboard::done) r = 1;
@@ -1285,7 +1322,7 @@ void app::news_frame()
 		m_news_shown = have;
 	}
 	ui::event ev;
-	while (m_ui_in.next(ev))
+	while (ui_next(ev))
 		if (ev.a == ui::act::confirm || m_news_scr.handle(ev).what == ui::result::back) { m_screen = screen::menu; return; }
 	ui_show(m_news_scr);
 }
@@ -1329,7 +1366,7 @@ void app::about_frame()
 	ui_frame_begin();
 	if (m_about_scr.tabs.empty()) m_about_scr = ui::make_about(about_now());
 	ui::event ev;
-	while (m_ui_in.next(ev))
+	while (ui_next(ev))
 	{
 		ui::result r = m_about_scr.handle(ev);
 		if (r.what == ui::result::back) { m_screen = m_back_to; return; }
@@ -1437,7 +1474,7 @@ void app::controls_frame()
 	else
 	{
 		ui::event ev;
-		while (m_ui_in.next(ev))
+		while (ui_next(ev))
 		{
 			ui::result r = m_ctl_scr.handle(ev);
 			const ui::item *it = m_ctl_scr.find(r.id);
@@ -1580,7 +1617,7 @@ void app::net_menu_frame()
 	else
 	{
 		ui::event ev;
-		while (m_ui_in.next(ev))
+		while (ui_next(ev))
 		{
 			ui::result r = m_online_scr.handle(ev);
 			if (r.what == ui::result::back) { m_screen = screen::menu; return; }
@@ -1684,7 +1721,7 @@ void app::net_lobby_frame()
 	if (m_lobby_scr.tabs.empty()) m_lobby_scr = ui::make_lobby(state());
 	bool start = false;
 	ui::event ev;
-	while (m_ui_in.next(ev))
+	while (ui_next(ev))
 	{
 		ui::result r = m_lobby_scr.handle(ev);
 		if (r.what == ui::result::back || (r.what == ui::result::activated && r.id == ui::lb_leave)) { m_net.stop(); m_screen = screen::net_menu; return; }
@@ -1861,7 +1898,7 @@ bool app::pause_frame()
 	};
 	if (m_menu_guide || pause_shortcut()) { resume_game(); return ran; }
 	ui::event ev;
-	while (m_ui_in.next(ev))
+	while (ui_next(ev))
 	{
 		ui::result r = m_pause_scr.handle(ev);
 		const ui::item *it = m_pause_scr.find(r.id);
@@ -2151,6 +2188,16 @@ int app::run()
 	want.samples = 1024;
 	m_audio = SDL_OpenAudioDevice(nullptr, 0, &want, &have, 0);
 	if (m_audio) SDL_PauseAudioDevice(m_audio, 0);
+	if (m_audio)
+		m_msound = std::make_unique<menu_sound>(
+			[this](const std::string &id) -> std::unique_ptr<arcade_machine>
+			{
+				for (const game_info &g : game_list())
+					if (g.id == id) { std::string err; return m_cat->create(g, err); }
+				return nullptr;
+			},
+			[this] { return size_t(SDL_GetQueuedAudioSize(m_audio) / sizeof(float)); },
+			[this](const float *p, size_t n) { SDL_QueueAudio(m_audio, p, Uint32(n * sizeof(float))); });
 
 	refresh_availability();
 	// start on the first available game
@@ -2200,6 +2247,7 @@ int app::run()
 	m_net.stop();
 	save_config(m_cfgpath, m_cfg);
 	for (auto *c : m_pads) SDL_GameControllerClose(c);
+	m_msound.reset();
 	if (m_audio) SDL_CloseAudioDevice(m_audio);
 	if (m_tex) SDL_DestroyTexture(m_tex);
 	m_gl.shutdown();

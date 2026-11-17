@@ -150,8 +150,11 @@ screen make_settings(const settings_state &st)
 	sound.name = "Sound";
 	panel so;
 	so.title = "Sound";
-	so.r = { 0.1f, 0.0f, 0.8f, 0.3f };
-	so.items = { slider(st_volume, "Volume", st.volume, 0.0f, 1.0f, 0.1f), label("Also on keys: - and +.") };
+	so.r = { 0.1f, 0.0f, 0.8f, 0.62f };
+	so.items = { slider(st_volume, "Volume", st.volume, 0.0f, 1.0f, 0.1f), label("Also on keys: - and +."),
+	             header("IN THE MENUS"), toggle(st_menu_music, "Music", st.menu_music), toggle(st_menu_sounds, "Sounds", st.menu_sounds),
+	             slider(st_menu_volume, "Menu volume", st.menu_volume, 0.0f, 1.0f, 0.1f),
+	             label("Played by the highlighted game's"), label("own sound board, from its ROMs."), label("Without them the menus are silent.") };
 	sound.panels = { so };
 
 	tab game;
@@ -191,7 +194,8 @@ void show_settings(screen &s, const settings_state &st)
 	if (item *i = s.find(st_sides)) i->choices = st.side_names;
 	pick(st_shape, st.shape); pick(st_scaling, st.scaling); pick(st_shader, st.shader); pick(st_sides, st.sides); pick(st_country, st.country); pick(st_pause, st.pause_buttons);
 	tog(st_fullscreen, st.fullscreen); tog(st_free_play, st.free_play); tog(st_players, st.four_players); tog(st_clips, st.video_clips); tog(st_news, st.news);
-	sli(st_scanlines, st.scanlines); sli(st_volume, st.volume);
+	sli(st_scanlines, st.scanlines); sli(st_volume, st.volume); sli(st_menu_volume, st.menu_volume);
+	tog(st_menu_music, st.menu_music); tog(st_menu_sounds, st.menu_sounds);
 }
 
 void read_settings(const screen &s, settings_state &st)
@@ -202,7 +206,8 @@ void read_settings(const screen &s, settings_state &st)
 	auto sli = [&](int id, float &v) { if (const item *i = m.find(id)) v = std::round(i->value * 10.0f) / 10.0f; };
 	pick(st_shape, st.shape); pick(st_scaling, st.scaling); pick(st_shader, st.shader); pick(st_sides, st.sides); pick(st_country, st.country); pick(st_pause, st.pause_buttons);
 	tog(st_fullscreen, st.fullscreen); tog(st_free_play, st.free_play); tog(st_players, st.four_players); tog(st_clips, st.video_clips); tog(st_news, st.news);
-	sli(st_scanlines, st.scanlines); sli(st_volume, st.volume);
+	sli(st_scanlines, st.scanlines); sli(st_volume, st.volume); sli(st_menu_volume, st.menu_volume);
+	tog(st_menu_music, st.menu_music); tog(st_menu_sounds, st.menu_sounds);
 }
 
 const std::vector<std::string> &pause_button_names()

@@ -49,6 +49,8 @@ public:
 	std::vector<u8> *program_rom() override { return &m_roms.program; }
 	u16 peek16(u32 a) override { return read16(a & ~15u, 0xffff); }
 	void poke16(u32 a, u16 v) override { write16(a & ~15u, v, 0xffff); }
+	void set_sound_only(bool on) override { m_maincpu.set_input_line(INPUT_LINE_HALT, on ? ASSERT_LINE : CLEAR_LINE); }
+	void sound_command(u8 b) override { m_sound.reset_write(0); m_sound.write(b); }
 	u32 fingerprint() const override
 	{
 		u32 h = fnv1a(m_roms.program.data(), m_roms.program.size());

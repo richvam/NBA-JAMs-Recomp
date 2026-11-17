@@ -151,6 +151,7 @@ struct theme
 	std::vector<uint32_t> backdrop;                        // kW x kH pixels, painted instead of the gradient
 	std::shared_ptr<const rom_art::font> title_font, list_font;
 	int panel_alpha = 255;                                 // how solid the panels are over the backdrop
+	std::string note;                                      // at the right of the status line, e.g. "Music on" (U6.2)
 };
 
 struct result

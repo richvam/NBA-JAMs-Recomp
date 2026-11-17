@@ -72,9 +72,11 @@ struct settings_state
 	int country = 0;
 	bool news = true;
 	int pause_buttons = 0;               // what is held on a controller for the pause menu: index into pause_button_names()
+	bool menu_music = true, menu_sounds = true;   // in the menus, from the highlighted game's sound board (U6)
+	float menu_volume = 0.6f;
 };
 
-enum settings_id { st_shape = 1, st_scaling, st_shader, st_scanlines, st_sides, st_fullscreen, st_volume, st_free_play, st_players, st_country, st_clips, st_news, st_pause };
+enum settings_id { st_shape = 1, st_scaling, st_shader, st_scanlines, st_sides, st_fullscreen, st_volume, st_free_play, st_players, st_country, st_clips, st_news, st_pause, st_menu_music, st_menu_sounds, st_menu_volume };
 
 // The controller buttons held for half a second to open the pause menu (U5.1). There is no
 // "none": Esc and the Guide button always open it as well, so it can never be unbound.
