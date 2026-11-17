@@ -67,6 +67,7 @@ struct settings_state
 	int sides = 0;                       // index into side_names
 	std::vector<std::string> side_names; // "Black", "Blurred picture", then one per overlay image
 	bool fullscreen = false;
+	bool tv_margins = false;              // the menus kept inside the safe area of a TV (U7.2)
 	float volume = 0.8f;
 	bool free_play = true, four_players = true, video_clips = true;
 	int country = 0;
@@ -76,7 +77,7 @@ struct settings_state
 	float menu_volume = 0.6f;
 };
 
-enum settings_id { st_shape = 1, st_scaling, st_shader, st_scanlines, st_sides, st_fullscreen, st_volume, st_free_play, st_players, st_country, st_clips, st_news, st_pause, st_menu_music, st_menu_sounds, st_menu_volume };
+enum settings_id { st_shape = 1, st_scaling, st_shader, st_scanlines, st_sides, st_fullscreen, st_volume, st_free_play, st_players, st_country, st_clips, st_news, st_pause, st_menu_music, st_menu_sounds, st_menu_volume, st_tv };
 
 // The controller buttons held for half a second to open the pause menu (U5.1). There is no
 // "none": Esc and the Guide button always open it as well, so it can never be unbound.

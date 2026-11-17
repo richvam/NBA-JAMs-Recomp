@@ -40,6 +40,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - The Online screen remembers the last five hosts you joined, under "Join again".
 - A pause menu in the game: Esc, the Guide button, or holding Start and Back on a controller. Resume, volume, screenshot, settings, controls, Lua mods, help, coins, service credit, TEST switch, reset, and quit to the game list. Online the game goes on while it is open, and what would change the game is greyed. The held buttons can be changed to L3 and R3 in Settings.
 - Menu music and sounds: the menus play the highlighted game's own tune and its cursor, confirm and back sounds, from its ROMs. Switches and a volume for them in Settings, Sound tab; "Music on" shows in the status line. Without the game's ROMs the menus are silent.
+- Settings, Video: "Menus inside a TV's safe area" keeps the menus away from the edges a TV cuts off.
 
 ### Changed
 - The CRT mask is as coarse at 4K as at 1080p (it was twice as fine at 4K), and it lines up
@@ -66,8 +67,10 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - The Lua mods and Controls screens are rebuilt in the new style. Lua mods shows the list and the highlighted script's page side by side, with the whole description. Controls groups who (game, player, profile), the buttons and the profile; a button is still bound by pressing it.
 - The Online, lobby, About and News screens are rebuilt like the rest of the menus and work with a controller, keyboard or mouse. The lobby lists the players with their ping, and the host can change the input delay there. About is now "About and help": it lists the controls of each player as they are set now, and the program's keys. The UDP port is typed instead of stepped.
 - In a game, Esc opens the pause menu instead of leaving the game at once; "Quit to the game list" is in the menu.
+- The README files describe the menus and the pause menu first; the F-keys are shortcuts.
 
 ### Fixed
+- With a controller in use, moving or resizing the window under a still mouse pointer no longer takes the focus away from the controller.
 
 ### Online
 - An online game does not start while a Lua mod that writes memory or runs every frame is

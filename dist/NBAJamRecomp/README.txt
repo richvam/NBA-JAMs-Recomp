@@ -5,11 +5,17 @@ Downloads and news: https://github.com/richvam/NBA-JAMs-Recomp/releases
 Original project:   https://github.com/PocketLucho/NBA-JAM---Recompiled
 If you want to support me, go to https://buymeacoffee.com/pocket_lucho
 
-Run NBAJamRecomp.exe (64-bit Windows 10/11, no installation). A menu lets you
-pick the game (arrows + Enter, or a gamepad). In a game, Esc opens the pause menu (on a
-controller: hold Start and Back, or press Guide); "Quit to the game list" is there.
-"News and updates" in the menu tells you when a newer version is published (it
-only tells you; nothing is downloaded) and can be switched off there.
+Run NBAJamRecomp.exe (64-bit Windows 10/11, no installation). Everything works
+with a controller alone; the keyboard and the mouse work too. In the menus the
+directions move, A (Enter) chooses, B (Esc) goes back, the shoulder buttons
+(Q, E) change tab, and the bottom line says what each button does.
+
+In a game, Esc, the Guide button, or Start and Back held for half a second open
+the pause menu: resume, volume, screenshot, settings, controls, Lua mods, help,
+coins, service credit, TEST switch, reset, and "Quit to the game list".
+
+"News" in the menu tells you when a newer version is published (it only tells
+you; nothing is downloaded). It can be switched off in Settings, Program.
 
 
 
@@ -48,53 +54,51 @@ comes from. To build them yourself use tools/build_roms.sh from the source
 code: its output in data\ is used when the ROMs are not found.
 
 
-CONTROLS (keyboard)
--------------------
-              Up Down Left Right     Shoot Pass  Turbo  Start  Coin
-  Player 1    arrows                  Z     X     C      1      5
-  Player 2    W   S   A   D           F     G     V      2      6
-  Player 3    numpad 8/2/4/6          0     .   Enter    3      7
-  Player 4    I   K   J   L           H     ;     U      4      8
+CONTROLS
+--------
+                Move              Shoot  Pass  Turbo           Start  Coin
+  Controller    stick or d-pad    A      B     X/shoulder/trig  Start  Back
+  Keys, P1      arrows            Z      X     C                1      5
+  Keys, P2      W  S  A  D        F      G     V                2      6
+  Keys, P3      numpad 8/2/4/6    0      .     Enter            3      7
+  Keys, P4      I  K  J  L        H      ;     U                4      8
 
-  Gamepads: each pad controls one player (A shoot, B pass, X/trigger turbo,
-  Start, Back = coin) by default.
+  Each controller is one player. Main menu -> "Controls": pick a player, pick
+  or create a profile, choose an action and press the button or stick
+  direction for it (press a bound one again to remove it; X/Delete clears the
+  action; waiting five seconds or B cancels). Set "Game" to one game to give
+  it its own profile. Shortcuts: one input holds several arcade buttons at
+  once - Shove (turbo+pass), Turbo shot (turbo+shoot) and two of your choice.
+  "Export profile" writes it to controller_profiles\export\; to import, copy
+  .ini profiles to controller_profiles\import\ and choose "Import", or drop
+  the file onto the window. "About and help" -> Controls lists what every
+  action is on right now. Keyboard keys are changed in nbajam_recomp.ini.
 
-  Remapping: main menu -> "Controls". Pick a player, pick or create a profile,
-  select an action and press Enter/A, then the pad button or stick direction
-  (press an already bound input again to remove it; Del/X clears the action).
-  Each player (P1-P4) has its own profile for all games; set "Game" to a
-  single game to give it a different profile there ("as all" = no override).
-  Shortcuts: one pad input holds several arcade buttons at once - Shove
-  (turbo+pass; on offence the same buttons do a turbo pass), Turbo shot
-  (turbo+shoot) and two custom shortcuts (Left/Right picks their buttons).
-  "Export setup" saves the per-player choice of the selected game (or all
-  games) together with those profiles in one file; importing it restores it.
-  Profiles are saved in controller_profiles/. "Export profile" writes it to
-  controller_profiles/export/ (path copied to the clipboard); to import, copy
-  .ini profiles to controller_profiles/import/ and choose "Import profiles",
-  or drop the file onto the window.
+  Settings (main menu, or "Video and sound" in the pause menu): the picture,
+  the TV safe area, the volume, the menus' own music and sounds (played from
+  the highlighted game's ROMs), the cabinet switches, the pause menu buttons.
 
-  F1   on-screen help                F2  TEST switch (service menu)
-  F3   reset
-  F4   video: Sharp -> Smooth -> Scanlines -> CRT -> Curved CRT
+  Keyboard shortcuts for the same things:
+  Esc  pause menu                    F1  help over the game
+  F2   TEST switch (service menu)    F3  reset
+  F4   picture: Sharp -> Smooth -> Scanlines -> CRT -> Curved CRT
   F5   scaling: Fit -> Smooth -> Integer
   F6   scanline strength
   F7   shape: Original 4:3 -> Stretch
   F8   around the 4:3 picture on a wide screen: black -> blurred picture -> overlays
   F11  fullscreen (or Alt+Enter)
   F12  screenshot (PNG in the screenshots\ folder; Print Screen works too)
-  P    pause                         - / +  volume
+  P    pause without the menu        - / +  volume
   9    service button (credit)
-  Esc  pause menu (resume, settings, coins, reset, quit to the game list)
 
-Settings (scale, keys, volume, DIPs) are kept in nbajam_recomp.ini
-next to the .exe. Each game's high scores and settings (NVRAM/CMOS) are kept
-in saves\.
+Settings are kept in nbajam_recomp.ini next to the .exe. Each game's high
+scores and settings (NVRAM/CMOS) are kept in saves\.
 
 
 VIDEO (shaders)
 ---------------
-  The picture is drawn with OpenGL shaders. Scaling (F5):
+  The picture is drawn with OpenGL shaders; all of this is in Settings, Video.
+  Scaling (F5):
     Fit          fills the height of the window; pixels stay crisp (default)
     Smooth       the same size, filtered
     Integer      every game line covers the same number of screen rows, so
@@ -120,18 +124,22 @@ VIDEO (shaders)
 
 ONLINE PLAY
 -----------
-  Select the game in the menu and press N (or Y on the pad).
-  * The host chooses "Host a game": they are player 1 and wait in the lobby.
-    Press Enter to start.
-  * The others choose "Join", type the host's IP (Ctrl+V pastes) and press
-    Enter. They become players 2, 3 and 4 in order of arrival.
+  Highlight the game and choose "Online game" in the menu (or X on a pad, N).
+  * The host chooses "Host a game": they are player 1 and wait in the lobby,
+    which lists who has joined. "Start the game" starts it.
+  * The others choose "Join a game" and type the host's address: on the
+    on-screen keyboard with a pad, or on the keyboard (Ctrl+V pastes). They
+    become players 2, 3 and 4 in order of arrival. Hosts joined before are
+    listed under "Join again".
   * Everybody plays with their player 1 controls (P1 keys or first pad).
   * Everybody needs the same ROMs; the app tells you if they differ.
   * Input delay: 3-4 on a LAN, 5-7 over the internet. If the game stalls now
     and then ("Waiting for the network..."), raise the delay.
   * Over the internet the host must forward UDP port 7845 on the router, or
     use a virtual LAN (Tailscale, ZeroTier, Radmin VPN).
-  * If "DESYNC" appears, leave (Esc, then "Leave the online game") and host the game again.
+  * The pause menu opens online too; the game goes on for everybody.
+  * If "DESYNC" appears, leave (pause menu, "Leave the online game") and host
+    the game again.
 
 
 FOLDERS

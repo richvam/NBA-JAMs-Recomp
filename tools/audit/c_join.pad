@@ -1,0 +1,47 @@
+# U7.1 audit C, joining: type the host's address on the on-screen keyboard and join
+wait 9000
+expect menu
+tap down 5
+tap a
+expect online
+tap down
+tap a
+wait 300
+expect typing
+tap a
+tap right
+tap a
+tap down 2
+tap left
+tap a
+tap down
+tap a
+tap right
+tap a
+tap left
+tap a
+tap right
+tap a
+tap left
+tap a
+tap up 3
+tap left
+tap a
+shot
+tap rb
+wait 1500
+expect lobby
+shot
+wait 30000
+expect game
+shot
+wait 5000
+shot
+wait 15000
+log after the host left: back on the game list with the reason
+expect menu
+shot
+tap b
+tap left
+tap a
+wait 1000

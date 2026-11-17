@@ -1,0 +1,68 @@
+# U7.1 audit B: with ROMs - a mod, a rebind, news, about, a game, the pause menu, quit
+wait 6000
+expect menu
+shot
+# Lua mods: switch the first script with the context button
+tap down 5
+tap down 2
+tap a
+expect mods
+tap x
+shot
+tap b
+expect menu
+# Controls: bind the right stick click to Shoot as well
+tap down
+tap a
+expect controls
+tap down 3
+tap down 4
+tap a
+wait 300
+tap rs
+wait 500
+shot
+tap b
+expect menu
+# News, About (its Controls tab)
+tap down
+tap a
+expect news
+tap b
+tap down
+tap a
+expect about
+tap rb
+shot
+tap b
+expect menu
+# T.E.
+tap up 5
+tap up
+tap up 3
+tap a
+wait 9000
+expect game
+shot
+# the pause menu: held Start + Back
+hold start+back 700
+wait 500
+expect pause
+shot
+tap right
+tap a
+tap b
+expect game
+wait 1000
+# again with Guide, then quit to the game list
+tap guide
+wait 500
+expect pause
+tap down 7
+tap a
+wait 1500
+expect menu
+tap b
+tap left
+tap a
+wait 1000
