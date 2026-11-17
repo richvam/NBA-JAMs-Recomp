@@ -1,6 +1,7 @@
 // machine.h - common interface for the emulated boards (T-unit, Wolf-unit)
 #pragma once
 #include "emu.h"
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -58,4 +59,10 @@ public:
 	virtual std::vector<u8> *program_rom() { return nullptr; }
 	virtual u16 peek16(u32 bitaddr) { (void)bitaddr; return 0; }
 	virtual void poke16(u32 bitaddr, u16 v) { (void)bitaddr; (void)v; }
+
+	// Menu sound (roadmap U6.1): the board's own sound board on its own. With sound_only on
+	// the main CPU is held, so only the bytes sent with sound_command() play.
+	virtual void set_sound_only(bool on) { (void)on; }
+	virtual void sound_command(u8 byte) { (void)byte; }
+	std::function<void(u8)> on_sound_command;           // each byte the main CPU sends the sound board
 };

@@ -1206,6 +1206,36 @@ int main(int argc, char **argv)
 		}
 	}
 
+	// ---------------- U6: menu music and sounds, in Settings and the status line ----------------
+	{
+		settings_state a;
+		a.shaders = { "Sharp" }; a.side_names = { "Black" };
+		a.menu_music = false; a.menu_sounds = true; a.menu_volume = 0.3f;
+		screen s = make_settings(a);
+		settings_state b;
+		read_settings(s, b);
+		s.cur_tab = 1; s.fix_focus();
+		bool reach = s.find(st_menu_music) && s.find(st_menu_sounds) && s.find(st_menu_volume);
+		CHECK(reach && !b.menu_music && b.menu_sounds && std::fabs(b.menu_volume - 0.3f) < 1e-4f, "Settings: menu music, menu sounds and their volume round-trip");
+		a.menu_music = true; a.menu_sounds = false; a.menu_volume = 0.9f;
+		show_settings(s, a);
+		read_settings(s, b);
+		CHECK(b.menu_music && !b.menu_sounds && std::fabs(b.menu_volume - 0.9f) < 1e-4f, "Settings: a change from elsewhere shows in the widgets and reads back");
+
+		// "Music on" at the right of the status line, only when it is set
+		theme th5;
+		canvas off(screen::kW, screen::kH), on(screen::kW, screen::kH);
+		s.draw(off, th5, device::xbox, 0);
+		th5.note = "Music on";
+		s.draw(on, th5, device::xbox, 0);
+		int diff_right = 0, diff_left = 0;
+		for (int y = screen::kH - 30; y < screen::kH; y++)
+			for (int x = 0; x < screen::kW; x++)
+				if (on.px[size_t(y) * screen::kW + size_t(x)] != off.px[size_t(y) * screen::kW + size_t(x)]) (x > screen::kW / 2 ? diff_right : diff_left)++;
+		CHECK(diff_right > 20 && diff_left == 0, "status line: \"Music on\" is drawn at the right when the music plays, and nothing else moves");
+		write_png(out, "settings_sound_music_on.png", on);
+	}
+
 	printf("\n%d checks, %d failed\n", g_run, g_fail);
 	return g_fail ? 1 : 0;
 }

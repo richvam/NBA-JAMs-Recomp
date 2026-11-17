@@ -44,6 +44,8 @@ public:
 	}
 	cpu_device *maincpu() override { return &m_maincpu; }
 	cpu_device *soundcpu() override { return &m_dcs.cpu(); }
+	void set_sound_only(bool on) override { m_maincpu.set_input_line(INPUT_LINE_HALT, on ? ASSERT_LINE : CLEAR_LINE); }
+	void sound_command(u8 b) override { m_dcs.data_w(b); }
 
 private:
 	u64 read(offs_t addr, u64 mem_mask) override;

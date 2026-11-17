@@ -242,7 +242,7 @@ void wunit_machine::write16(offs_t a, u16 data, u16 mask)
 	}
 	if (IN_RANGE(a, 0x01480000, 0x014fffff)) { m_cmos_write_enable = 1; return; }
 	if (IN_RANGE(a, 0x01600000, 0x0160001f)) { if (WOFF(a, 0x01600000) == 0 && (mask & 0xff)) pic_write(u8(data)); return; }
-	if (IN_RANGE(a, 0x01680000, 0x0168001f)) { if (WOFF(a, 0x01680000) == 0 && (mask & 0xff)) m_dcs.data_w(data & 0xff); return; }
+	if (IN_RANGE(a, 0x01680000, 0x0168001f)) { if (WOFF(a, 0x01680000) == 0 && (mask & 0xff)) { m_dcs.data_w(data & 0xff); if (on_sound_command) on_sound_command(u8(data)); } return; }
 	if (IN_RANGE(a, 0x01800000, 0x0187ffff))
 	{
 		offs_t o = WOFF(a, 0x01800000) % 16 % 8;

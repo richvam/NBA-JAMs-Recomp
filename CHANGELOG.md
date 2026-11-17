@@ -39,6 +39,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - An on-screen keyboard, so a controller is enough to type the host's address, the UDP port and a new profile's name. A physical keyboard still types, and Ctrl+V pastes.
 - The Online screen remembers the last five hosts you joined, under "Join again".
 - A pause menu in the game: Esc, the Guide button, or holding Start and Back on a controller. Resume, volume, screenshot, settings, controls, Lua mods, help, coins, service credit, TEST switch, reset, and quit to the game list. Online the game goes on while it is open, and what would change the game is greyed. The held buttons can be changed to L3 and R3 in Settings.
+- Menu music and sounds: the menus play the highlighted game's own tune and its cursor, confirm and back sounds, from its ROMs. Switches and a volume for them in Settings, Sound tab; "Music on" shows in the status line. Without the game's ROMs the menus are silent.
 
 ### Changed
 - The CRT mask is as coarse at 4K as at 1080p (it was twice as fine at 4K), and it lines up

@@ -331,6 +331,7 @@ void tunit_machine::write16(offs_t a, u16 data, u16 mask)
 		{
 			m_sound.reset_write(~data & 0x100);
 			m_sound.write(data & 0xff);
+			if ((data & 0x100) && on_sound_command) on_sound_command(u8(data));
 			m_fake_sound_state = 128;
 		}
 		return;
