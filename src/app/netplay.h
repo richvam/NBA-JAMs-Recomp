@@ -97,7 +97,7 @@ public:
 	enum class stun_state { off, asking, found, failed };
 	stun_state stun_status() const { return m_stun; }
 	net_addr public_addr() const { return m_public; }
-	// host: send to a player's address (from their code) for 30 s so the host's router lets
+	// host: send to a player's address (from their code) for 60 s so the host's router lets
 	// their packets in; the player's own packets to the host do the same on their side
 	void invite(const net_addr &player);
 	int invites() const { return int(m_invites.size()); }

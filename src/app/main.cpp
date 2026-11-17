@@ -1894,7 +1894,7 @@ void app::net_lobby_frame()
 		if (kbd_step() == 1)
 		{
 			net_addr a;
-			if (net_code_parse(m_edit, a)) { m_net.invite(a); message("Letting " + net_code(a) + " in for 30 seconds", 3000); }
+			if (net_code_parse(m_edit, a)) { m_net.invite(a); message("Letting " + net_code(a) + " in for 60 seconds", 3000); }
 			else message("That is not a code: ten letters and digits, like ABCDE-FGHJK", 5000);
 		}
 		ui::update_lobby(m_lobby_scr, state());

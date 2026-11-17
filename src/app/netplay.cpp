@@ -753,6 +753,6 @@ void netplay::tick_stun(u32 now)
 
 void netplay::invite(const net_addr &player)
 {
-	for (auto &i : m_invites) if (i.to == player) { i.until = net_now_ms() + 30000; return; }
-	m_invites.push_back({ player, net_now_ms() + 30000 });
+	for (auto &i : m_invites) if (i.to == player) { i.until = net_now_ms() + 60000; return; }
+	m_invites.push_back({ player, net_now_ms() + 60000 });
 }
