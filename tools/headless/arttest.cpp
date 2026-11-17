@@ -7,9 +7,12 @@
 //       give the fallback and never a crash. With a folder, PNGs of the test screen.
 //
 //   arttest --roms <app_dir> [out_dir]
+//       also writes every screen of the program in each game's theme (<game>_screen_*.png,
+//       the Part 2 gate review). These hold game art: keep the folder out of the repository.
 //       The user's own ROMs (<app_dir>/roms): what is read from each game, and with a
 //       folder the pages of the test screen as PNGs. Those PNGs hold game art: keep the
 //       folder outside the repository.
+#include "ui/keyboard.h"
 #include "games.h"
 #include "rom_art.h"
 #include "ui/art_view.h"
@@ -188,6 +191,88 @@ static int real_roms(const std::string &base, const std::string &out)
 			ui::event down; down.a = ui::act::down;
 			pk.handle(down);
 		}
+	}
+	// every screen of the program, in each game's theme (the Part 2 gate review)
+	if (!out.empty())
+	{
+		using namespace ui;
+		settings_state ss;
+		ss.shaders = { "Sharp", "Smooth", "Scanlines", "CRT", "Curved CRT" };
+		ss.side_names = { "Black", "Blurred picture", "cabinet_purple" };
+		mods_state ms;
+		ms.folder = base + "/mods";
+		mod_view a;
+		a.name = "Quarter length"; a.description = "Sets how long a quarter lasts, from 30 seconds to 12 minutes, on every game."; a.enabled = true;
+		a.options.push_back({ "Minutes", { "0:30", "1:30", "3:00", "12:00" }, 2 });
+		for (const game_info &g : game_list()) a.games.push_back({ g.title, true, true });
+		mod_view b = a;
+		b.name = "No team select timer"; b.description = "Removes the countdown on the team select screen."; b.enabled = false; b.options.clear();
+		ms.mods = { a, b };
+		controls_state cs;
+		cs.games = { "All games" };
+		for (const game_info &g : game_list()) cs.games.push_back(g.title);
+		cs.profiles = { "Default", "Fight stick" };
+		cs.pad = "Xbox Wireless Controller";
+		static const char *an[13] = { "Up", "Down", "Left", "Right", "Shoot", "Pass", "Turbo", "Start", "Coin", "Shove", "Turbo shot", "Shortcut 1", "Shortcut 2" };
+		static const char *ab[13] = { "dpup, -lefty", "dpdown, +lefty", "dpleft, -leftx", "dpright, +leftx", "a, y", "b", "x, rightshoulder", "start", "back", "-", "-", "-", "-" };
+		static const char *ak[9] = { "Up", "Down", "Left", "Right", "Z", "X", "C", "1", "5" };
+		for (int i = 0; i < 13; i++) cs.actions.push_back({ an[i], ab[i], false });
+		cs.shortcut_sets = { "-", "shoot", "pass", "turbo+pass" };
+		online_state os;
+		os.address = "192.168.1.20"; os.local_ips = { "192.168.1.31" }; os.recent = { "192.168.1.20", "100.84.12.7" };
+		lobby_state lh;
+		lh.local_ips = os.local_ips;
+		lh.players = { { "Player 1", "you (host)" }, { "Player 2", "192.168.1.20  12 ms  ready" } };
+		lobby_state lj;
+		lj.host = false; lj.address = "192.168.1.31"; lj.slot = 1; lj.ping = 12; lj.count = 2;
+		about_state as;
+		as.version = "test"; as.build = "test"; as.data_dir = base; as.player = 0; as.profile = "Default"; as.pad = "Xbox Wireless Controller";
+		for (int i = 0; i < 13; i++) as.controls.push_back({ an[i], i < 9 ? ak[i] : "", ab[i] });
+		news_state ns;
+		ns.ok = true; ns.name = "NBA JAM Recomp 2026.12.01"; ns.date = "2026-12-01"; ns.version = "2026.11.06"; ns.is_new = true; ns.page = "github.com/richvam/NBA-JAMs-Recomp/releases";
+		ns.lines = { "ADDED", "- A pause menu in the game.", "- Menu music and sounds from the game's own sound board.", "", "FIXED", "- The menus keep the focus on the controller." };
+		int written = 0;
+		for (size_t gi = 0; gi < game_list().size(); gi++)
+		{
+			const game_info &g = game_list()[gi];
+			roms r;
+			art_set set = cat.art_roms(g, r) ? read(r) : art_set();
+			theme t = make_theme(load_theme_spec(theme_id_for_game(g.id), ""), &set);
+			os.game = lh.game = g.title;
+			as.game = g.title;
+			pause_state ps;
+			ps.game = g.title;
+			pause_state po = ps;
+			po.online = true;
+			struct shot { std::string name; screen s; device dev; };
+			std::vector<shot> shots;
+			for (int tab = 0; tab < 4; tab++) { screen st = make_settings(ss); st.cur_tab = tab; st.fix_focus(); shots.push_back({ "settings_" + std::to_string(tab + 1), st, device::xbox }); }
+			shots.push_back({ "mods", make_mods(ms), device::xbox });
+			shots.push_back({ "controls", make_controls(cs), device::xbox });
+			shots.push_back({ "online", make_online(os), device::xbox });
+			shots.push_back({ "lobby_host", make_lobby(lh), device::xbox });
+			shots.push_back({ "lobby_join", make_lobby(lj), device::playstation });
+			for (int tab = 0; tab < 4; tab++) { screen st = make_about(as); st.cur_tab = tab; st.fix_focus(); shots.push_back({ "about_" + std::to_string(tab + 1), st, device::keyboard }); }
+			shots.push_back({ "news", make_news(ns), device::keyboard });
+			shots.push_back({ "pause", make_pause(ps), device::xbox });
+			shots.push_back({ "pause_online", make_pause(po), device::xbox });
+			for (auto &sh : shots)
+			{
+				canvas cv(screen::kW, screen::kH);
+				sh.s.draw(cv, t, sh.dev, 0);
+				write_png(out, std::string(g.id) + "_screen_" + sh.name + ".png", cv);
+				written++;
+			}
+			// the on-screen keyboard over the Online screen
+			keyboard kb;
+			kb.open(layout::address, "The host's address", "192.168.", 60);
+			canvas cv(screen::kW, screen::kH);
+			make_online(os).draw(cv, t, device::xbox, 0);
+			kb.draw(cv, t, device::xbox, 0);
+			write_png(out, std::string(g.id) + "_screen_keyboard.png", cv);
+			written++;
+		}
+		printf("%d screens written, %zu themes\n", written, game_list().size());
 	}
 	printf("\n%d of %zu games gave ROM art\n", found, game_list().size());
 	return 0;
