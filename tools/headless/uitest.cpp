@@ -13,6 +13,7 @@
 #include "ui/gallery.h"
 #include "ui/themes.h"
 #include "ui/screens.h"
+#include "ui/keyboard.h"
 #include <cmath>
 #include "miniz.h"
 #include <cstdio>
@@ -992,6 +993,120 @@ int main(int argc, char **argv)
 			shots[i].draw(cv, th2, i == 1 ? device::xbox : device::keyboard, 0);
 			write_png(out, files[i], cv);
 		}
+	}
+
+	// ---------------- U4: the on-screen keyboard and recent hosts ----------------
+	{
+		// press the key showing `label`, moving to it with directions only, as a controller does
+		auto press_key = [&](keyboard &k, const std::string &label) -> keyboard::outcome
+		{
+			for (int guard = 0; guard < 200; guard++)
+			{
+				if (k.current().label == label) return k.handle(ev(act::confirm));
+				// find it, then step towards it: rows first, then along the row
+				int tr = -1, tc = -1;
+				for (int r = 0; r < int(k.rows().size()); r++)
+					for (int c = 0; c < int(k.rows()[size_t(r)].size()); c++)
+						if (k.rows()[size_t(r)][size_t(c)].label == label) { tr = r; tc = c; }
+				if (tr < 0) return keyboard::none;
+				if (k.row() != tr) k.handle(ev(tr > k.row() ? act::down : act::up));
+				else k.handle(ev(tc > k.col() ? act::right : act::left));
+			}
+			return keyboard::none;
+		};
+		auto type_all = [&](keyboard &k, const std::string &s)
+		{
+			bool ok = true;
+			for (char c : s) ok = ok && press_key(k, c == ' ' ? "SP" : std::string(1, c)) == keyboard::typed;
+			return ok;
+		};
+
+		// an IP address with directions and Confirm only
+		keyboard ip;
+		ip.open(layout::address, "The host's address", "", 60);
+		bool typed = type_all(ip, "192.168.1.20");
+		keyboard::outcome ok = press_key(ip, "OK");
+		CHECK(typed && ok == keyboard::done && ip.text == "192.168.1.20", "keyboard: an IP address is typed with directions and Confirm alone, and OK takes it");
+		keyboard::outcome del = ip.handle(ev(act::context));
+		bool erased = ip.text == "192.168.1.2";
+		CHECK(del == keyboard::typed && erased && ip.handle(ev(act::back)) == keyboard::cancelled && ip.handle(ev(act::tab_next)) == keyboard::done,
+		      "keyboard: the context button deletes, Back cancels, the next-tab button is OK");
+		CHECK(!ip.type('/') && !ip.type(' ') && ip.type('a') && ip.text == "192.168.1.2a", "keyboard: the address layout refuses what cannot be in an address; a physical keyboard can still type a name");
+
+		// a profile name, with small letters through the shift key
+		keyboard nm;
+		nm.open(layout::text, "Name of the new profile", "Default copy", 24);
+		for (int i = 0; i < 4; i++) nm.handle(ev(act::context));
+		bool shift = press_key(nm, "SMALL") == keyboard::none && nm.lower();
+		bool small = type_all(nm, "stick");
+		press_key(nm, "CAPITALS");
+		bool caps = type_all(nm, " 2");
+		CHECK(shift && small && caps && press_key(nm, "OK") == keyboard::done && nm.text == "Default stick 2", "keyboard: a profile name with capitals, small letters, a space and a digit");
+		nm.open(layout::text, "x", "", 4);
+		for (char c : std::string("ABCDEF")) nm.type(c);
+		CHECK(nm.text == "ABCD", "keyboard: no more characters than the field takes");
+
+		// every key can be reached, and the cursor wraps at the edges
+		for (layout l : { layout::text, layout::number, layout::address })
+		{
+			keyboard k;
+			k.open(l, "t", "", 8);
+			std::set<std::pair<int, int>> seen;
+			std::vector<std::pair<int, int>> todo = { { 0, 0 } };
+			std::vector<keyboard> states = { k };
+			int total = 0;
+			for (auto &r : k.rows()) total += int(r.size());
+			while (!states.empty())
+			{
+				keyboard s = states.back();
+				states.pop_back();
+				if (!seen.insert({ s.row(), s.col() }).second) continue;
+				for (act m : { act::up, act::down, act::left, act::right }) { keyboard n = s; n.handle(ev(m)); states.push_back(n); }
+			}
+			bool inside = true;
+			for (auto &r : k.rows()) for (auto &key : r) inside = inside && key.r.x >= keyboard::kX && key.r.x + key.r.w <= keyboard::kX + keyboard::kW && key.r.y + key.r.h <= keyboard::kY + keyboard::kH - 14;
+			keyboard w = k;
+			w.handle(ev(act::left));
+			CHECK(int(seen.size()) == total && inside && w.col() == int(w.rows()[0].size()) - 1,
+			      std::string("keyboard (") + (l == layout::text ? "text" : l == layout::number ? "number" : "address") + "): all " + std::to_string(total) + " keys are reached with directions, all inside the box; Left at the edge wraps");
+		}
+
+		// the mouse presses a key directly
+		keyboard ms;
+		ms.open(layout::number, "port", "", 5);
+		const keyboard::key &seven = ms.rows()[2][0];
+		event click; click.ptr = event::click; click.x = seven.r.x + 3; click.y = seven.r.y + 3;
+		CHECK(ms.handle(click) == keyboard::typed && ms.text == "7" && !ms.type('x'), "keyboard: a click presses a key; the number layout takes digits only");
+
+		// recent hosts on the Online screen (U4.2)
+		online_state os;
+		os.game = "NBA JAM";
+		os.recent = { "192.168.1.20", "my-friend.example" };
+		screen on = make_online(os);
+		const item *r0 = on.find(on_recent0), *r1 = on.find(on_recent0 + 1);
+		on.cur_panel = 0;
+		for (int i = 0; i < 6; i++) on.handle(ev(act::down));
+		result rj = on.handle(ev(act::confirm));
+		CHECK(r0 && r1 && r0->label == "192.168.1.20" && r1->label == "my-friend.example" && rj.what == result::activated && rj.id == on_recent0 + 1 && on.focus_ok(),
+		      "Online: hosts joined before are listed, last first, and one is rejoined from the list with Confirm");
+
+		theme th3;
+		keyboard shots[3];
+		shots[0].open(layout::address, "The host's address", "192.168.", 60);
+		shots[1].open(layout::text, "Name of the new profile", "Fight stick copy", 24);
+		shots[2].open(layout::number, "UDP port (1024 to 65535)", "78", 5);
+		shots[1].handle(ev(act::down)); shots[1].handle(ev(act::right));
+		static const char *files[3] = { "keyboard_1_address.png", "keyboard_2_text.png", "keyboard_3_number.png" };
+		for (int i = 0; i < 3; i++)
+		{
+			canvas cv(screen::kW, screen::kH);
+			on.draw(cv, th3, device::xbox, 0);
+			shots[i].draw(cv, th3, i == 1 ? device::playstation : device::xbox, 0);
+			write_png(out, files[i], cv);
+		}
+		canvas cv(screen::kW, screen::kH);
+		on.draw(cv, th3, device::xbox, 0);
+		write_png(out, "online_4_recent.png", cv);
 	}
 
 	printf("\n%d checks, %d failed\n", g_run, g_fail);

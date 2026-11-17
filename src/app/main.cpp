@@ -10,6 +10,7 @@
 #include "ui/art_view.h"
 #include "ui/themes.h"
 #include "ui/screens.h"
+#include "ui/keyboard.h"
 #include "ui/ui_sdl.h"
 #include "miniz.h"
 #include "gl_present.h"
@@ -62,6 +63,7 @@ struct config
 	int net_port = 7845;
 	int net_delay = 4;
 	std::string net_host;
+	std::vector<std::string> net_recent;   // hosts joined before, the last one first (U4.2)
 	std::string pad_profile[4] = { "Default", "Default", "Default", "Default" };   // controller profile of each player
 	std::map<std::string, std::array<std::string, 4>> game_profiles;   // per-game override ("" = use pad_profile)
 	dip_settings dips;
@@ -96,7 +98,7 @@ static void save_config(const std::string &path, config &c)
 	  << "\n# scaling: integer (whole multiples of the game's lines), fit (fills the height, crisp pixels), smooth (fills the height, filtered)\nscaling=" << view_scaling_id(c.scaling) << "\n# side_fill: around a 4:3 picture on a wider screen: black, blur (the picture, blurred and dimmed), overlay (an image from overlays/ in the data folder)\nside_fill=" << (c.side_fill == 1 ? "blur" : c.side_fill == 2 ? "overlay" : "black") << "\noverlay=" << c.overlay << "\n# overlay_opacity: 0.1 to 1, for overlays with a transparent opening\noverlay_opacity=" << c.overlay_opacity << "\nscanline_strength=" << c.scan_strength
 	  << "\n# opengl=0 uses the basic SDL renderer (no shaders)\nopengl=" << c.use_opengl
 	  << "\n\n[audio]\nvolume=" << c.volume
-	  << "\n\n[network]\nport=" << c.net_port << "\ninput_delay=" << c.net_delay << "\nlast_host=" << c.net_host
+	  << "\n\n[network]\nport=" << c.net_port << "\ninput_delay=" << c.net_delay << "\nlast_host=" << c.net_host << "\nrecent_hosts=" << [&] { std::string r; for (auto &h : c.net_recent) r += (r.empty() ? "" : ",") + h; return r; }()
 	  << "\n\n[dips]\nfree_play=" << c.dips.free_play << "\nfour_players=" << c.dips.four_players
 	  << "\ncountry=" << c.dips.country << "\nvideo_clips=" << c.dips.video_clips
 	  << "\n\n[controllers]\n# profile of each player's pad (files in controller_profiles/, edit them in the Controls menu)\n";
@@ -147,6 +149,19 @@ static void load_config(const std::string &path, config &c)
 		else if (k == "port") c.net_port = std::clamp(atoi(v.c_str()), 1024, 65535);
 		else if (k == "input_delay") c.net_delay = std::clamp(atoi(v.c_str()), 1, 10);
 		else if (k == "last_host") c.net_host = v;
+		else if (k == "recent_hosts")
+		{
+			c.net_recent.clear();
+			size_t a = 0;
+			while (a <= v.size() && c.net_recent.size() < 5)
+			{
+				size_t b = v.find(',', a);
+				std::string h = trim(v.substr(a, b == std::string::npos ? std::string::npos : b - a));
+				if (!h.empty()) c.net_recent.push_back(h);
+				if (b == std::string::npos) break;
+				a = b + 1;
+			}
+		}
 		else if (k == "volume") c.volume = std::clamp(float(atof(v.c_str())), 0.0f, 1.0f);
 		else if (k == "free_play") c.dips.free_play = atoi(v.c_str()) != 0;
 		else if (k == "four_players") c.dips.four_players = atoi(v.c_str()) != 0;
@@ -316,8 +331,11 @@ private:
 
 	// netplay
 	netplay m_net;
-	bool m_editing = false;
-	std::string m_edit;
+	bool m_editing = false;            // text is being typed: on the on-screen keyboard or a physical one (U4.1)
+	ui::keyboard m_kbd;
+	std::string &m_edit = m_kbd.text;
+	void kbd_open(ui::layout l, const std::string &title, const std::string &start, size_t max_len);
+	int kbd_step();                    // 0 still typing, 1 OK, 2 cancelled
 	bool m_net_game = false;           // current game runs under netplay
 	std::vector<std::string> m_local_ips;
 };
@@ -481,8 +499,9 @@ void app::poll_events()
 	{
 		// the rebuilt screens take their input through the toolkit's one layer (U1.3); releases
 		// are always passed on, so nothing stays "held" after a screen change
-		const bool toolkit = m_screen != screen::game &&
-		                     m_capture < 0 && !m_editing;      // not while a button is being bound or a name typed
+		// not while a button is being bound; while text is typed, keys type and only the
+		// controller, mouse and touch drive the on-screen keyboard
+		const bool toolkit = m_screen != screen::game && m_capture < 0 && !(m_editing && (e.type == SDL_KEYDOWN || e.type == SDL_TEXTINPUT));
 		if (toolkit || e.type == SDL_KEYUP || e.type == SDL_CONTROLLERBUTTONUP || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_FINGERUP)
 		{
 			ui::raw_event raw;
@@ -527,6 +546,7 @@ void app::poll_events()
 					if (!m_captured) { m_capture_in = { false, int(e.cbutton.button), 1 }; m_captured = true; }
 					break;
 				}
+				if (m_editing) break;          // the on-screen keyboard has the controller
 				if (e.cbutton.button == SDL_CONTROLLER_BUTTON_X) m_menu_clear = true;
 				if (e.cbutton.button == SDL_CONTROLLER_BUTTON_DPAD_UP) m_menu_up = true;
 				if (e.cbutton.button == SDL_CONTROLLER_BUTTON_DPAD_DOWN) m_menu_down = true;
@@ -538,12 +558,7 @@ void app::poll_events()
 				break;
 			case SDL_TEXTINPUT:
 				if (m_editing)
-					for (const char *c = e.text.text; *c; c++)
-					{
-						bool ctl = m_screen == screen::controls;
-						bool okc = isalnum((unsigned char)*c) || *c == '.' || *c == '-' || (ctl ? (*c == ' ' || *c == '_') : *c == ':');
-						if (okc && m_edit.size() < (ctl ? 24u : 60u)) m_edit += *c;
-					}
+					for (const char *c = e.text.text; *c; c++) m_kbd.type(*c);       // the keyboard's layout says which characters it takes
 				break;
 			case SDL_KEYDOWN:
 			{
@@ -551,9 +566,10 @@ void app::poll_events()
 				bool alt = (e.key.keysym.mod & KMOD_ALT) != 0;
 				if (m_editing)
 				{
-					if (k == SDLK_BACKSPACE && !m_edit.empty()) m_edit.pop_back();
+					if (k == SDLK_F12 || k == SDLK_PRINTSCREEN) m_shot = true;     // a screenshot works while typing too
+					if (k == SDLK_BACKSPACE) m_kbd.erase();
 					if (k == SDLK_v && (e.key.keysym.mod & KMOD_CTRL))
-						if (char *t = SDL_GetClipboardText()) { for (char *c = t; *c && m_edit.size() < 60; c++) if (!isspace((unsigned char)*c)) m_edit += *c; SDL_free(t); }
+						if (char *t = SDL_GetClipboardText()) { for (char *c = t; *c; c++) if (!isspace((unsigned char)*c)) m_kbd.type(*c); SDL_free(t); }
 					if (k == SDLK_RETURN || k == SDLK_KP_ENTER) m_menu_ok = true;
 					if (k == SDLK_ESCAPE) m_menu_back = true;
 					break;
@@ -1144,6 +1160,35 @@ void app::mods_frame()
 static const char *const act_en[kNumActions] = { "Up", "Down", "Left", "Right", "Shoot", "Pass", "Turbo", "Start", "Coin",
                                                  "Shove", "Turbo shot", "Shortcut 1", "Shortcut 2" };
 
+// The on-screen keyboard (U4.1) over the current screen. A physical keyboard types into
+// it as well; Enter and Esc take or drop the text.
+void app::kbd_open(ui::layout l, const std::string &title, const std::string &start, size_t max_len)
+{
+	m_kbd.open(l, title, start, max_len);
+	m_editing = true;
+	SDL_StartTextInput();
+}
+
+int app::kbd_step()
+{
+	int r = m_menu_ok ? 1 : m_menu_back ? 2 : 0;
+	ui::event ev;
+	while (!r && m_ui_in.next(ev))
+	{
+		ui::keyboard::outcome o = m_kbd.handle(ev);
+		if (o == ui::keyboard::done) r = 1;
+		if (o == ui::keyboard::cancelled) r = 2;
+	}
+	if (r)
+	{
+		while (m_ui_in.next(ev)) {}     // nothing typed this frame reaches the screen under it
+		m_editing = false;
+		m_kbd.close();
+		SDL_StopTextInput();
+	}
+	return r;
+}
+
 // The end of every rebuilt screen's frame: the theme of the highlighted game, the screen,
 // a program message over it if there is one.
 void app::ui_show(ui::screen &s)
@@ -1152,6 +1197,7 @@ void app::ui_show(ui::screen &s)
 	follow_theme(game_list()[size_t(std::clamp(m_sel, 0, int(game_list().size()) - 1))].id, now);
 	canvas cv(ui::screen::kW, ui::screen::kH);
 	s.draw(cv, m_theme, m_ui_in.last_device(), now);
+	m_kbd.draw(cv, m_theme, m_ui_in.last_device(), now);
 	if (!m_message.empty() && now < m_message_until) menu_message(cv, m_message);
 	present(cv.px.data(), cv.w, cv.h, false);
 	SDL_Delay(8);
@@ -1330,11 +1376,9 @@ void app::controls_frame()
 	}
 	else if (m_editing)
 	{
-		// the name of a new profile: Enter or A takes it as it stands, Esc or B cancels
-		if (m_menu_ok)
+		// the name of a new profile, on the on-screen keyboard or typed
+		if (kbd_step() == 1)
 		{
-			m_editing = false;
-			SDL_StopTextInput();
 			std::string nm = m_edit;
 			while (!nm.empty() && nm.back() == ' ') nm.pop_back();
 			if (!valid_profile_name(nm)) message("Invalid name");
@@ -1347,7 +1391,6 @@ void app::controls_frame()
 			}
 			return;
 		}
-		if (m_menu_back) { m_editing = false; SDL_StopTextInput(); }
 	}
 	else
 	{
@@ -1384,7 +1427,7 @@ void app::controls_frame()
 			std::string m, path;
 			switch (r.id)
 			{
-				case ui::ct_new: m_edit = prof.name.substr(0, 18) + " copy"; m_editing = true; SDL_StartTextInput(); return;
+				case ui::ct_new: kbd_open(ui::layout::text, "Name of the new profile", prof.name.substr(0, 18) + " copy", 24); return;
 				case ui::ct_reset:
 				{
 					pad_profile d0 = pad_profile::defaults();
@@ -1440,8 +1483,8 @@ void app::controls_frame()
 	follow_theme(game_list()[size_t(std::clamp(m_sel, 0, ng - 1))].id, now);
 	canvas cv(ui::screen::kW, ui::screen::kH);
 	m_ctl_scr.draw(cv, m_theme, m_ui_in.last_device(), now);
+	m_kbd.draw(cv, m_theme, m_ui_in.last_device(), now);
 	if (m_capture >= 0) m_ctl_scr.toast("Press it now. Wait or Esc: cancel", now, 200);
-	else if (m_editing) m_ctl_scr.toast("Type a name. Enter or A: OK. Esc or B: cancel", now, 200);
 	if (!m_message.empty() && SDL_GetTicks() < m_message_until) menu_message(cv, m_message);
 	present(cv.px.data(), cv.w, cv.h, false);
 	SDL_Delay(8);
@@ -1464,22 +1507,22 @@ void app::net_menu_frame()
 		st.local_ips = m_local_ips;
 		st.typing = m_editing ? m_edit_what : 0;
 		st.typed = m_edit;
+		st.recent = m_cfg.net_recent;
 		return st;
 	};
 	auto type = [&](int what, const std::string &start, bool join)
 	{
-		m_edit = start; m_edit_what = what; m_edit_join = join; m_editing = true;
-		SDL_StartTextInput();
+		m_edit_what = what; m_edit_join = join;
+		if (what == 1) kbd_open(ui::layout::address, "The host's address", start, 60);
+		else kbd_open(ui::layout::number, "UDP port (1024 to 65535)", start, 5);
 	};
 	if (m_online_scr.tabs.empty()) m_online_scr = ui::make_online(state());
 	bool join_now = false;
 	if (m_editing)
 	{
-		// the address or the port is being typed: Enter or A takes it, Esc or B cancels
-		if (m_menu_ok)
+		// the address or the port, on the on-screen keyboard or typed
+		if (kbd_step() == 1)
 		{
-			m_editing = false;
-			SDL_StopTextInput();
 			if (m_edit_what == 1) { m_cfg.net_host = m_edit; join_now = m_edit_join && !m_edit.empty(); }
 			else
 			{
@@ -1491,7 +1534,6 @@ void app::net_menu_frame()
 				else message("The port is a number from 1024 to 65535", 4000);
 			}
 		}
-		else if (m_menu_back) { m_editing = false; SDL_StopTextInput(); }
 	}
 	else
 	{
@@ -1519,16 +1561,31 @@ void app::net_menu_frame()
 			}
 			else if (r.id == ui::on_address) { type(1, m_cfg.net_host, false); break; }
 			else if (r.id == ui::on_port) { type(2, std::to_string(m_cfg.net_port), false); break; }
+			else if (r.id >= ui::on_recent0 && r.id < ui::on_recent0 + int(m_cfg.net_recent.size()))
+			{
+				m_cfg.net_host = m_cfg.net_recent[size_t(r.id - ui::on_recent0)];
+				join_now = true;
+			}
 		}
 	}
 	if (join_now)
 	{
 		std::string err;
 		if (!m_net.join(m_cfg.net_host, u16(m_cfg.net_port), err)) message("Network: " + err, 6000);
-		else { m_lobby_scr = ui::screen(); m_screen = screen::net_lobby; return; }
+		else
+		{
+			// remembered, the last one first, so it is typed once (U4.2)
+			auto &rc = m_cfg.net_recent;
+			rc.erase(std::remove(rc.begin(), rc.end(), m_cfg.net_host), rc.end());
+			rc.insert(rc.begin(), m_cfg.net_host);
+			if (rc.size() > 5) rc.resize(5);
+			save_config(m_cfgpath, m_cfg);
+			m_lobby_scr = ui::screen();
+			m_screen = screen::net_lobby;
+			return;
+		}
 	}
 	ui::update_online(m_online_scr, state());
-	if (m_editing) m_online_scr.toast(m_edit_what == 1 ? "Type the address. Enter or A: OK. Ctrl+V pastes" : "Type the port. Enter or A: OK. Esc or B: cancel", now, 200);
 	ui_show(m_online_scr);
 }
 
