@@ -203,10 +203,14 @@ static int real_roms(const std::string &base, const std::string &out)
 		ms.folder = base + "/mods";
 		mod_view a;
 		a.name = "Quarter length"; a.description = "Sets how long a quarter lasts, from 30 seconds to 12 minutes, on every game."; a.enabled = true;
-		a.options.push_back({ "Minutes", { "0:30", "1:30", "3:00", "12:00" }, 2 });
+		a.options.push_back({ "Minutes", "Length", 0, { "0:30", "1:30", "3:00", "12:00" }, 2, false });
+		a.options.push_back({ "Overtime", "Length", 1, { "Off", "On" }, 1, false });
+		a.options.push_back({ "Speed", "Rules", 0, { "0.5", "1", "1.5", "2" }, 1, false });
+		a.options.push_back({ "Always on fire", "Rules", 2, {}, 5, false });
+		a.options.push_back({ "Never on fire", "Rules", 1, { "Off", "On" }, 0, true });
 		for (const game_info &g : game_list()) a.games.push_back({ g.title, true, true });
 		mod_view b = a;
-		b.name = "No team select timer"; b.description = "Removes the countdown on the team select screen."; b.enabled = false; b.options.clear();
+		b.name = "No team select timer"; b.description = "Removes the countdown on the team select screen."; b.enabled = false; b.options = { a.options[0] };
 		ms.mods = { a, b };
 		controls_state cs;
 		cs.games = { "All games" };

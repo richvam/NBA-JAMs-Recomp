@@ -42,6 +42,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - Menu music and sounds: the menus play the highlighted game's own tune and its cursor, confirm and back sounds, from its ROMs. Switches and a volume for them in Settings, Sound tab; "Music on" shows in the status line. Without the game's ROMs the menus are silent.
 - Settings, Video: "Menus inside a TV's safe area" keeps the menus away from the edges a TV cuts off.
 - Lua mods can share code: `nba.include("lib/name.lua")` runs a file from `mods/lib/`. And `nba.sym("name")` gives the address of a name from the game's source, on T.E. 4.0, T.E. Special Edition 5.02 and Maximum Hangtime 1.3.
+- Lua mod options can be switches, number ranges or a tick per player, can be put under headings, and can grey each other out.
 
 ### Changed
 - The CRT mask is as coarse at 4K as at 1080p (it was twice as fine at 4K), and it lines up

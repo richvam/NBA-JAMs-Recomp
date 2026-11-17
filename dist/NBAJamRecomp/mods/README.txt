@@ -27,6 +27,22 @@ Declare the mod in a global table, then use the hooks:
   function on_frame(n)    -- after every emulated frame (n = frame number)
   end
 
+Option types
+------------
+Each option may have a type (the default is a list of values, as above):
+  { id = "ot", type = "toggle", label = "Overtime", default = true }
+      on or off; nba.option gives true or false
+  { id = "speed", type = "range", label = "Speed", min = 0.5, max = 2, step = 0.1, default = 1 }
+      a number from min to max by step (at most 1001 values)
+  { id = "fire", type = "players", label = "Always on fire", default = 5 }
+      a tick per player 1 to 4; nba.option gives a bit mask: player p is ticked
+      when (mask >> (p - 1)) & 1 == 1. default = 5 ticks players 1 and 3.
+Every type can also have:
+  group = "Rules"           a heading above the option; options of one group go together
+  conflicts = { "fire" }    this option is greyed out while one of those options is set away
+                            from its default, and nba.option then gives this option's default
+                            (the choice is kept for when the other is set back)
+
 Game ids: nbajam, nbajamte, nbajamse (T-Unit), nbahangt, nbamht (Wolf Unit).
 
 The nba table

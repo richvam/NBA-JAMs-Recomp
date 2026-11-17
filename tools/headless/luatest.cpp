@@ -216,6 +216,59 @@ function on_frame(n) if n == 2 then error("boom") end end
 	mod_script *o3 = find(m3, "opts.lua");
 	CHECK(o3 && o3->enabled && o3->option_index(o3->options[0]) == 2 && o3->option_index(o3->options[1]) == 1, "invalid option value falls back to the default");
 
+	// ---- option types (roadmap 1.3) ----
+	{
+		fs::path td = fs::temp_directory_path() / "nbajam_luatest_types";
+		fs::remove_all(td);
+		fs::create_directories(td);
+		std::string tini = (td / "mods.ini").string();
+		write_file(td / "types.lua", R"(
+mod = { name = "Types", options = {
+  { id = "ot", type = "toggle", label = "Overtime", default = true, group = "Length" },
+  { id = "speed", type = "range", min = 0.5, max = 2, step = 0.1, default = 1, group = "Rules" },
+  { id = "fire", type = "players", default = 5, group = "Rules" },
+  { id = "nofire", type = "toggle", conflicts = { "fire2" } },
+  { id = "fire2", type = "players" },
+  { id = "list", values = { 3, 4 }, default = 4 },
+  { id = "badrange", type = "range", min = 5, max = 1 },
+} }
+function on_load()
+  nba.log("v", tostring(nba.option("ot")), nba.option("speed"), nba.option("fire"), tostring(nba.option("nofire")), nba.option("list"))
+end
+)");
+		mod_manager tm;
+		tm.scan(td.string(), tini);
+		mod_script *t = find(tm, "types.lua");
+		CHECK(t && t->error.empty() && t->options.size() == 6, "types: toggle, range, players and list parse; a range with no values is left out");
+		if (t && t->options.size() == 6)
+		{
+			auto &o = t->options;
+			CHECK(o[0].type == mod_option::toggle && o[0].values.size() == 2 && t->option_index(o[0]) == 1 && o[0].group == "Length", "types: a toggle is { 0, 1 }, default true is on, its group is kept");
+			CHECK(o[1].type == mod_option::range && o[1].values.size() == 16 && t->option_index(o[1]) == 5 && o[1].value_text(15) == "2", "types: a range has min..max by step (0.5 to 2 by 0.1 is 16 values), its default found");
+			CHECK(o[2].type == mod_option::players && o[2].values.size() == 16 && t->option_index(o[2]) == 5 && o[2].value_text(5) == "1, 3" && o[2].value_text(0) == "None", "types: players is a bit mask 0 to 15, shown as the players ticked");
+			CHECK(!t->option_greyed(o[3]), "types: conflicts: not greyed while the other option is at its default");
+			t->opt["nofire"] = 1; t->opt["fire2"] = 2;
+			CHECK(t->option_greyed(o[3]) && t->option_used(o[3]) == 0 && t->option_index(o[3]) == 1, "types: conflicts: greyed once the other is set; the script reads the default, the choice is kept");
+			// every type round-trips through mods.ini
+			t->enabled = true; t->opt["ot"] = 0; t->opt["speed"] = 12; t->opt["fire"] = 10; t->opt["list"] = 0;
+			tm.save();
+			mod_manager t2;
+			t2.scan(td.string(), tini);
+			mod_script *u = find(t2, "types.lua");
+			CHECK(u && u->option_index(u->options[0]) == 0 && u->option_index(u->options[1]) == 12 && u->option_index(u->options[2]) == 10 &&
+			      u->option_index(u->options[3]) == 1 && u->option_index(u->options[4]) == 2 && u->option_index(u->options[5]) == 0,
+			      "types: mods.ini round-trips every type (toggle, range with a 0.1 step, players, list)");
+			auto tm8 = make_machine(10, nullptr, 0);
+			for (auto &x : t2.mods()) x.enabled = x.file == "types.lua";
+			t2.start("nbajamte", *tm8);
+			bool ok = false;
+			for (auto &x : t2.take_log()) ok = ok || x.find("v false 1.7 10 false 3") != std::string::npos;
+			CHECK(ok, "types: nba.option gives a toggle as a boolean, a range as a number, players as the mask, a greyed option as its default");
+			t2.stop();
+		}
+		fs::remove_all(td);
+	}
+
 	// ---- shared libraries (roadmap 1.1) ----
 	{
 		fs::path ld = fs::temp_directory_path() / "nbajam_luatest_lib";

@@ -1258,8 +1258,11 @@ ui::mods_state app::mods_now()
 		{
 			ui::mod_view::option vo;
 			vo.label = o.label;
+			vo.group = o.group;
+			vo.kind = o.type == mod_option::toggle ? 1 : o.type == mod_option::players ? 2 : 0;
 			for (size_t k = 0; k < o.values.size(); k++) vo.values.push_back(o.value_text(int(k)));
 			vo.value = m.option_index(o);
+			vo.greyed = m.option_greyed(o);
 			v.options.push_back(vo);
 		}
 		for (const game_info &g : game_list())
@@ -1310,7 +1313,18 @@ void app::mods_frame()
 				m.all_games = it->choice == 0;
 				if (!m.all_games && m.games.empty()) supported();          // start from every supported game
 			}
-			else if (r.id >= ui::md_opt0 && r.id < ui::md_opt0 + int(m.options.size())) m.opt[m.options[size_t(r.id - ui::md_opt0)].id] = it->choice;
+			else if (r.id >= ui::md_opt0 && r.id < ui::md_opt0 + int(m.options.size()))
+			{
+				const mod_option &o = m.options[size_t(r.id - ui::md_opt0)];
+				m.opt[o.id] = o.type == mod_option::toggle ? (it->on ? 1 : 0) : it->choice;   // a toggle's values are { 0, 1 }
+			}
+			else if (r.id >= ui::md_ply0 && r.id < ui::md_ply0 + 4 * int(m.options.size()))
+			{
+				const mod_option &o = m.options[size_t((r.id - ui::md_ply0) / 4)];
+				const int bit = 1 << ((r.id - ui::md_ply0) % 4);
+				const int mask = m.option_index(o);                                     // a players option's values are 0 to 15
+				m.opt[o.id] = it->on ? (mask | bit) : (mask & ~bit);
+			}
 			else if (r.id >= ui::md_game0 && r.id < ui::md_game0 + int(games.size()))
 			{
 				const game_info &g = games[size_t(r.id - ui::md_game0)];
