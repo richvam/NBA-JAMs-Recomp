@@ -139,5 +139,19 @@ void seed_data_dir(const app_paths &p)
 			fs::path dst = to / d / it->path().filename();
 			if (!fs::exists(dst, ec)) fs::copy_file(it->path(), dst, ec);
 		}
+	}	// the mods' shared files and symbol tables (roadmap 1.1, 1.2): libraries only when the
+	// user has none of that name; symbol tables are the program's data, so always the shipped one
+	for (const char *d : { "lib", "sym" })
+	{
+		fs::path src = from / "mods" / d;
+		if (!fs::is_directory(src, ec)) continue;
+		fs::create_directories(to / "mods" / d, ec);
+		for (auto it = fs::directory_iterator(src, ec); !ec && it != fs::directory_iterator(); it.increment(ec))
+		{
+			if (!it->is_regular_file(ec) || S(it->path().extension()) != ".lua") continue;
+			fs::path dst = to / "mods" / d / it->path().filename();
+			if (std::string(d) == "sym") fs::copy_file(it->path(), dst, fs::copy_options::overwrite_existing, ec);
+			else if (!fs::exists(dst, ec)) fs::copy_file(it->path(), dst, ec);
+		}
 	}
 }
