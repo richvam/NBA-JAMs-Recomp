@@ -778,7 +778,7 @@ int main(int argc, char **argv)
 		ms.folder = "C:/Users/someone/Games/NBAJamRecomp/mods";
 		mod_view a;
 		a.name = "Quarter length"; a.description = "Sets how long a quarter lasts, from 30 seconds to 12 minutes, on every game."; a.enabled = true;
-		a.options.push_back({ "Minutes", { "0:30", "1:30", "3:00", "12:00" }, 1 });
+		a.options.push_back({ "Minutes", "", 0, { "0:30", "1:30", "3:00", "12:00" }, 1, false });
 		a.games = { { "NBA JAM", true, true }, { "NBA JAM Tournament Edition", true, true }, { "NBA Hangtime", false, false } };
 		mod_view b;
 		b.name = "No select timer"; b.description = "No countdown on team select."; b.enabled = false; b.all_games = false;
@@ -810,6 +810,29 @@ int main(int argc, char **argv)
 		none.folder = ms.folder;
 		screen empty = make_mods(none);
 		CHECK(page(empty).find("Put .lua scripts in this folder") != std::string::npos && empty.focus_ok(), "Lua mods: with no scripts it says where they go");
+		// option types (Lua 1.3): groups, toggle, players, a greyed option
+		{
+			mods_state ts;
+			mod_view t;
+			t.name = "Types"; t.enabled = true;
+			t.options.push_back({ "Minutes", "Length", 0, { "1", "2" }, 0, false });
+			t.options.push_back({ "Overtime", "Length", 1, { "Off", "On" }, 1, false });
+			t.options.push_back({ "On fire", "Rules", 2, {}, 5, false });
+			t.options.push_back({ "Never on fire", "Rules", 1, { "Off", "On" }, 0, true });
+			t.options.push_back({ "Plain", "", 0, { "a" }, 0, false });
+			ts.mods = { t };
+			screen tm = make_mods(ts);
+			std::vector<std::string> heads;
+			for (auto &i : tm.tabs[0].panels[1].items) if (i.k == kind::header) heads.push_back(i.label);
+			CHECK(heads.size() == 4 && heads[0] == "Length" && heads[1] == "Rules" && heads[2] == "OPTIONS" && heads[3] == "GAMES", "Lua mods: group headings come before their options, ungrouped ones under OPTIONS");
+			const item *ot = tm.find(md_opt0 + 1);
+			CHECK(ot && ot->k == kind::toggle && ot->on, "Lua mods: a toggle option is a switch");
+			bool ticks = true;
+			for (int p = 0; p < 4; p++) { const item *pl = tm.find(md_ply0 + 8 + p); ticks = ticks && pl && pl->k == kind::toggle && pl->on == ((5 >> p) & 1); }
+			CHECK(ticks && page(tm).find("On fire") != std::string::npos, "Lua mods: a players option is a tick per player, from its bit mask");
+			const item *g = tm.find(md_opt0 + 3);
+			CHECK(g && g->disabled && !g->focusable(), "Lua mods: an option in conflict is greyed out and cannot be changed");
+		}
 
 		// Controls
 		controls_state cs;

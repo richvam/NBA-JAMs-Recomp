@@ -92,7 +92,8 @@ struct mod_view
 {
 	std::string name, description, error;    // error: the script could not be read; nothing on its page can be changed
 	bool enabled = false, all_games = true;
-	struct option { std::string label; std::vector<std::string> values; int value = 0; };
+	// kind: 0 a list of values (also a range), 1 on/off, 2 a tick per player (value = bit mask)
+	struct option { std::string label, group; int kind = 0; std::vector<std::string> values; int value = 0; bool greyed = false; };
 	std::vector<option> options;
 	struct game { std::string title; bool supported = true, on = false; };
 	std::vector<game> games;
@@ -104,7 +105,7 @@ struct mods_state
 	std::string folder;                  // where the scripts go
 };
 
-enum mods_id { md_mod0 = 1, md_enabled = 500, md_apply, md_opt0 = 600, md_game0 = 700 };
+enum mods_id { md_mod0 = 1, md_enabled = 500, md_apply, md_opt0 = 600, md_game0 = 700, md_ply0 = 800 };   // md_ply0 + 4 * option + player
 
 screen make_mods(const mods_state &st);
 int mods_index(const screen &s, int last);                 // the script the page is about

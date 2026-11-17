@@ -280,8 +280,26 @@ void update_mods(screen &s, const mods_state &st, int mod)
 			lines(m.description, 5);
 			items.push_back(toggle(md_enabled, "Mod enabled", m.enabled));
 			items.push_back(picker(md_apply, "Apply to", { "All games", "Selected games" }, m.all_games ? 0 : 1));
-			if (!m.options.empty()) items.push_back(header("OPTIONS"));
-			for (size_t i = 0; i < m.options.size(); i++) items.push_back(picker(md_opt0 + int(i), m.options[i].label, m.options[i].values, m.options[i].value));
+			std::string group = "\x01";
+			for (size_t i = 0; i < m.options.size() && i < 50; i++)
+			{
+				const mod_view::option &o = m.options[i];
+				if (o.group != group) { group = o.group; items.push_back(header(group.empty() ? "OPTIONS" : group)); }
+				if (o.kind == 2)
+				{
+					items.push_back(label(o.label + (o.greyed ? " (off: another option is set)" : "")));
+					for (int p = 0; p < 4; p++)
+					{
+						item t = toggle(md_ply0 + 4 * int(i) + p, "   Player " + std::to_string(p + 1), (o.value >> p) & 1);
+						t.disabled = o.greyed;
+						items.push_back(t);
+					}
+					continue;
+				}
+				item it = o.kind == 1 ? toggle(md_opt0 + int(i), o.label, o.value != 0) : picker(md_opt0 + int(i), o.label, o.values, o.value);
+				it.disabled = o.greyed;
+				items.push_back(it);
+			}
 			items.push_back(header("GAMES"));
 			for (size_t i = 0; i < m.games.size(); i++)
 			{

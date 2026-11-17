@@ -10,6 +10,10 @@
 //     options = { { id = "minutes", label = "Minutes per quarter",
 //                   values = { 1, 2, 3, 4, 5 }, default = 3, format = "%d min" } },
 //   }
+// Option types (roadmap 1.3): type = "list" (the default: values/labels), "toggle" (on/off),
+// "range" (min, max, step) and "players" (a tick per player 1 to 4, a bit mask). group = "..."
+// puts a heading above the option; conflicts = { ids } greys it out while one of those options
+// is away from its default, and then the script reads its default.
 //   function on_load() ... end     -- game loaded, before the first reset (patch ROM here)
 //   function on_frame(n) ... end   -- after every emulated frame
 //
@@ -30,7 +34,10 @@ struct lua_State;
 
 struct mod_option
 {
-	std::string id, label, format;
+	enum kind { list, toggle, range, players };
+	kind type = list;
+	std::string id, label, format, group;
+	std::vector<std::string> conflicts;  // option ids that grey this one out when set
 	std::vector<double> values;
 	std::vector<std::string> labels;     // optional text for each value
 	int def = 0;                         // index into values
@@ -57,7 +64,10 @@ struct mod_script
 	bool applies_to(const std::string &game) const;
 	bool game_checked(const std::string &game) const;
 	void set_game(const std::string &game, bool on);
-	int option_index(const mod_option &o) const;
+	int option_index(const mod_option &o) const;    // the stored choice
+	bool option_greyed(const mod_option &o) const;  // a conflicting option is away from its default
+	int option_used(const mod_option &o) const;     // what the script reads: the default while greyed
+	const mod_option *find_option(const std::string &id) const;
 };
 
 class mod_manager

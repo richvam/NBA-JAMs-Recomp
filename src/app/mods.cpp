@@ -13,6 +13,7 @@ extern "C" {
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
+#include <cmath>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -45,6 +46,13 @@ std::string mod_option::value_text(int i) const
 	if (i < int(labels.size()) && !labels[size_t(i)].empty()) return labels[size_t(i)];
 	char b[64];
 	double v = values[size_t(i)];
+	if (type == toggle) return v != 0 ? "On" : "Off";
+	if (type == players)
+	{
+		std::string t;
+		for (int p = 0; p < 4; p++) if (int(v) & (1 << p)) t += (t.empty() ? "" : ", ") + std::to_string(p + 1);
+		return t.empty() ? "None" : t;
+	}
 	if (!format.empty())
 	{
 		if (format.find("%d") != std::string::npos || format.find("%i") != std::string::npos) snprintf(b, sizeof b, format.c_str(), int(v));
@@ -83,6 +91,34 @@ int mod_script::option_index(const mod_option &o) const
 	auto it = opt.find(o.id);
 	int i = it == opt.end() ? o.def : it->second;
 	return std::clamp(i, 0, std::max(0, int(o.values.size()) - 1));
+}
+
+const mod_option *mod_script::find_option(const std::string &id) const
+{
+	for (const auto &o : options) if (o.id == id) return &o;
+	return nullptr;
+}
+
+bool mod_script::option_greyed(const mod_option &o) const
+{
+	for (const auto &c : o.conflicts)
+		if (const mod_option *w = find_option(c))
+			if (w != &o && option_index(*w) != w->def) return true;
+	return false;
+}
+
+int mod_script::option_used(const mod_option &o) const
+{
+	return option_greyed(o) ? std::clamp(o.def, 0, std::max(0, int(o.values.size()) - 1)) : option_index(o);
+}
+
+// the value list entry closest to v, if it is v up to rounding (a range step such as 0.1
+// written to mods.ini and read back); -1 if none
+static int value_slot(const std::vector<double> &vals, double v)
+{
+	for (size_t i = 0; i < vals.size(); i++)
+		if (std::fabs(vals[i] - v) <= 1e-9 * std::max(1.0, std::fabs(v))) return int(i);
+	return -1;
 }
 
 // ---------------------------------------------------------------------------
@@ -146,7 +182,14 @@ struct mod_api
 		const char *id = luaL_checkstring(L, 1);
 		mod_script *s = script(L);
 		for (const auto &o : s->options)
-			if (o.id == id) { lua_pushnumber(L, o.values.empty() ? 0 : o.values[size_t(s->option_index(o))]); return 1; }
+			if (o.id == id)
+			{
+				double v = o.values.empty() ? 0 : o.values[size_t(s->option_used(o))];
+				if (o.type == mod_option::toggle) lua_pushboolean(L, v != 0);
+				else if (o.type == mod_option::players) lua_pushinteger(L, lua_Integer(v));
+				else lua_pushnumber(L, v);
+				return 1;
+			}
 		return luaL_error(L, "unknown option '%s'", id);
 	}
 	static int frame(lua_State *L) { lua_pushinteger(L, mgr(L)->m_frame); return 1; }
@@ -410,19 +453,42 @@ bool mod_manager::load_meta(mod_script &m)
 					op.label = field_str(L, o, "label");
 					op.format = field_str(L, o, "format");
 					if (op.label.empty()) op.label = op.id;
-					lua_getfield(L, o, "values");
+					op.group = field_str(L, o, "group");
+					const std::string ty = field_str(L, o, "type");
+					lua_getfield(L, o, "conflicts");
 					if (lua_istable(L, -1))
-						for (lua_Integer k = 1; k <= luaL_len(L, -1); k++) { lua_geti(L, -1, k); op.values.push_back(lua_tonumber(L, -1)); lua_pop(L, 1); }
+						for (lua_Integer k = 1; k <= luaL_len(L, -1); k++) { lua_geti(L, -1, k); if (lua_isstring(L, -1)) op.conflicts.push_back(lua_tostring(L, -1)); lua_pop(L, 1); }
 					lua_pop(L, 1);
+					auto num = [&](const char *f, double d) { lua_getfield(L, o, f); double v = lua_isnumber(L, -1) ? lua_tonumber(L, -1) : d; lua_pop(L, 1); return v; };
+					if (ty == "toggle") { op.type = mod_option::toggle; op.values = { 0, 1 }; }
+					else if (ty == "players") { op.type = mod_option::players; for (int k = 0; k < 16; k++) op.values.push_back(k); }
+					else if (ty == "range")
+					{
+						op.type = mod_option::range;
+						const double mn = num("min", 0), mx = num("max", mn), st = num("step", 1);
+						if (st > 0 && mx >= mn)
+						{
+							const long long n = (long long)std::floor((mx - mn) / st + 1e-9) + 1;
+							for (long long k = 0; k < std::min(n, 1001LL); k++) op.values.push_back(mn + double(k) * st);
+						}
+					}
+					else if (ty.empty() || ty == "list")
+					{
+						lua_getfield(L, o, "values");
+						if (lua_istable(L, -1))
+							for (lua_Integer k = 1; k <= luaL_len(L, -1); k++) { lua_geti(L, -1, k); op.values.push_back(lua_tonumber(L, -1)); lua_pop(L, 1); }
+						lua_pop(L, 1);
+					}
 					lua_getfield(L, o, "labels");
 					if (lua_istable(L, -1))
 						for (lua_Integer k = 1; k <= luaL_len(L, -1); k++) { lua_geti(L, -1, k); op.labels.push_back(lua_isstring(L, -1) ? lua_tostring(L, -1) : ""); lua_pop(L, 1); }
 					lua_pop(L, 1);
 					lua_getfield(L, o, "default");
-					if (lua_isnumber(L, -1))
+					if (lua_isnumber(L, -1) || lua_isboolean(L, -1))
 					{
-						double d = lua_tonumber(L, -1);
-						for (size_t k = 0; k < op.values.size(); k++) if (op.values[k] == d) op.def = int(k);
+						double d = lua_isboolean(L, -1) ? (lua_toboolean(L, -1) ? 1 : 0) : lua_tonumber(L, -1);
+						int k = value_slot(op.values, d);
+						if (k >= 0) op.def = k;
 					}
 					lua_pop(L, 1);
 					if (!op.id.empty() && !op.values.empty()) m.options.push_back(op);
@@ -612,8 +678,8 @@ void mod_manager::load_settings()
 			for (const auto &o : cur->options)
 				if (o.id == k)
 				{
-					double d = atof(v.c_str());
-					for (size_t i = 0; i < o.values.size(); i++) if (o.values[i] == d) cur->opt[k] = int(i);
+					int i = value_slot(o.values, atof(v.c_str()));
+					if (i >= 0) cur->opt[k] = i;
 				}
 	}
 }
@@ -622,6 +688,7 @@ void mod_manager::save() const
 {
 	if (m_ini.empty()) return;
 	std::ofstream g(P(m_ini));
+	g.precision(15);
 	g << "# NBA JAM Recomp - Lua mods (scripts in mods/). games=all or a list: nbajam,nbajamte,nbajamse,nbahangt,nbamht\n";
 	for (const auto &m : m_mods)
 	{
