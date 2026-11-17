@@ -147,9 +147,11 @@ struct online_state
 	int typing = 0;                      // 1: the address is being typed, 2: the port
 	std::string typed;
 	std::vector<std::string> recent;     // hosts joined before, the last one first (U4.2)
+	bool upnp = true, stun = true;       // N2: ask the router to open the port; ask a STUN server for the public address
+	std::string stun_server;
 };
 
-enum online_id { on_host = 1, on_join, on_address, on_port, on_delay, on_recent0 = 20 };
+enum online_id { on_host = 1, on_join, on_address, on_port, on_delay, on_upnp, on_stun, on_recent0 = 20 };
 
 screen make_online(const online_state &st);
 void update_online(screen &s, const online_state &st);
@@ -167,9 +169,13 @@ struct lobby_state
 	std::string address;                 // joining: the host's address
 	int slot = -1, ping = 0, count = 0;  // joining: slot -1 until the host answers
 	bool receiving = false;              // joining: the game data is coming
+	// N2: this computer's connection code, as the internet sees it, and how it was found
+	std::string code, code_note;
+	int inviting = 0;                    // host: players being let in by their code
+	bool no_answer = false;              // joining: no answer for a few seconds
 };
 
-enum lobby_id { lb_start = 1, lb_delay, lb_leave };
+enum lobby_id { lb_start = 1, lb_delay, lb_leave, lb_invite, lb_copy };
 
 screen make_lobby(const lobby_state &st);
 void update_lobby(screen &s, const lobby_state &st);

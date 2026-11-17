@@ -76,6 +76,12 @@ jobs:
           build/linux/newstest | tee newstest.log
           grep -q ", 0 failed" newstest.log
 
+      - name: Router tests (codes, STUN, UPnP, hole punching; no network needed)
+        run: |
+          set -o pipefail
+          build/linux/nattest | tee nattest.log
+          grep -q ", 0 failed" nattest.log
+
       - name: Menu toolkit tests (no display needed)
         run: |
           set -o pipefail

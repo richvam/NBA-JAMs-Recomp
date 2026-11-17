@@ -69,8 +69,11 @@ ART_SRC = src/app/rom_art.cpp src/app/games.cpp src/app/romload.cpp src/app/ui/a
 $(BUILD)/arttest: tools/headless/arttest.cpp $(ART_SRC) $(BUILD)/libcore.a $(BUILD)/miniz.o
 	$(CXX) $(CXXFLAGS) $(APP_INC) $< $(ART_SRC) $(BUILD)/miniz.o $(BUILD)/libcore.a -o $@
 
-$(BUILD)/nettest: tools/headless/nettest.cpp src/app/games.cpp src/app/romload.cpp src/app/netplay.cpp src/app/mods.cpp $(BUILD)/libcore.a $(BUILD)/liblua.a $(BUILD)/miniz.o
-	$(CXX) $(CXXFLAGS) $(INC) $(APP_INC) $< src/app/games.cpp src/app/romload.cpp src/app/netplay.cpp src/app/mods.cpp $(BUILD)/miniz.o $(BUILD)/libcore.a $(BUILD)/liblua.a -lpthread -o $@
+$(BUILD)/nattest: tools/headless/nattest.cpp src/app/netplay.cpp src/app/nat.cpp
+	$(CXX) $(CXXFLAGS) $(INC) $(APP_INC) $< src/app/netplay.cpp src/app/nat.cpp -lpthread -o $@
+
+$(BUILD)/nettest: tools/headless/nettest.cpp src/app/games.cpp src/app/romload.cpp src/app/netplay.cpp src/app/nat.cpp src/app/mods.cpp $(BUILD)/libcore.a $(BUILD)/liblua.a $(BUILD)/miniz.o
+	$(CXX) $(CXXFLAGS) $(INC) $(APP_INC) $< src/app/games.cpp src/app/romload.cpp src/app/netplay.cpp src/app/nat.cpp src/app/mods.cpp $(BUILD)/miniz.o $(BUILD)/libcore.a $(BUILD)/liblua.a -lpthread -o $@
 
 $(BUILD)/sndlog: tools/headless/sndlog.cpp src/app/games.cpp src/app/romload.cpp src/app/menu_sound.cpp $(BUILD)/libcore.a $(BUILD)/miniz.o
 	$(CXX) $(CXXFLAGS) $(INC) $(APP_INC) $< src/app/games.cpp src/app/romload.cpp src/app/menu_sound.cpp $(BUILD)/miniz.o $(BUILD)/libcore.a -lpthread -o $@
@@ -80,14 +83,14 @@ $(BUILD)/modtest: tools/headless/modtest.cpp src/app/mods.cpp src/app/romload.cp
 
 # ---------------- application (Windows, llvm-mingw cross) ----------------
 SDL2W ?= /home/claude/deps/SDL2-2.30.9/x86_64-w64-mingw32
-APP_SRC = src/app/main.cpp src/app/games.cpp src/app/romload.cpp src/app/netplay.cpp src/app/gl_present.cpp src/app/controls.cpp src/app/mods.cpp src/third_party/miniz/miniz.c
+APP_SRC = src/app/main.cpp src/app/games.cpp src/app/romload.cpp src/app/netplay.cpp src/app/nat.cpp src/app/gl_present.cpp src/app/controls.cpp src/app/mods.cpp src/third_party/miniz/miniz.c
 WIN_OUT ?= dist/NBAJamRecomp
 win:
 	@mkdir -p $(WIN_OUT) build/win
 	x86_64-w64-mingw32-gcc -O2 -c src/third_party/miniz/miniz.c -o build/win/miniz.o
 	$(MAKE) BUILD=build/win CC=x86_64-w64-mingw32-gcc build/win/liblua.a
 	x86_64-w64-mingw32-g++ -std=c++20 -O2 -Isrc/emu -Isrc/mame -Isrc/board -Isrc/app -Isrc/third_party/miniz -Isrc/third_party/lua -I$(SDL2W)/include/SDL2 \
-	  src/app/main.cpp src/app/games.cpp src/app/romload.cpp src/app/netplay.cpp src/app/gl_present.cpp src/app/controls.cpp src/app/mods.cpp src/app/menu_sound.cpp src/app/pad_script.cpp src/app/version.cpp src/app/paths.cpp src/app/news.cpp src/app/view.cpp src/app/png_read.cpp src/app/overlay.cpp src/app/ui/ui.cpp src/app/ui/gallery.cpp src/app/ui/lettering.cpp src/app/ui/themes.cpp src/app/ui/screens.cpp src/app/ui/keyboard.cpp src/app/ui/art_view.cpp src/app/rom_art.cpp $(VERSION_DEFS) build/win/miniz.o build/win/libcore.a build/win/liblua.a \
+	  src/app/main.cpp src/app/games.cpp src/app/romload.cpp src/app/netplay.cpp src/app/nat.cpp src/app/gl_present.cpp src/app/controls.cpp src/app/mods.cpp src/app/menu_sound.cpp src/app/pad_script.cpp src/app/version.cpp src/app/paths.cpp src/app/news.cpp src/app/view.cpp src/app/png_read.cpp src/app/overlay.cpp src/app/ui/ui.cpp src/app/ui/gallery.cpp src/app/ui/lettering.cpp src/app/ui/themes.cpp src/app/ui/screens.cpp src/app/ui/keyboard.cpp src/app/ui/art_view.cpp src/app/rom_art.cpp $(VERSION_DEFS) build/win/miniz.o build/win/libcore.a build/win/liblua.a \
 	  -L$(SDL2W)/lib -lmingw32 -lSDL2main -lSDL2 -mwindows -static -lwinmm -lsetupapi -loleaut32 -lole32 -limm32 -lversion -lgdi32 -luser32 -lshell32 -luuid -ladvapi32 -lcfgmgr32 -lws2_32 -lwinhttp -lwinpthread \
 	  -o $(WIN_OUT)/NBAJamRecomp.exe
 
@@ -97,7 +100,7 @@ APP_INC = -Isrc/emu -Isrc/mame -Isrc/board -Isrc/app -Isrc/third_party/miniz -Is
 $(BUILD)/miniz.o: src/third_party/miniz/miniz.c
 	$(CC) -O2 -c $< -o $@
 linux-app: $(BUILD)/libcore.a $(BUILD)/miniz.o $(BUILD)/liblua.a
-	$(CXX) $(CXXFLAGS) $(APP_INC) -I$(SDL2L)/include/SDL2 src/app/main.cpp src/app/games.cpp src/app/romload.cpp src/app/netplay.cpp src/app/gl_present.cpp src/app/controls.cpp src/app/mods.cpp src/app/menu_sound.cpp src/app/pad_script.cpp src/app/version.cpp src/app/paths.cpp src/app/news.cpp src/app/view.cpp src/app/png_read.cpp src/app/overlay.cpp src/app/ui/ui.cpp src/app/ui/gallery.cpp src/app/ui/lettering.cpp src/app/ui/themes.cpp src/app/ui/screens.cpp src/app/ui/keyboard.cpp src/app/ui/art_view.cpp src/app/rom_art.cpp $(VERSION_DEFS) \
+	$(CXX) $(CXXFLAGS) $(APP_INC) -I$(SDL2L)/include/SDL2 src/app/main.cpp src/app/games.cpp src/app/romload.cpp src/app/netplay.cpp src/app/nat.cpp src/app/gl_present.cpp src/app/controls.cpp src/app/mods.cpp src/app/menu_sound.cpp src/app/pad_script.cpp src/app/version.cpp src/app/paths.cpp src/app/news.cpp src/app/view.cpp src/app/png_read.cpp src/app/overlay.cpp src/app/ui/ui.cpp src/app/ui/gallery.cpp src/app/ui/lettering.cpp src/app/ui/themes.cpp src/app/ui/screens.cpp src/app/ui/keyboard.cpp src/app/ui/art_view.cpp src/app/rom_art.cpp $(VERSION_DEFS) \
 	  $(BUILD)/miniz.o $(BUILD)/libcore.a $(BUILD)/liblua.a -L$(SDL2L)/lib -Wl,-Bstatic -lSDL2 -Wl,-Bdynamic -static-libstdc++ -static-libgcc -lm -ldl -lpthread -o $(BUILD)/NBAJamRecomp
 $(BUILD)/cattest: tools/headless/cattest.cpp src/app/games.cpp src/app/romload.cpp $(BUILD)/libcore.a $(BUILD)/miniz.o
 	$(CXX) $(CXXFLAGS) $(APP_INC) $< src/app/games.cpp src/app/romload.cpp $(BUILD)/miniz.o $(BUILD)/libcore.a -o $@

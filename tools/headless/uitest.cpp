@@ -933,14 +933,20 @@ int main(int argc, char **argv)
 		CHECK(on.focused()->id == on_host && on.find(on_address)->value_text == "not set" && on.find(on_port)->value_text == "7845" && on.find(on_delay)->value == 4 &&
 		      on.find(on_join)->value_text == "no address yet" && on.tabs[0].panels[0].title == os.game && text_of(on, 0, 0).find("192.168.1.20, 100.84.12.7") != std::string::npos,
 		      "Online: host and join, the address, port and delay, and the local addresses to tell the others");
-		for (int i = 0; i < 5; i++) on.handle(ev(act::down));
+		on.cur_panel = 0; on.tabs[0].panels[0].focus = 0;
+		for (int i = 0; i < 4; i++) on.handle(ev(act::down));
 		result dl = on.handle(ev(act::right));
 		CHECK(dl.what == result::changed && dl.id == on_delay && on.find(on_delay)->value == 5, "Online: the input delay changes with Left and Right");
 		os.address = "203.0.113.9"; os.typing = 2; os.typed = "78"; os.available = false; os.delay = 5;
 		update_online(on, os);
 		CHECK(on.find(on_port)->value_text == "78_" && on.find(on_address)->value_text == "203.0.113.9" && on.find(on_join)->value_text.empty() && on.find(on_host)->dim && on.find(on_host)->value_text == "No ROMs",
 		      "Online: a port being typed is shown as it is typed; a game without ROMs cannot be hosted and says so");
-
+		on.handle(ev(act::down));
+		const bool both_on = on.find(on_upnp) && on.find(on_upnp)->on && on.find(on_stun)->on;
+		result up = on.handle(ev(act::confirm));
+		CHECK(both_on && up.what == result::changed && up.id == on_upnp && !on.find(on_upnp)->on &&
+		      text_of(on, 0, 1).find("sees your IP address") != std::string::npos,
+		      "Online: opening the port (UPnP) and finding a code (STUN) can be switched off; the help says the STUN server sees your IP address");
 		// the lobby
 		lobby_state ls;
 		ls.game = os.game; ls.local_ips = os.local_ips;
@@ -948,7 +954,13 @@ int main(int argc, char **argv)
 		screen lb = make_lobby(ls);
 		walk(lb, "Lobby (host)");
 		CHECK(lb.focused()->id == lb_start && lb.tabs[0].panels[0].title == "Players: 1 of 4" && text_of(lb, 0, 0).find("start alone") != std::string::npos &&
-		      text_of(lb, 0, 2).find("UDP port: 7845") != std::string::npos, "Lobby: the host starts on Start, alone if nobody joined, and sees what to tell the others");
+		      text_of(lb, 0, 2).find("Code: none") != std::string::npos && text_of(lb, 0, 2).find("port 7845") != std::string::npos && lb.find(lb_invite) && lb.find(lb_copy),
+		      "Lobby: the host starts on Start, alone if nobody joined, and sees what to tell the others");
+		ls.code = "6BR0E-7C2YD"; ls.code_note = "Players join with this code."; ls.inviting = 1;
+		update_lobby(lb, ls);
+		CHECK(text_of(lb, 0, 2).find("Code: 6BR0E-7C2YD") != std::string::npos && text_of(lb, 0, 2).find("Players join with this code") != std::string::npos &&
+		      text_of(lb, 0, 0).find("Letting in 1 player by code") != std::string::npos, "Lobby: the host's code and how it was found; a player being let in by code is shown");
+		ls.code.clear(); ls.code_note.clear(); ls.inviting = 0;
 		ls.players.push_back({ "Player 2", "192.168.1.31  12 ms  ready" });
 		ls.players.push_back({ "Player 3", "192.168.1.40  30 ms" });
 		ls.delay = 6;
@@ -959,7 +971,13 @@ int main(int argc, char **argv)
 		lj.host = false; lj.address = "203.0.113.9";
 		screen jn = make_lobby(lj);
 		walk(jn, "Lobby (joining)");
-		bool waiting = text_of(jn, 0, 0).find("Waiting for an answer") != std::string::npos && jn.focused()->id == lb_leave && !jn.find(lb_start);
+		bool waiting = text_of(jn, 0, 0).find("Waiting for an answer") != std::string::npos && jn.find(lb_leave) && jn.find(lb_copy) && !jn.find(lb_start) && !jn.find(lb_invite) &&
+		               text_of(jn, 0, 0).find("No answer yet") == std::string::npos;
+		lj.no_answer = true; lj.code = "6BR0E-7C2YD";
+		update_lobby(jn, lj);
+		CHECK(text_of(jn, 0, 0).find("No answer yet. Send the host your code: 6BR0E-7C2YD") != std::string::npos && text_of(jn, 0, 2).find("6BR0E-7C2YD") != std::string::npos,
+		      "Lobby: a player with no answer after a few seconds is told to send the host their code, and sees it");
+		lj.no_answer = false;
 		lj.slot = 2; lj.ping = 41; lj.count = 3;
 		update_lobby(jn, lj);
 		CHECK(waiting && text_of(jn, 0, 0).find("You are player 3") != std::string::npos && text_of(jn, 0, 0).find("41 ms") != std::string::npos && text_of(jn, 0, 0).find("Waiting for the host to start") != std::string::npos,
@@ -1111,7 +1129,7 @@ int main(int argc, char **argv)
 		screen on = make_online(os);
 		const item *r0 = on.find(on_recent0), *r1 = on.find(on_recent0 + 1);
 		on.cur_panel = 0;
-		for (int i = 0; i < 6; i++) on.handle(ev(act::down));
+		for (int i = 0; i < 8; i++) on.handle(ev(act::down));
 		result rj = on.handle(ev(act::confirm));
 		CHECK(r0 && r1 && r0->label == "192.168.1.20" && r1->label == "my-friend.example" && rj.what == result::activated && rj.id == on_recent0 + 1 && on.focus_ok(),
 		      "Online: hosts joined before are listed, last first, and one is rejoined from the list with Confirm");

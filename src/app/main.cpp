@@ -17,6 +17,7 @@
 #include "miniz.h"
 #include "gl_present.h"
 #include "netplay.h"
+#include "nat.h"
 #include "mods.h"
 #include "controls.h"
 #include "shaders.h"
@@ -67,6 +68,9 @@ struct config
 	int net_delay = 4;
 	std::string net_host;
 	std::vector<std::string> net_recent;   // hosts joined before, the last one first (U4.2)
+	bool net_upnp = true;         // N2.1: ask the router to forward the port when hosting
+	bool net_stun = true;         // N2.2: ask a STUN server for this computer's public address (its code)
+	std::string net_stun_server = "stun.l.google.com:19302";
 	int pause_buttons = 0;        // held on a controller to open the pause menu: 0 Start + Back, 1 L3 + R3 (U5.1)
 	bool menu_music = true, menu_sounds = true;   // U6: from the highlighted game's sound board
 	float menu_volume = 0.6f;
@@ -104,7 +108,7 @@ static void save_config(const std::string &path, config &c)
 	  << "\n# scaling: integer (whole multiples of the game's lines), fit (fills the height, crisp pixels), smooth (fills the height, filtered)\nscaling=" << view_scaling_id(c.scaling) << "\n# side_fill: around a 4:3 picture on a wider screen: black, blur (the picture, blurred and dimmed), overlay (an image from overlays/ in the data folder)\nside_fill=" << (c.side_fill == 1 ? "blur" : c.side_fill == 2 ? "overlay" : "black") << "\noverlay=" << c.overlay << "\n# overlay_opacity: 0.1 to 1, for overlays with a transparent opening\noverlay_opacity=" << c.overlay_opacity << "\nscanline_strength=" << c.scan_strength
 	  << "\n# opengl=0 uses the basic SDL renderer (no shaders)\nopengl=" << c.use_opengl
 	  << "\n\n[audio]\nvolume=" << c.volume
-	  << "\n\n[network]\nport=" << c.net_port << "\ninput_delay=" << c.net_delay << "\nlast_host=" << c.net_host << "\nrecent_hosts=" << [&] { std::string r; for (auto &h : c.net_recent) r += (r.empty() ? "" : ",") + h; return r; }()
+	  << "\n\n[network]\nport=" << c.net_port << "\ninput_delay=" << c.net_delay << "\nupnp=" << c.net_upnp << "\nstun=" << c.net_stun << "\nstun_server=" << c.net_stun_server << "\nlast_host=" << c.net_host << "\nrecent_hosts=" << [&] { std::string r; for (auto &h : c.net_recent) r += (r.empty() ? "" : ",") + h; return r; }()
 	  << "\n\n[dips]\nfree_play=" << c.dips.free_play << "\nfour_players=" << c.dips.four_players
 	  << "\ncountry=" << c.dips.country << "\nvideo_clips=" << c.dips.video_clips
 	  << "\n\n[controllers]\n# profile of each player's pad (files in controller_profiles/, edit them in the Controls menu)\n";
@@ -160,6 +164,9 @@ static void load_config(const std::string &path, config &c)
 		else if (k == "port") c.net_port = std::clamp(atoi(v.c_str()), 1024, 65535);
 		else if (k == "input_delay") c.net_delay = std::clamp(atoi(v.c_str()), 1, 10);
 		else if (k == "last_host") c.net_host = v;
+		else if (k == "upnp") c.net_upnp = atoi(v.c_str()) != 0;
+		else if (k == "stun") c.net_stun = atoi(v.c_str()) != 0;
+		else if (k == "stun_server") c.net_stun_server = v;
 		else if (k == "recent_hosts")
 		{
 			c.net_recent.clear();
@@ -374,6 +381,10 @@ private:
 
 	// netplay
 	netplay m_net;
+	upnp_mapper m_upnp;                // N2.1: the router's port forward while hosting
+	u32 m_join_t = 0;                  // when joining started (the hint after a few seconds)
+	void net_traversal_start();
+	std::string net_code_note(std::string &code);
 	bool m_editing = false;            // text is being typed: on the on-screen keyboard or a physical one (U4.1)
 	ui::keyboard m_kbd;
 	std::string &m_edit = m_kbd.text;
@@ -1696,12 +1707,15 @@ void app::net_menu_frame()
 		st.typing = m_editing ? m_edit_what : 0;
 		st.typed = m_edit;
 		st.recent = m_cfg.net_recent;
+		st.upnp = m_cfg.net_upnp;
+		st.stun = m_cfg.net_stun;
+		st.stun_server = m_cfg.net_stun_server;
 		return st;
 	};
 	auto type = [&](int what, const std::string &start, bool join)
 	{
 		m_edit_what = what; m_edit_join = join;
-		if (what == 1) kbd_open(ui::layout::address, "The host's address", start, 60);
+		if (what == 1) kbd_open(ui::layout::text, "The host's code or address", start, 60);
 		else kbd_open(ui::layout::number, "UDP port (1024 to 65535)", start, 5);
 	};
 	if (m_online_scr.tabs.empty()) m_online_scr = ui::make_online(state());
@@ -1734,13 +1748,15 @@ void app::net_menu_frame()
 			{
 				if (const ui::item *it = m_online_scr.find(r.id)) m_cfg.net_delay = std::clamp(int(it->value + 0.5f), 1, 10);
 			}
+			if (r.what == ui::result::changed && (r.id == ui::on_upnp || r.id == ui::on_stun))
+				if (const ui::item *it = m_online_scr.find(r.id)) { (r.id == ui::on_upnp ? m_cfg.net_upnp : m_cfg.net_stun) = it->on; save_config(m_cfgpath, m_cfg); }
 			if (r.what != ui::result::activated) continue;
 			if (r.id == ui::on_host)
 			{
 				std::string err;
 				if (!m_avail[size_t(m_sel)]) message(m_why[size_t(m_sel)], 6000);
 				else if (!m_net.host(u16(m_cfg.net_port), err)) message("Network: " + err, 6000);
-				else { m_lobby_scr = ui::screen(); m_screen = screen::net_lobby; return; }
+				else { net_traversal_start(); m_lobby_scr = ui::screen(); m_screen = screen::net_lobby; return; }
 			}
 			else if (r.id == ui::on_join)
 			{
@@ -1768,6 +1784,8 @@ void app::net_menu_frame()
 			rc.insert(rc.begin(), m_cfg.net_host);
 			if (rc.size() > 5) rc.resize(5);
 			save_config(m_cfgpath, m_cfg);
+			net_traversal_start();
+			m_join_t = SDL_GetTicks();
 			m_lobby_scr = ui::screen();
 			m_screen = screen::net_lobby;
 			return;
@@ -1775,6 +1793,44 @@ void app::net_menu_frame()
 	}
 	ui::update_online(m_online_scr, state());
 	ui_show(m_online_scr);
+}
+
+// N2: when hosting, the router is asked to forward the port (UPnP); host and player both ask
+// a STUN server for the address and port the internet sees, which is their code.
+void app::net_traversal_start()
+{
+	if (m_cfg.net_upnp && m_net.role() == netplay::mode::host) m_upnp.start(u16(m_cfg.net_port));
+	if (!m_cfg.net_stun || m_cfg.net_stun_server.empty()) return;
+	const std::string &sv = m_cfg.net_stun_server;
+	size_t c = sv.rfind(':');
+	net_addr a;
+	std::string err;
+	if (udp_socket::resolve(sv.substr(0, c), c == std::string::npos ? 3478 : u16(atoi(sv.c_str() + c + 1)), a, err)) m_net.stun_begin(a);
+}
+
+// this computer's code and a line on how it was found
+std::string app::net_code_note(std::string &code)
+{
+	code.clear();
+	const bool host = m_net.role() == netplay::mode::host;
+	net_addr ext{};
+	if (host && m_upnp.status() == upnp_mapper::state::mapped)
+	{
+		std::string ip = m_upnp.external_ip();
+		int a, b, c, d;
+		if (sscanf(ip.c_str(), "%d.%d.%d.%d", &a, &b, &c, &d) == 4) ext = { u32(a) << 24 | u32(b) << 16 | u32(c) << 8 | u32(d), u16(m_cfg.net_port) };
+		if (ext.ip && !net_ip_private(ext.ip)) { code = net_code(ext); return "Your router's port is open (UPnP): anyone can join with this code."; }
+	}
+	if (m_net.stun_status() == netplay::stun_state::found)
+	{
+		code = net_code(m_net.public_addr());
+		if (host) return ext.ip ? "Your router is behind another one, so its open port does not reach the internet. Let each player in by their code."
+		                        : "Players join with this code. If one cannot, let them in by their code.";
+		return "If the host's code alone does not connect, send them this one.";
+	}
+	if ((host && m_upnp.status() == upnp_mapper::state::working) || m_net.stun_status() == netplay::stun_state::asking) return "Finding your public address...";
+	if (!m_cfg.net_stun && !(host && m_cfg.net_upnp)) return "Codes are off (Online menu). Use an address.";
+	return "No public address found. Forward the UDP port on your router, or use a virtual LAN.";
 }
 
 // Interim netplay guard (roadmap 0.3): scripts that run every frame or write RAM are not
@@ -1814,6 +1870,9 @@ void app::net_lobby_frame()
 		st.ping = m_net.ping_ms();
 		st.count = m_net.players();
 		st.receiving = m_net.stage() == netplay::phase::transfer;
+		st.code_note = net_code_note(st.code);
+		st.inviting = m_net.invites();
+		st.no_answer = !host && st.slot < 0 && SDL_GetTicks() - m_join_t > 5000;
 		if (host)
 		{
 			st.players.push_back({ "Player 1", "you (host)" });
@@ -1829,10 +1888,32 @@ void app::net_lobby_frame()
 	};
 	if (m_lobby_scr.tabs.empty()) m_lobby_scr = ui::make_lobby(state());
 	bool start = false;
+	if (m_editing)
+	{
+		// a player's code, to let them in
+		if (kbd_step() == 1)
+		{
+			net_addr a;
+			if (net_code_parse(m_edit, a)) { m_net.invite(a); message("Letting " + net_code(a) + " in for 30 seconds", 3000); }
+			else message("That is not a code: ten letters and digits, like ABCDE-FGHJK", 5000);
+		}
+		ui::update_lobby(m_lobby_scr, state());
+		ui_show(m_lobby_scr);
+		return;
+	}
 	ui::event ev;
 	while (ui_next(ev))
 	{
 		ui::result r = m_lobby_scr.handle(ev);
+		if (r.what == ui::result::activated && r.id == ui::lb_invite) { kbd_open(ui::layout::text, "The player's code", "", 16); break; }
+		if (r.what == ui::result::activated && r.id == ui::lb_copy)
+		{
+			std::string code;
+			net_code_note(code);
+			if (code.empty()) message("No code yet", 3000);
+			else { SDL_SetClipboardText(code.c_str()); message("Copied: " + code, 3000); }
+			continue;
+		}
 		if (r.what == ui::result::back || (r.what == ui::result::activated && r.id == ui::lb_leave)) { m_net.stop(); m_screen = screen::net_menu; return; }
 		if (r.what == ui::result::activated && r.id == ui::lb_start) start = true;
 		if (r.what == ui::result::changed && r.id == ui::lb_delay)
@@ -2322,6 +2403,7 @@ int app::run()
 	{
 		poll_events();
 		if (m_quit) break;
+		if (!m_net.active() && m_upnp.status() != upnp_mapper::state::off) m_upnp.stop();   // N2.1: the forward goes with the session
 		switch (m_screen)
 		{
 			case screen::menu: menu_frame(); next = clock::now(); continue;
