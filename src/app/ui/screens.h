@@ -15,6 +15,7 @@
 //         the players and, for the host, the delay and the start.
 //   U3.6  About and help: the program, the controls as they are set now, the program's
 //         keys, the credits. News: the notes of the latest release.
+//   U5    the pause menu, over the running game.
 //   U3.2  Settings: Video, Sound, Game and Program tabs. Everything on it is also on a key
 //         (F4 to F8, F11, - and +), which keep working.
 #pragma once
@@ -70,9 +71,14 @@ struct settings_state
 	bool free_play = true, four_players = true, video_clips = true;
 	int country = 0;
 	bool news = true;
+	int pause_buttons = 0;               // what is held on a controller for the pause menu: index into pause_button_names()
 };
 
-enum settings_id { st_shape = 1, st_scaling, st_shader, st_scanlines, st_sides, st_fullscreen, st_volume, st_free_play, st_players, st_country, st_clips, st_news };
+enum settings_id { st_shape = 1, st_scaling, st_shader, st_scanlines, st_sides, st_fullscreen, st_volume, st_free_play, st_players, st_country, st_clips, st_news, st_pause };
+
+// The controller buttons held for half a second to open the pause menu (U5.1). There is no
+// "none": Esc and the Guide button always open it as well, so it can never be unbound.
+const std::vector<std::string> &pause_button_names();
 
 screen make_settings(const settings_state &st);
 void show_settings(screen &s, const settings_state &st);        // the widgets take the state's values (a key changed one)
@@ -193,5 +199,23 @@ struct news_state
 };
 
 screen make_news(const news_state &st);
+
+// ---------------------------------------------------------------- pause menu (U5)
+// Over the running game. Offline the game is paused while it is open; online it keeps
+// running for everybody, and what would change the game is greyed.
+struct pause_state
+{
+	std::string game;
+	bool online = false;
+	float volume = 0.8f;
+	bool test = false;                   // the cabinet's TEST switch
+	int coins[4] = { 0, 0, 0, 0 };       // coins waiting to go in when the game resumes
+	int service = 0;
+};
+
+enum pause_id { ps_resume = 1, ps_volume, ps_shot, ps_video, ps_controls, ps_mods, ps_help, ps_quit, ps_coin0 = 20, ps_service = 30, ps_test, ps_reset };
+
+screen make_pause(const pause_state &st);
+void update_pause(screen &s, const pause_state &st);
 
 } // namespace ui

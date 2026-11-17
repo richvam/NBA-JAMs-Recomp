@@ -110,7 +110,12 @@ int main(int argc, char **argv)
 		np.poll();
 		if (!np.active()) { fprintf(stderr, "%s: ended: %s at frame %u\n", role.c_str(), np.error().c_str(), np.frame()); return 1; }
 		if (!np.can_run()) { stalls++; sleep_ms(1); continue; }
-		cabinet_inputs in = np.frame_inputs(script(np.local_slot(), np.frame()));
+		cabinet_inputs::player local = script(np.local_slot(), np.frame());
+		// MENU=<frame>: this peer has the pause menu open for 600 frames from that frame. The
+		// app then sends nothing pressed (app::menu_inputs) and the game goes on (U5.3).
+		if (const char *mf = getenv("MENU"))
+			if (np.frame() >= u32(atoi(mf)) && np.frame() < u32(atoi(mf)) + 600) local = cabinet_inputs::player{};
+		cabinet_inputs in = np.frame_inputs(local);
 		if (getenv("CHEAT") && np.frame() >= 400 && np.frame() < 460) in.p[0].left = true;
 		m->set_inputs(in);
 		m->run_frame();

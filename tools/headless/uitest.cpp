@@ -14,6 +14,7 @@
 #include "ui/themes.h"
 #include "ui/screens.h"
 #include "ui/keyboard.h"
+#include <algorithm>
 #include <cmath>
 #include "miniz.h"
 #include <cstdio>
@@ -1107,6 +1108,102 @@ int main(int argc, char **argv)
 		canvas cv(screen::kW, screen::kH);
 		on.draw(cv, th3, device::xbox, 0);
 		write_png(out, "online_4_recent.png", cv);
+	}
+
+	// ---------------- U5: the pause menu ----------------
+	{
+		auto walk = [&](const screen &start, const std::string &name)
+		{
+			static const act moves[] = { act::up, act::down, act::left, act::right, act::tab_prev, act::tab_next, act::page_up, act::page_down };
+			std::set<std::tuple<int, int, int>> seen;
+			std::vector<screen> todo = { start };
+			bool ok = true, back = true;
+			while (!todo.empty())
+			{
+				screen s = todo.back();
+				todo.pop_back();
+				auto key = std::make_tuple(s.cur_tab, s.cur_panel, s.tabs[size_t(s.cur_tab)].panels[size_t(s.cur_panel)].focus);
+				if (seen.count(key)) continue;
+				seen.insert(key);
+				ok = ok && s.focus_ok();
+				{ screen b = s; back = back && b.handle(ev(act::back)).what == result::back; }
+				for (act m : moves) { screen n = s; n.handle(ev(m)); todo.push_back(n); }
+			}
+			int missing = 0;
+			auto want = all_usable(start);
+			for (auto &w : want) missing += !seen.count(w);
+			CHECK(missing == 0 && ok && back, name + ": all " + std::to_string(want.size()) + " usable items are reached with directions alone; focus is never lost; Back is always reported");
+		};
+		pause_state ps;
+		ps.game = "NBA JAM Tournament Edition";
+		screen pz = make_pause(ps);
+		walk(pz, "Pause menu");
+		CHECK(pz.focused()->id == ps_resume && pz.handle(ev(act::back)).what == result::back, "Pause menu: opens on Resume, and Back resumes");
+
+		// U5.2: every key that works in a game today has an entry
+		struct old_key { const char *key, *what; int id; };
+		static const old_key keys[] = {
+			{ "Esc", "back to the game list", ps_quit }, { "P", "pause", ps_resume }, { "F1", "help", ps_help }, { "F2", "TEST switch", ps_test },
+			{ "F3", "reset", ps_reset }, { "F4", "picture look", ps_video }, { "F5", "scaling", ps_video }, { "F6", "scanline strength", ps_video },
+			{ "F7", "picture shape", ps_video }, { "F8", "sides", ps_video }, { "F11", "fullscreen", ps_video }, { "F12", "screenshot", ps_shot },
+			{ "- and +", "volume", ps_volume }, { "9", "service credit", ps_service }, { "5", "coin, player 1", ps_coin0 }, { "6", "coin, player 2", ps_coin0 + 1 },
+			{ "7", "coin, player 3", ps_coin0 + 2 }, { "8", "coin, player 4", ps_coin0 + 3 },
+		};
+		int missing = 0;
+		for (const old_key &k : keys)
+		{
+			const item *it = pz.find(k.id);
+			if (!it || !it->focusable()) { missing++; printf("      no entry for %s (%s)\n", k.key, k.what); }
+		}
+		CHECK(missing == 0, "Pause menu: each of the " + std::to_string(sizeof(keys) / sizeof(keys[0])) + " keys a game takes today has an entry (U5.2 checklist)");
+
+		// coins wait for the game; the TEST switch and the volume are reported as they change
+		ps.coins[1] = 2; ps.service = 1; ps.test = true; ps.volume = 0.5f;
+		update_pause(pz, ps);
+		screen tz = pz;
+		tz.cur_panel = 2; tz.fix_focus(); tz.handle(ev(act::down));
+		result tr = tz.handle(ev(act::confirm));
+		CHECK(pz.find(ps_coin0 + 1)->label == "Player 2 +2" && pz.find(ps_service)->value_text == "+1" && pz.find(ps_test)->on && pz.find(ps_volume)->value == 0.5f &&
+		      tr.what == result::changed && tr.id == ps_test && !tz.find(ps_test)->on, "Pause menu: coins waiting are counted, the TEST switch is flipped and reported");
+
+		// U5.3: online, nothing that changes the game for the others
+		pause_state po = ps;
+		po.online = true; po.coins[1] = 0;
+		screen on = make_pause(po);
+		walk(on, "Pause menu (online)");
+		bool greyed = true;
+		for (int id : { (int)ps_reset, (int)ps_test, (int)ps_mods, (int)ps_service, (int)ps_video, (int)ps_controls, (int)ps_help, ps_coin0 + 1, ps_coin0 + 2, ps_coin0 + 3 }) greyed = greyed && on.find(id)->disabled;
+		bool open = true;
+		for (int id : { (int)ps_resume, (int)ps_volume, (int)ps_shot, (int)ps_quit, (int)ps_coin0 }) open = open && !on.find(id)->disabled;
+		CHECK(greyed && open && on.find(ps_quit)->label == "Leave the online game" && on.find(ps_coin0)->label == "You" && on.tabs[0].panels[0].title == "Online game: still running",
+		      "Pause menu online: reset, TEST switch, mods, the full settings and the others' coins are greyed; resume, volume, screenshot, your coin and leave are not");
+		on.ask("Leave the online game? It ends for you.", ps_quit);
+		result no = on.handle(ev(act::back));
+		on.ask("Leave the online game? It ends for you.", ps_quit);
+		on.handle(ev(act::left));
+		result yes = on.handle(ev(act::confirm));
+		CHECK(no.what == result::no && yes.what == result::yes && yes.id == ps_quit, "Pause menu online: leaving asks first, and Back there means stay");
+
+		// the shortcut can be changed and never set to nothing
+		settings_state ss;
+		ss.shaders = { "Sharp" }; ss.side_names = { "Black" };
+		ss.pause_buttons = 1;
+		screen st = make_settings(ss);
+		settings_state back_st;
+		read_settings(st, back_st);
+		CHECK(st.find(st_pause) && st.find(st_pause)->choices == pause_button_names() && back_st.pause_buttons == 1 && pause_button_names().size() == 2 &&
+		      std::find(pause_button_names().begin(), pause_button_names().end(), std::string("None")) == pause_button_names().end(),
+		      "Settings: the pause menu's controller shortcut can be chosen, and there is no choice of none");
+
+		theme th4;
+		screen shots[2] = { make_pause(ps), on };
+		static const char *files[2] = { "pause_1.png", "pause_2_online.png" };
+		for (int i = 0; i < 2; i++)
+		{
+			canvas cv(screen::kW, screen::kH);
+			shots[i].draw(cv, th4, device::xbox, 0);
+			write_png(out, files[i], cv);
+		}
 	}
 
 	printf("\n%d checks, %d failed\n", g_run, g_fail);
