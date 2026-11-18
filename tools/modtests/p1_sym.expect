@@ -1,12 +1,16 @@
 # Phase 1 review, 1.2: nba.sym("scores") is the .map value on each source-built revision
-# (tools/modtests/phase1_review.sh also rebuilds every symbol file from the .map and compares).
-game nbajamte nbajamse nbamht nbajam nbahangt
+# Hangtime L1.3 and L1.1 (2.3) are from their own source; Maximum Hangtime 1.03 is carried
+# by tools/sym_carry.py. (tools/modtests/phase1_review.sh also rebuilds every symbol file from the .map and compares).
+game nbajamte nbajamse nbamht nbajam nbahangt nbahangt:nbahangt13 nbamht:nbamht103
 frames 10
 nbajamte: once scores 0x010EAFD0
 nbajamse: once scores 0x010F2F30
-nbamht: once scores 0x01137B40
+rom=nbamht: once scores 0x01137B40
+rom=nbamht103: once scores 0x01137BE0
 nbajam: once scores nil
-nbahangt: once scores nil
+nbahangt: once scores 0x01137B40
 nbajam: once GAMSTATE nil
-nbahangt: once GAMSTATE nil
+rom=nbahangt: once GAMSTATE 0x0112F880
+rom=nbahangt13: once GAMSTATE 0x0112F880
+rom=nbamht103: once GAMSTATE 0x0112F840
 once no_such_symbol_x nil

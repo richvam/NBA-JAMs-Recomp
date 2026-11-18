@@ -1,17 +1,17 @@
 -- codes_mht.lua - roadmap 2.2 check: enter one Maximum Hangtime code for player 1 on the
--- versus screen, built from lib/codes_nbamht.lua (number codes from their digits, stick codes
+-- versus screen, built from lib/codes_<game>.lua (number codes from their digits, stick codes
 -- from STICK below), and report every power-up variable 4 s into the game.
 -- The script plays by itself: start presses to team select, shoot to pick, then the code.
 -- Option "code": 0 = none, 1-23 = the table's entries in order.
 mod = {
   name = "Codes check (Maximum Hangtime)",
-  games = { "nbamht" },
+  games = { "nbamht", "nbahangt" },
   options = { { id = "code", label = "Code", type = "range", min = 0, max = 23, step = 1, default = 0 },
     -- two = 1: cabinet player 2 joins too (the other team: cabinet players 1 and 2 are the
     -- game's player slots 1 and 2) and enters nothing; two = 2: it enters the same code
     { id = "two", label = "Second player", values = { 0, 1, 2 }, default = 0 } },
 }
-local codes = nba.include("lib/codes_nbamht.lua")
+local codes   -- lib/codes_<game>.lua, read in on_load (nba.game is not set while the folder is scanned)
 
 -- stick codes, step by step: each step is held 3 frames; "rel" steps release everything
 local UR, DR, DL, UL = { "up", "right" }, { "down", "right" }, { "down", "left" }, { "up", "left" }
@@ -42,6 +42,7 @@ local function r(n) return S[n] and nba.read16(S[n]) or -1 end
 function on_load()
   for _, n in ipairs(VARS) do S[n] = nba.sym(n) end
   for _, n in ipairs({ "GAMSTATE", "in_team_select", "inmatchup" }) do S[n] = nba.sym(n) end
+  codes = nba.include("lib/codes_" .. nba.game .. ".lua")
   local k = nba.option("code")
   two = nba.option("two")
   entry = codes[k]

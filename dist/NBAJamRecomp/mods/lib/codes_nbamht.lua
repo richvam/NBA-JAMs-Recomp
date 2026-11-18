@@ -1,4 +1,4 @@
--- codes_nbamht.lua - the cabinet codes of NBA Maximum Hangtime 1.3 (roadmap 2.2), from the sources.
+-- codes_nbamht.lua - the cabinet codes of NBA Maximum Hangtime 1.3 (roadmap 2.2, 2.3), from the sources.
 -- Written by tools/codes_from_source.py; checked in modtest by tools/modtests/codes_mht.lua.
 -- kind "number": a 3-digit code on the versus screen (turbo, shoot, pass presses), value = the
 -- digits. When the screen ends the variable is 0 or 0xF for every player; with humans on both

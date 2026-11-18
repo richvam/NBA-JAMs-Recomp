@@ -6,7 +6,9 @@
 #
 #  <program_roms_dir> is what tools/build_program_roms.sh writes: <id>/program.lo, .hi.
 #  Each <name>.expect belongs to <name>.lua next to it. Lines:
-#      game nbajamte nbajamse nbamht    the games to run it on (each one in turn)
+#      game nbajamte nbajamse nbamht    the games to run it on (each one in turn); <id>:<folder>
+#                                       runs game <id> on <program_roms_dir>/<folder>/ (another revision);
+#                                       modtest also gets rom=<folder>, so a line may start "rom=<folder>:"
 #      frames 3000                      how many frames to run
 #      env PLAY=1                       environment for modtest (may repeat)
 #      opt step=2                       an option value (may repeat)
@@ -37,19 +39,20 @@ for ex in "$HERE"/*.expect; do
   if [ -n "$each" ]; then eid=${each%%=*}; for v in ${each#*=}; do runs="$runs $eid=$v"; done; fi
   runs="$runs $(sed -n 's/\r$//; s/^run[[:space:]]\+//p' "$ex" | sed 's/[[:space:]]\+/:/g')"
   [ -n "${runs// /}" ] || runs=-
-  for g in $games; do for ev in $runs; do
-    runopts=$opts; label=$g
+  for gg in $games; do for ev in $runs; do
+    g=${gg%%:*}; d=${gg#*:}
+    runopts=$opts; label=$gg
     if [ "$ev" != - ]; then
       # a run's value replaces an "opt" line for the same option
       runopts=""; for o in $opts; do case ":$ev:" in *":${o%%=*}="*) ;; *) runopts="$runopts $o";; esac; done
-      runopts="$runopts ${ev//:/ }"; label="$g ${ev//:/ }"
+      runopts="$runopts ${ev//:/ }"; label="$gg ${ev//:/ }"
     fi
     rm -rf "$TMP/m"; mkdir -p "$TMP/m"
     cp -r "$TOP/dist/NBAJamRecomp/mods/lib" "$TOP/dist/NBAJamRecomp/mods/sym" "$TMP/m/"; cp "$lua" "$TMP/m/"
     echo "== $name on $label"
-    if [ ! -f "$ROMS/$g/program.lo" ]; then echo "FAIL: no $ROMS/$g/program.lo"; fail=$((fail + 1)); failed+=("$name/$label"); continue; fi
+    if [ ! -f "$ROMS/$d/program.lo" ]; then echo "FAIL: no $ROMS/$d/program.lo"; fail=$((fail + 1)); failed+=("$name/$label"); continue; fi
     # shellcheck disable=SC2086
-    out=$(env $envs "$MODTEST" --expect "$ex" "$ROMS/$g/program.lo" "$ROMS/$g/program.hi" "$TMP/m" "$g" "${frames:-1000}" $runopts 2>&1)
+    out=$(env $envs "$MODTEST" --expect "$ex" "$ROMS/$d/program.lo" "$ROMS/$d/program.hi" "$TMP/m" "$g" "${frames:-1000}" $runopts rom=$d 2>&1)
     rc=$?
     echo "$out" | grep -a "^PASS\|^FAIL\|expectations passed\|ERROR" | sed "s|$HERE/||"
     if [ $rc -eq 0 ]; then pass=$((pass + 1)); else fail=$((fail + 1)); failed+=("$name/${label// /:}"); [ $rc -ne 4 ] && echo "modtest exit $rc"; fi
