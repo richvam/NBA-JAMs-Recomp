@@ -1,0 +1,28 @@
+# roadmap 2.1: each T.E./SE code entered for player 1 sets its variable (read 4 s after tip-off)
+# (codes_te.lua plays to the matchup screen and enters the code like the cabinet).
+# code 0 (none) is the control: nothing set.
+# Two results are not explained yet and are pinned here as seen, so a change shows:
+# - quick hands (code 6) sets stlpower on T.E. 4.0 but not on SE 5.02, although the source,
+#   the instructions and the addresses are the same;
+# - assistance off (code 4): T.E. never sets assistance_off in modtest, with the 10 taps or
+#   without; SE sets it about 100 frames after tip-off with or without them (the factory
+#   default of the computer assistance adjustment, ADJCOMPASS = 1, means off).
+game nbajamte nbajamse
+frames 3500
+each code=0 1 2 3 4 5 6 7 8 9
+code=0: once p1taps=0 plyr_tourn=0 plyr_maxpower=0 show_shot=0
+code=0: once stlpower=0 plyrbighead=0 baby_flag=0
+nbajamte: code=0: once assistance_off=0
+nbajamse: code=0: once assistance_off=1
+code=1: once plyr_tourn=1
+code=2: once plyr_maxpower=1
+code=3: once show_shot=1
+nbajamte: code=4: once p1taps=10 plyr_tourn=0 plyr_maxpower=0 show_shot=0 assistance_off=0
+nbajamse: code=4: once p1taps=10 plyr_tourn=0 plyr_maxpower=0 show_shot=0 assistance_off=1
+code=5: once p1taps=24
+nbajamte: code=6: once stlpower=1
+nbajamse: code=6: once stlpower=0
+code=7: once plyrbighead=1
+code=8: once p1taps=6 plyr_tourn=0
+code=8: once stlpower=0 plyrbighead=1
+code=9: once baby_flag=1

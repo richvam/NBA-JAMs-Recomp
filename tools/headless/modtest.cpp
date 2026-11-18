@@ -2,10 +2,11 @@
 // what they changed. usage: modtest [--expect file] prog_lo prog_hi mods_dir game_id [frames] [opt=value...]
 // --expect (roadmap 1.8): lines "expect <frame> <symbol or 0xaddress>[:8|:16|:32] <op> <value>",
 // op one of == != < > <= >=; after that frame the value is read and compared. Other lines
-// "log <text>": a line of the mods' log contains the text, after the line the previous
+// "log <text>": a line of the mods' log contains the text, at or after the line the previous
 // log/once matched (so they check the order); "once <text>": the same, and exactly one line
 // contains it; "nolog <text>": no line does. These are checked at the end of the run.
-// A line may start with "<game id>:" to apply only to that game. The log also holds a line
+// A line may start with "<game id>:" or "<option>=<value>:" to apply only to that game, or
+// to a run given that opt=value argument. The log also holds a line
 // "listed <file>" for each script the mods folder lists.
 // (game, frames, env, opt: read by tools/modtests/run_all.sh) and # comments are skipped.
 // Exit code 4 when an expectation fails or its symbol is unknown.
@@ -58,11 +59,17 @@ int main(int argc, char **argv)
 			n++;
 			if (!l.empty() && l.back() == '\r') l.pop_back();
 			std::istringstream is(l); std::string kw; is >> kw;
-			if (kw.size() > 1 && kw.back() == ':')
+			bool skip = false;
+			while (!skip && kw.size() > 1 && kw.back() == ':')
 			{
-				if (argc < 7 || kw.substr(0, kw.size() - 1) != argv[6]) continue;   // argv[6]: game_id before the shift
-				is >> kw;
+				// "<game id>:" or "<option>=<value>:" (one of this run's opt=value arguments); may repeat
+				std::string want = kw.substr(0, kw.size() - 1);
+				bool match = argc > 6 && want == argv[6];   // argv[6]: game_id before the shift
+				for (int k = 8; k < argc && !match; k++) match = want == argv[k];
+				if (!match) skip = true;
+				else is >> kw;
 			}
+			if (skip) continue;
 			if (kw == "log" || kw == "once" || kw == "nolog")
 			{
 				std::string t; std::getline(is, t);
@@ -221,7 +228,7 @@ int main(int argc, char **argv)
 		{
 			ok = first < log.size() && (e.kind == "log" || count == 1);
 			why = first == log.size() ? (count ? "only before the previous match" : "not in the log") : e.kind == "once" && count != 1 ? "in the log " + std::to_string(count) + " times" : "log line " + std::to_string(first + 1) + ": " + log[first];
-			if (first < log.size()) from = first + 1;
+			if (first < log.size()) from = first;   // the next one may match the same line
 		}
 		printf("%s %s:%d: %s \"%s\": %s\n", ok ? "PASS" : "FAIL", expect_file, e.line, e.kind.c_str(), e.text.c_str(), why.c_str());
 		if (!ok) failed++;
