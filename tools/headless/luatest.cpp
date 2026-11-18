@@ -408,6 +408,92 @@ end
 		fs::remove_all(sd);
 	}
 
+	// ---- game events, lib/jam.lua (roadmap 1.5) ----
+	// The shipped library, a symbol file for a made-up program, and a driver script that writes
+	// a game's state into RAM frame by frame: a demo, then matchup, tip-off, four quarters, the
+	// buzzer, and a second game.
+	{
+		fs::path ed = fs::temp_directory_path() / "nbajam_luatest_events";
+		fs::remove_all(ed);
+		fs::create_directories(ed / "lib");
+		fs::create_directories(ed / "sym");
+		std::ifstream jf("dist/NBAJamRecomp/mods/lib/jam.lua", std::ios::binary);
+		std::stringstream js; js << jf.rdbuf();
+		write_file(ed / "lib" / "jam.lua", js.str());
+		const u16 code[1] = { 0x5151 };
+		auto em = make_machine(10, code, 1);
+		const std::vector<u8> &prog = *em->program_rom();
+		char crc[16];
+		snprintf(crc, sizeof crc, "%08x", crc32_of(prog.data(), prog.size()));
+		write_file(ed / "sym" / ("nbajamte_" + std::string(crc) + ".lua"),
+		           "return { GAMSTATE = 0x01000000, inmatchup = 0x01000010, gmqrtr = 0x01000020, game_time = 0x01000040, scores = 0x01000080 }\n");
+		write_file(ed / "driver.lua", R"(
+mod = { name = "Driver" }
+local jam = nba.include("lib/jam.lua")
+local got = {}
+function on_matchup() got[#got + 1] = "M" end
+function on_game_start() got[#got + 1] = "S" end
+function on_quarter(n) got[#got + 1] = "Q" .. n end
+function on_game_end() got[#got + 1] = "E" end
+-- { GAMSTATE, inmatchup, gmqrtr, game_time, score 1, score 2 } per frame
+local T = 0x03000000
+local seq = {
+  { 1, 0, 0, T, 0, 0 }, { 1, 0, 0, T - 1, 0, 0 }, { 1, 0, 0, T - 2, 0, 0 },     -- demo game: nothing
+  { 2, 1, 0, T, 0, 0 }, { 2, 1, 0, T, 0, 0 }, { 3, 0, 0, T, 0, 0 },             -- matchup screen
+  { 3, 0, 0, T - 1, 0, 0 }, { 3, 0, 0, T - 2, 2, 0 }, { 3, 0, 0, 0, 2, 0 },     -- quarter 1
+  { 3, 0, 1, 0, 2, 0 }, { 4, 0, 1, T, 2, 0 }, { 3, 0, 1, T, 2, 0 },             -- break (halftime-like screen)
+  { 3, 0, 1, T - 1, 2, 0 }, { 3, 0, 1, 1, 2, 2 }, { 3, 0, 2, 0, 2, 2 },         -- quarter 2; counter moves at 0:00
+  { 3, 0, 2, T, 2, 2 }, { 3, 0, 2, T - 1, 2, 2 }, { 3, 0, 2, 0, 4, 4 },         -- quarter 3
+  { 3, 0, 3, T, 4, 4 }, { 3, 0, 3, T - 1, 4, 4 }, { 3, 0, 3, 0, 6, 6 },         -- quarter 4, tied
+  { 3, 0, 4, T, 6, 6 }, { 3, 0, 4, T - 1, 6, 6 }, { 3, 0, 4, 0, 9, 6 },         -- overtime: buzzer, apart
+  { 3, 0, 4, 0, 9, 6 }, { 1, 0, 4, 0, 9, 6 },                                   -- nothing more
+  { 2, 1, 0, T, 0, 0 }, { 3, 0, 0, T, 0, 0 }, { 3, 0, 0, T - 1, 0, 0 },         -- a second game
+  { 8, 0, 0, T - 1, 0, 0 },                                                     -- game over (left)
+}
+local i = 0
+function on_frame()
+  i = i + 1
+  local s = seq[i]
+  if not s then return end
+  nba.write16(0x01000000, s[1] & 0xffff); nba.write16(0x01000010, s[2]); nba.write16(0x01000020, s[3])
+  nba.write32(0x01000040, s[4]); nba.write16(0x01000080, s[5]); nba.write16(0x01000090, s[6])
+  jam.update()
+  if i == #seq then nba.log("events " .. table.concat(got, " ") .. (jam.available and "" or " unavailable")) end
+end
+)");
+		mod_manager evm;
+		evm.scan(ed.string(), "");
+		CHECK(evm.mods().size() == 1, "events: lib/jam.lua is a library, not listed as a mod");
+		for (auto &s : evm.mods()) s.enabled = true;
+		evm.start("nbajamte", *em);
+		for (int f = 0; f < 40; f++) evm.frame();
+		auto lg = evm.take_log();
+		std::string ev;
+		for (auto &x : lg) if (x.find("events ") != std::string::npos) ev = x.substr(x.find("events ") + 7);
+		CHECK(ev == "M S Q1 Q2 Q3 Q4 Q5 E M S Q1 E",
+		      ("events: a demo gives none; matchup, tip-off, each quarter once (the clock's last tick is not a start), overtime, the buzzer with the scores apart, a second game, game over (got \"" + ev + "\")").c_str());
+		evm.stop();
+		// a game without a symbol file: no events, said once, no error
+		const u16 other[1] = { 0x6161 };
+		auto om = make_machine(10, other, 1);
+		mod_manager evn;
+		evn.scan(ed.string(), "");
+		for (auto &s : evn.mods()) s.enabled = true;
+		evn.start("nbajamte", *om);
+		for (int f = 0; f < 40; f++) evn.frame();
+		lg = evn.take_log();
+		bool said = false, unavailable = false, err = false;
+		for (auto &x : lg)
+		{
+			said = said || x.find("no game events for nbajamte") != std::string::npos;
+			unavailable = unavailable || x.find("events  unavailable") != std::string::npos;
+			err = err || x.find("error") != std::string::npos;
+		}
+		CHECK(said && unavailable && !err, "events: a revision without a symbol file says so, calls nothing, and is not an error");
+		evn.stop();
+		fs::remove_all(ed);
+	}
+
 	fs::remove_all(dir);
 	printf("\n%d checks, %d failed\n", g_run, g_fail);
 	return g_fail ? 1 : 0;

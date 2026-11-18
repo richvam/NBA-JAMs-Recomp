@@ -99,6 +99,21 @@ Hangtime 1.3 (8089), the three games built from source. Example:
   local scores = nba.sym("scores")      -- 0x010EAFD0 on T.E. 4.0, nil on a revision without a file
   if scores then nba.log(nba.read16(scores)) end
 
+Game events
+-----------
+lib/jam.lua watches the game's own state and calls functions of your script:
+  local jam = nba.include("lib/jam.lua")
+  function on_frame() jam.update() end          -- needed: the events are checked here
+  function on_matchup() end                     -- the matchup screen before a game
+  function on_game_start() end                  -- the tip-off (the clock starts)
+  function on_quarter(n) end                    -- the clock starts in quarter n (5+: overtime)
+  function on_game_end() end                    -- the final buzzer, or the game is over
+Each is called once per game, in that order; define only the ones you need. Demo games in
+attract mode give none. jam.quarter() is the current quarter (0 before tip-off) and
+jam.scores() the two teams' points. jam.available is false, and nothing is called, on a game
+without a symbol file (see Symbols): today T.E. 4.0, T.E. Special Edition 5.02 and Maximum
+Hangtime 1.3 have events; NBA Jam and NBA Hangtime do not yet. The library only reads RAM.
+
 Each instruction of the original source assembles to fixed words (e.g. "movi X,a0" is
 09E0 followed by X, low word first), so a mod can find the code it wants by pattern
 and works on every revision that shares that code. See quarter_length.lua and
