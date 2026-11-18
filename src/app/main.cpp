@@ -1823,6 +1823,7 @@ std::string app::net_code_note(std::string &code)
 		std::string ip = m_upnp.external_ip();
 		int a, b, c, d;
 		if (sscanf(ip.c_str(), "%d.%d.%d.%d", &a, &b, &c, &d) == 4) ext = { u32(a) << 24 | u32(b) << 16 | u32(c) << 8 | u32(d), u16(m_cfg.net_port) };
+		if (ext.ip) m_net.also_public(ext.ip);
 		if (ext.ip && !net_ip_private(ext.ip)) { code = net_code(ext); return "Your router's port is open (UPnP): anyone can join with this code."; }
 	}
 	if (m_net.stun_status() == netplay::stun_state::found)

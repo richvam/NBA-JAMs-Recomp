@@ -45,6 +45,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - Lua mod options can be switches, number ranges or a tick per player, can be put under headings, and can grey each other out.
 - Online games over the internet usually need no router settings any more: the host's router is asked to open the port, and players join with a short code; if that is not enough, the host lets a player in by the player's own code.
 - Lua mods can be set from the pause menu during an offline game. Options a mod marks as live change the game at once; the others apply next game.
+- A player on the host's own home network can join with the host's code too: the game finds the host on that network by itself.
 
 ### Changed
 - The CRT mask is as coarse at 4K as at 1080p (it was twice as fine at 4K), and it lines up

@@ -134,6 +134,8 @@ ONLINE PLAY
     in order of arrival. Hosts joined before are listed under "Join again".
   * No answer after a few seconds: the player sends the host their own code
     (shown on their screen); the host chooses "Let a player in" and types it.
+  * The code also works from the host's own home network: the player finds
+    the host there by itself.
   * Everybody plays with their player 1 controls (P1 keys or first pad).
   * Everybody needs the same ROMs; the app tells you if they differ.
   * Input delay: 3-4 on a LAN, 5-7 over the internet. If the game stalls now

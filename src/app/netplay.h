@@ -32,9 +32,11 @@ public:
 	void send(const net_addr &to, const void *data, size_t len);
 	int recv(net_addr &from, void *data, size_t cap);   // -1 when nothing pending
 	static bool resolve(const std::string &host, u16 port, net_addr &out, std::string &err);
+	u16 local_port() const;
 	double loss = 0.0;                             // test hook: drop this fraction of sends
 	// test hook (the NAT simulator in nattest): when set, every packet goes to `via` with the
-	// real destination in front (6 bytes), and packets from `via` carry the real source
+	// real destination in front (6 bytes), and packets from `via` carry the real source.
+	// Packets to 127.0.0.1 go straight there: in the simulator that is the home network.
 	net_addr via;
 private:
 	long long m_fd = -1;
@@ -101,6 +103,13 @@ public:
 	// their packets in; the player's own packets to the host do the same on their side
 	void invite(const net_addr &player);
 	int invites() const { return int(m_invites.size()); }
+	// Both behind one router: most routers do not send packets for their own public address
+	// back inside. When the player's public address equals the host's, the player asks on the
+	// home network (broadcast) for the host with that public address and switches to the
+	// address that answers. The host answers for its STUN address and for also_public().
+	void also_public(u32 ip) { m_also_public = ip; }
+	bool found_on_lan() const { return m_lan_found; }
+	std::vector<net_addr> lan_probe_to;           // test hook: where to ask instead of the broadcast
 
 private:
 	struct peer
@@ -133,6 +142,9 @@ private:
 	struct invite_t { net_addr to; u32 until; };
 	std::vector<invite_t> m_invites;
 	void tick_stun(u32 now);
+	net_addr m_target;             // client: the address joined (from the code)
+	u32 m_also_public = 0, m_lan_t = 0;
+	bool m_lan_found = false;
 	mode m_mode = mode::off;
 	phase m_phase = phase::lobby;
 	std::string m_error;

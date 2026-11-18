@@ -163,6 +163,33 @@ static bool punch(nat_kind hk, nat_kind ck, bool forwarded = false)
 	return ok;
 }
 
+// host and player behind the SAME router, which does not send packets for its own public
+// address back inside: the player joins with the host's code and finds it on the home network
+// (127.0.0.1 is the home network in the simulator). lan = false: the search is pointed nowhere.
+static bool same_router(bool lan, bool other_host = false)
+{
+	stun_server st;
+	nat_box nb(port_restricted, ip4(127, 0, 1, 1));
+	netplay host, cl;
+	std::string err;
+	if (!host.host(0, err)) return false;
+	host.socket().via = nb.inside_addr();
+	auto pump = [&] { st.pump(); nb.pump(); host.poll(); if (cl.active()) cl.poll(); };
+	auto until = [&](auto done, int ms) { auto t0 = net_now_ms(); while (!done() && net_now_ms() - t0 < u32(ms)) { pump(); sleep_ms(2); } return done(); };
+	host.stun_begin(st.addr());
+	if (!until([&] { return host.stun_status() == netplay::stun_state::found; }, 4000)) return false;
+	net_addr code = host.public_addr();
+	if (other_host) code.ip = ip4(127, 0, 1, 9);   // a code of another home with the same router here
+	if (!cl.join(net_code(code), 0, err)) return false;
+	cl.socket().via = nb.inside_addr();
+	cl.lan_probe_to = { net_addr{ ip4(127, 0, 0, 1), lan ? host.socket().local_port() : u16(1) } };
+	cl.stun_begin(st.addr());
+	bool ok = until([&] { return cl.active() && cl.local_slot() == 1 && host.players() == 2; }, 3000);
+	if (ok) { until([&] { return false; }, 1000); ok = cl.active() && host.players() == 2 && cl.found_on_lan(); }
+	host.stop(); cl.stop();
+	return ok;
+}
+
 // ---------------------------------------------------------------- a test router for UPnP
 struct test_igd
 {
@@ -366,6 +393,10 @@ int main(int argc, char **argv)
 		for (int c = 0; c < 4; c++) fw = fw && punch(port_restricted, nat_kind(c), true);
 		CHECK(fw, "forwarded port (as UPnP makes): a player behind any router joins with the host's code alone");
 	}
+	// ---- both behind one router ----
+	CHECK(!same_router(false), "same router: without the home-network search the host's code does not connect (the router does not loop back)");
+	CHECK(same_router(true), "same router: the player sees its public address equals the host's, finds the host on the home network, and joins");
+	CHECK(!same_router(true, true), "same router: a code with another public address does not start the search");
 	printf("\n%d checks, %d failed\n", g_run, g_fail);
 	return g_fail ? 1 : 0;
 }
