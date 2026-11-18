@@ -1,0 +1,8 @@
+# events.lua with PLAY=1 (modtest presses start, then shoot to pick): the game waits at
+# power-on (GAMSTATE 0) until a button, then reaches a game (GAMSTATE 3, INGAME) and stays in it.
+game nbajamte nbajamse nbamht
+frames 8001
+env PLAY=1
+expect 300 GAMSTATE == 0
+expect 5000 GAMSTATE == 3
+expect 8000 GAMSTATE == 3

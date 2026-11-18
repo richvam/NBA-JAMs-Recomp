@@ -1,0 +1,5 @@
+# press_draw.lua: the script's start presses reach team select; before them it is not there.
+game nbajamte nbajamse nbamht
+frames 2600
+expect 999 in_team_select == 0
+expect 2599 in_team_select != 0
