@@ -2,7 +2,7 @@
 """sym_carry.py - carry a symbol file to a revision without source, by opcode pattern (roadmap 2.3).
 
     sym_carry.py <from.lua> <from.lo> <from.hi> <to.lo> <to.hi> <game_id> <out folder>
-                 [--agree <from2.lua> <from2.lo> <from2.hi>] [--check <to.lua>]
+                 [--agree <from2.lua> <from2.lo> <from2.hi>] [--extra name=address@site ...] [--check <to.lua>]
 
 For every name of <from.lua> (a symbol file of a revision built from source), the instructions
 of the <from> program that use the name's address (as a 32-bit operand) are looked up in the
@@ -16,6 +16,8 @@ the program checks against the ROM before it uses the name (mods.cpp).
 
 --agree: carry from a second source revision too and keep only the names both give the same
 address.
+--extra name=address@site: a name found by hand in the disassembly; its proof is the
+instruction at <site> that uses <address> (may repeat).
 --check <to.lua>: compare with the true symbol file of <to> (when its source exists) and print
 how many names are right, wrong and missing; nothing is written.
 """
@@ -162,6 +164,9 @@ GAP_FILL = True
 
 def main(a):
     check = agree = None
+    extra = []
+    while '--extra' in a:
+        k = a.index('--extra'); extra.append(a[k + 1]); a = a[:k] + a[k + 2:]
     if '--check' in a:
         k = a.index('--check'); check = a[k + 1]; a = a[:k] + a[k + 2:]
     if '--agree' in a:
@@ -180,6 +185,14 @@ def main(a):
               f'{sum(1 for n in res if n in res2 and res2[n][0] != res[n][0])} differ')
         res = both
         note = f' and {agree[0].split("/")[-1]} (only names both give the same address)'
+    for e in extra:
+        # name=address@site, found by hand in the disassembly: the proof is the instruction at
+        # <site> that uses <address> (the words from there to the end of its operand)
+        n, rest = e.split('=', 1); v, site = (int(x, 16) for x in rest.split('@'))
+        i = (site - BASE) >> 4
+        j = next(k for k in range(i, i + 6) if tw[k] | tw[k + 1] << 16 == v)
+        res[n] = (v, site, tw[i:j + 2])
+        print(f'--extra {n} = 0x{v:08X}, proved at 0x{site:08X} ({j + 2 - i} words)')
     if check:
         true = load_syms(check)
         right = sum(1 for n, (v, _, _) in res.items() if true.get(n) == v)

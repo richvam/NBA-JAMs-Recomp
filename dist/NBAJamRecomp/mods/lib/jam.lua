@@ -26,7 +26,7 @@ local jam = {}
 
 -- GAMSTATE values from GAME.EQU (the same in both families)
 local families = {
-  jam      = { games = { nbajamte = true, nbajamse = true }, INAMODE = 1, INGAME = 3, INGAMEOV = 8 },
+  jam      = { games = { nbajamte = true, nbajamse = true, nbajam = true }, INAMODE = 1, INGAME = 3, INGAMEOV = 8 },
   hangtime = { games = { nbamht = true, nbahangt = true },   INAMODE = 1, INGAME = 3, INGAMEOV = 8 },
 }
 

@@ -146,6 +146,48 @@ def write(game, rev, path_select2, out):
     return rows, limit
 
 
+# NBA JAM 1993 rev 3.01 (roadmap 2.4): no source; read from the disassembly of the program
+# (tools/dasm), at the places named in "source". The same machinery as T.E. (tap counts on the
+# matchup screen, checks at tip-off), with fewer codes and other counts.
+JAM_CODES = [
+    dict(id="shot_percent", en="Show shot percentage", sym="show_shot", kind="flag", when="matchup",
+         original="Tap any button 15 times or more, then turn the stick a full circle, on the matchup screen",
+         source="disassembly FF906B80-FF906CA0 (OR of the stick directions = 0xF, taps >= 15)"),
+    dict(id="assist_off", en="Computer assistance off", sym="assistance_off", kind="flag", when="matchup",
+         original="Tap any button exactly 10 times on the matchup screen",
+         source="disassembly FF908380-FF908530 (adjustment 0x1B, or a player's taps = 10)"),
+    dict(id="goaltend", en="Powerup goaltending", sym="p1taps", kind="taps", value=8, when="matchup",
+         original="Tap any button exactly 8 times on the matchup screen",
+         effect="the player's goaltends are let go 70% of the time",
+         source="disassembly FF8844F0-FF8845E0 (taps = 8, RNDPER 700)"),
+    dict(id="quick_hands", en="Quick hands", sym="stlpower", kind="players", when="tipoff",
+         original="Tap any button 5 times or more on the matchup screen, then hold turbo, pass, shoot and down at tip-off",
+         source="disassembly FF859270-FF859410 (controls = 0x72, taps >= 5)"),
+    dict(id="big_head", en="Big head", sym="plyrbighead", kind="players", when="tipoff",
+         original="Hold up, turbo and pass at tip-off",
+         source="disassembly FF859440-FF8594D0 (controls = 0x61)"),
+]
+
+
+def write_jam(out):
+    L = ['-- codes_nbajam.lua - the cabinet codes of NBA JAM 1993 rev 3.01 (roadmap 2.4).',
+         '-- No source: read from the disassembly (tools/dasm) at the places in "source"; written by',
+         '-- tools/codes_from_source.py; checked in modtest by tools/modtests/codes_te.lua (codes 3, 4,',
+         '-- 7, 10, 11). Kinds as in codes_nbajamte.lua. NBA JAM 1993 has no tournament mode, maximum',
+         '-- power, huge head or baby mode (T.E. added them). Spanish labels: roadmap 2.5.',
+         'return {']
+    for c in JAM_CODES:
+        f = [f'id = {lua_str(c["id"])}', f'label = {{ en = {lua_str(c["en"])} }}', f'original = {lua_str(c["original"])}',
+             f'sym = {lua_str(c["sym"])}', f'kind = {lua_str(c["kind"])}']
+        if 'value' in c: f.append(f'value = {c["value"]}')
+        f.append(f'when = {lua_str(c["when"])}')
+        if 'effect' in c: f.append(f'effect = {lua_str(c["effect"])}')
+        f.append(f'source = {lua_str(c["source"])}')
+        L.append('  { ' + ', '.join(f) + ' },')
+    L.append('}')
+    open(out, 'w', newline='\n').write('\n'.join(L) + '\n')
+
+
 # Maximum Hangtime 1.3 (roadmap 2.2): SELECT3.ASM, BB3.ASM, PLYR.ASM, SCORE.ASM, COMBOS.DOC.
 # Number codes: the three icons on the versus screen count turbo, shoot and pass presses
 # (stick up while pressing counts down); a match in combination_tbl ORs the player's bit into
@@ -245,6 +287,8 @@ if __name__ == '__main__':
         print(f'Maximum Hangtime: {len(nums)} number codes ({", ".join(c for c, _ in nums)}), {len(MHT_STICK)} stick codes')
         del sys.argv[3]
     te, se, lib = sys.argv[1:]
+    write_jam(lib + '/codes_nbajam.lua')
+    print(f'NBA JAM 1993: {len(JAM_CODES)} codes (from the disassembly)')
     a, la = write('nbajamte', 'NBA JAM Tournament Edition 4.0', te + '/SELECT2.ASM', lib + '/codes_nbajamte.lua')
     b, lb = write('nbajamse', 'NBA JAM T.E. Special Edition 5.02', se + '/SELECT2.ASM', lib + '/codes_nbajamse.lua')
     na = {letters_of(r['ini']) + str(r['month']) + str(r['day']): r['name'] for r in a[:la]}

@@ -1,44 +1,50 @@
 # events.lua with PLAY=1 (modtest presses start, then shoot to pick): the game waits at
 # power-on (GAMSTATE 0) until a button, then plays a whole game. Each event once, in order.
-# NBA Jam has no symbol file yet: the library says so and calls nothing.
 game nbajamte nbajamse nbamht nbajam nbahangt nbahangt:nbahangt13 nbamht:nbamht103
 frames 45000
 env PLAY=1
 nbajamte: expect 300 GAMSTATE == 0
+nbajam: expect 300 GAMSTATE == 0
 nbajamse: expect 300 GAMSTATE == 0
 nbamht: expect 300 GAMSTATE == 0
 nbahangt: expect 300 GAMSTATE == 0
 nbajamte: expect 5000 GAMSTATE == 3
+nbajam: expect 5000 GAMSTATE == 3
 nbajamse: expect 5000 GAMSTATE == 3
 nbamht: expect 5000 GAMSTATE == 3
 nbahangt: expect 5000 GAMSTATE == 3
 nbajamte: once : matchup
+nbajam: once : matchup
 nbajamse: once : matchup
 nbamht: once : matchup
 nbahangt: once : matchup
 nbajamte: once : game start
+nbajam: once : game start
 nbajamse: once : game start
 nbamht: once : game start
 nbahangt: once : game start
 nbajamte: once : quarter 1
+nbajam: once : quarter 1
 nbajamse: once : quarter 1
 nbamht: once : quarter 1
 nbahangt: once : quarter 1
 nbajamte: once : quarter 2
+nbajam: once : quarter 2
 nbajamse: once : quarter 2
 nbamht: once : quarter 2
 nbahangt: once : quarter 2
 nbajamte: once : quarter 3
+nbajam: once : quarter 3
 nbajamse: once : quarter 3
 nbamht: once : quarter 3
 nbahangt: once : quarter 3
 nbajamte: once : quarter 4
+nbajam: once : quarter 4
 nbajamse: once : quarter 4
 nbamht: once : quarter 4
 nbahangt: once : quarter 4
 nbajamte: once : game end
+nbajam: once : game end
 nbajamse: once : game end
 nbamht: once : game end
 nbahangt: once : game end
-nbajam: once no game events for nbajam
-nbajam: nolog EVENT
