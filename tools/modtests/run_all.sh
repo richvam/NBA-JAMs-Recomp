@@ -11,6 +11,7 @@
 #      env PLAY=1                       environment for modtest (may repeat)
 #      opt step=2                       an option value (may repeat)
 #      each code=1 2 3                  one run per value, with code=<value> added
+#      run code=1 two=1                 one more run with those values (may repeat)
 #      expect <frame> <symbol>[:8|:16|:32] <op> <value>   checked by modtest
 #  The script runs from a fresh folder holding it, mods/lib and mods/sym.
 #  Exit code 1 when any expectation fails.
@@ -29,11 +30,20 @@ for ex in "$HERE"/*.expect; do
   frames=$(sed -n 's/\r$//; s/^frames[[:space:]]\+//p' "$ex" | tail -1)
   envs=$(sed -n 's/\r$//; s/^env[[:space:]]\+//p' "$ex")
   opts=$(sed -n 's/\r$//; s/^opt[[:space:]]\+//p' "$ex")
+  # the runs: one per "each" value and one per "run" line, or a single plain run;
+  # each is a list of opt=value joined by ':'
   each=$(sed -n 's/\r$//; s/^each[[:space:]]\+//p' "$ex" | head -1)
-  eid=${each%%=*}; evals=${each#*=}; [ -n "$each" ] || evals=-
-  for g in $games; do for ev in $evals; do
+  runs=""
+  if [ -n "$each" ]; then eid=${each%%=*}; for v in ${each#*=}; do runs="$runs $eid=$v"; done; fi
+  runs="$runs $(sed -n 's/\r$//; s/^run[[:space:]]\+//p' "$ex" | sed 's/[[:space:]]\+/:/g')"
+  [ -n "${runs// /}" ] || runs=-
+  for g in $games; do for ev in $runs; do
     runopts=$opts; label=$g
-    if [ "$ev" != - ]; then runopts="$opts $eid=$ev"; label="$g $eid=$ev"; fi
+    if [ "$ev" != - ]; then
+      # a run's value replaces an "opt" line for the same option
+      runopts=""; for o in $opts; do case ":$ev:" in *":${o%%=*}="*) ;; *) runopts="$runopts $o";; esac; done
+      runopts="$runopts ${ev//:/ }"; label="$g ${ev//:/ }"
+    fi
     rm -rf "$TMP/m"; mkdir -p "$TMP/m"
     cp -r "$TOP/dist/NBAJamRecomp/mods/lib" "$TOP/dist/NBAJamRecomp/mods/sym" "$TMP/m/"; cp "$lua" "$TMP/m/"
     echo "== $name on $label"

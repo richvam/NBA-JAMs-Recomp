@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """codes_from_source.py - write mods/lib/codes_nbajamte.lua and codes_nbajamse.lua (roadmap 2.1).
 
-    codes_from_source.py <T.E. source dir> <SE source dir> <mods/lib folder>
+    codes_from_source.py <T.E. source dir> <SE source dir> [<MHT 1.3 source dir>] <mods/lib folder>
+
+The Maximum Hangtime 1.3 source is the repository's SRC/ with BACKUP/CODE113M/ copied over it
+(as tools/build_roms.sh builds it); it writes codes_nbamht.lua (roadmap 2.2).
 
 The cabinet codes of T.E. 4.0 and SE 5.02 are the same (SCORE.ASM, PLYR.ASM, SELECT.ASM and
 SELECT2.ASM differ only in formatting, apart from the secret players); they are listed by
@@ -140,9 +143,94 @@ def write(game, rev, path_select2, out):
     return rows, limit
 
 
+# Maximum Hangtime 1.3 (roadmap 2.2): SELECT3.ASM, BB3.ASM, PLYR.ASM, SCORE.ASM, COMBOS.DOC.
+# Number codes: the three icons on the versus screen count turbo, shoot and pass presses
+# (stick up while pressing counts down); a match in combination_tbl ORs the player's bit into
+# the variable while the screen lasts (5 s). When it ends, set_plyrs_powerup_ram turns each of
+# pup_baby..pup_fastpass into 0 or 0xF (all four players): in a game with humans on both
+# teams the bits must come from both teams, otherwise any one bit is enough. Tournament mode
+# is kept per player and is refused when only one human plays.
+MHT_NUM = {  # combination_tbl label -> (variable, id, English label)
+    'TOURN': ('pup_tournament', 'tournament', 'Tournament mode'),
+    'BABYS': ('pup_baby', 'baby', 'Baby-sized players'),
+    'NOMUS': ('pup_nomusic', 'no_music', 'No music during play'),
+    'GOALT': ('pup_goaltend', 'goaltend', 'Goaltending allowed'),
+    'MXBLK': ('pup_maxblock', 'max_block', 'Shot blocking'),
+    'MXSTL': ('pup_maxsteal', 'max_steal', 'Maximum steals'),
+    'MXPWR': ('pup_maxpower', 'max_power', 'Maximum power'),
+    'MXSPD': ('pup_maxspeed', 'max_speed', 'Maximum speed'),
+    'HYPER': ('pup_hypspeed', 'hyper_speed', 'Hyper speed'),
+    'TBSTL': ('pup_trbstealth', 'stealth_turbo', 'Stealth turbo'),
+    'TBINF': ('pup_trbinfinite', 'infinite_turbo', 'Infinite turbo'),
+    'NOPSH': ('pup_nopush', 'no_push', 'No pushing'),
+    'FPASS': ('pup_fastpass', 'fast_pass', 'Fast turbo passes'),
+}
+MHT_COSMETIC = {'pup_nomusic'}   # kept by tournament mode (clear_secret_powerup_tmode skips it)
+MHT_STICK = [  # BB3.ASM #special_moves, entered on the versus screen, set at once for that player
+    dict(id="lock_combo", en="Lock the number code", sym="pup_lockcombo", kind="players",
+         original="Press down on the versus screen: the player's three icons stop changing", source="BB3.ASM sp_lockcombo"),
+    dict(id="big_head", en="Big head", sym="pup_bighead", kind="players", conflicts=["huge_head"],
+         original="Hold up, turbo and pass together", tournament="kept", source="BB3.ASM sp_bighead"),
+    dict(id="huge_head", en="Huge head", sym="pup_hugehead", kind="players", conflicts=["big_head"],
+         original="Up, up, pass, turbo (within 1 s)", tournament="kept", source="BB3.ASM sp_hugehead"),
+    dict(id="shot_percent", en="Show shot percentage", sym="pup_showshotper", kind="players",
+         original="Turn the stick a full circle clockwise from up (within 1 s); only the first player to do it",
+         tournament="kept", source="BB3.ASM sp_showshotper"),
+    dict(id="no_tag", en="No tag arrows", sym="pup_notag", kind="players",
+         original="Left, left, pass, turbo (within 1 s)", source="BB3.ASM sp_notag"),
+    dict(id="no_drift", en="No drift on block jumps", sym="pup_nodrift", kind="players",
+         original="Down, down, shoot, turbo (within 1 s)", source="BB3.ASM sp_nodrift"),
+    dict(id="no_assistance", en="Computer assistance off", sym="pup_noassistance", kind="flag",
+         original="Hold right and press pass twice (within 1 s)", source="BB3.ASM sp_noassistance"),
+    dict(id="aba_ball", en="ABA ball", sym="pup_aba", kind="flag",
+         original="Hold right and press shoot, turbo, pass (within 1 s)", tournament="kept", source="BB3.ASM sp_aba"),
+    dict(id="outdoor_court", en="Outdoor court", sym="pup_court", kind="flag",
+         original="Hold left and press turbo twice (within 1 s)", tournament="kept", source="BB3.ASM sp_court"),
+    dict(id="special", en="Special combo (ABA ball, outdoor court, shot percentage, big head)", sym="pup_aba", kind="flag",
+         original="Shoot, shoot, then hold shoot and turn the stick a full circle clockwise from up (within 1.3 s)",
+         tournament="kept", source="BB3.ASM sp_special"),
+]
+
+
+def write_mht(src, out):
+    s = open(src + '/SELECT3.ASM', encoding='latin-1').read().replace('\r', '')
+    t = s[s.index('\ncombination_tbl\n'):s.index('\ncombination_tbl_end')]
+    nums = re.findall(r'^\s*WL\s+>([0-9A-Fa-f]{3}),(\w+)\s*$', t, re.M)   # commented lines start with ';'
+    L = ['-- codes_nbamht.lua - the cabinet codes of NBA Maximum Hangtime 1.3 (roadmap 2.2), from the sources.',
+         '-- Written by tools/codes_from_source.py; checked in modtest by tools/modtests/codes_mht.lua.',
+         '-- kind "number": a 3-digit code on the versus screen (turbo, shoot, pass presses), value = the',
+         '-- digits. When the screen ends the variable is 0 or 0xF for every player; with humans on both',
+         '-- teams both teams must enter it (tournament: any one player, refused with one human).',
+         '-- kind "players": bit 0-3 = player 1-4, set at once; "flag": nonzero = on.',
+         '-- All are cleared at game start and at game over. Tournament mode clears the others than',
+         '-- those marked tournament = "kept". Spanish labels: roadmap 2.5.',
+         '-- Not in 1.3 although named in the source: show hot spots (pup_showhotspots is only cleared;',
+         '-- its number code 030 is commented out).',
+         'return {']
+    for code, lab in nums:
+        sym, cid, en = MHT_NUM[lab]
+        kept = sym in MHT_COSMETIC
+        L.append(f'  {{ id = {lua_str(cid)}, label = {{ en = {lua_str(en)} }}, original = "{code}", sym = {lua_str(sym)}, '
+                 f'kind = "number", value = {int(code)}, when = "matchup", '
+                 f'tournament = {lua_str("this is tournament mode" if cid == "tournament" else "kept" if kept else "cleared")} }},')
+    for c in MHT_STICK:
+        f = [f'id = {lua_str(c["id"])}', f'label = {{ en = {lua_str(c["en"])} }}', f'original = {lua_str(c["original"])}',
+             f'sym = {lua_str(c["sym"])}', f'kind = {lua_str(c["kind"])}', 'when = "matchup"']
+        if 'conflicts' in c: f.append('conflicts = { ' + ', '.join(lua_str(x) for x in c['conflicts']) + ' }')
+        f += [f'tournament = {lua_str(c.get("tournament", "cleared"))}', f'source = {lua_str(c["source"])}']
+        L.append('  { ' + ', '.join(f) + ' },')
+    L.append('}')
+    open(out, 'w', newline='\n').write('\n'.join(L) + '\n')
+    return nums
+
+
 if __name__ == '__main__':
-    if len(sys.argv) != 4:
+    if len(sys.argv) not in (4, 5):
         sys.exit(__doc__)
+    if len(sys.argv) == 5:   # <T.E.> <SE> <Maximum Hangtime 1.3 source> <lib>
+        nums = write_mht(sys.argv[3], sys.argv[4] + '/codes_nbamht.lua')
+        print(f'Maximum Hangtime: {len(nums)} number codes ({", ".join(c for c, _ in nums)}), {len(MHT_STICK)} stick codes')
+        del sys.argv[3]
     te, se, lib = sys.argv[1:]
     a, la = write('nbajamte', 'NBA JAM Tournament Edition 4.0', te + '/SELECT2.ASM', lib + '/codes_nbajamte.lua')
     b, lb = write('nbajamse', 'NBA JAM T.E. Special Edition 5.02', se + '/SELECT2.ASM', lib + '/codes_nbajamse.lua')
