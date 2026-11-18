@@ -10,7 +10,7 @@ function on_load()
     ids[c.id] = true
     kinds[c.kind] = (kinds[c.kind] or 0) + 1
     if not nba.sym(c.sym) and not c.sym_note then bad[#bad + 1] = c.id .. ": no symbol " .. c.sym end
-    if not (c.label and c.label.en and c.original and c.when) then bad[#bad + 1] = c.id .. ": missing a field" end
+    if not (c.label and c.label.en and c.label.es and c.original and c.when) then bad[#bad + 1] = c.id .. ": missing a field" end
   end
   local k = {}
   for n, v in pairs(kinds) do k[#k + 1] = n .. " " .. v end

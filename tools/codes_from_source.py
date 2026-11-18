@@ -112,6 +112,26 @@ def letters_of(raw):
 def lua_str(s):
     return '"' + s.replace('\\', '\\\\').replace('"', '\\"') + '"'
 
+# Spanish labels (roadmap 2.5), by code id; secret players keep their name.
+ES = {
+    'tournament': 'Modo torneo', 'max_power': 'Potencia máxima', 'shot_percent': 'Mostrar porcentaje de tiro',
+    'assist_off': 'Sin ayuda de la máquina', 'goaltend': 'Interferencia permitida', 'quick_hands': 'Manos rápidas',
+    'big_head': 'Cabeza grande', 'huge_head': 'Cabeza enorme', 'baby': 'Jugadores bebé',
+    'big_roster': 'Plantilla ampliada', 'team_switch': 'Cambiar de equipo en el descanso',
+    'no_music': 'Sin música durante el juego', 'max_block': 'Tapones', 'max_steal': 'Robos máximos',
+    'max_speed': 'Velocidad máxima', 'hyper_speed': 'Hipervelocidad', 'stealth_turbo': 'Turbo invisible',
+    'infinite_turbo': 'Turbo infinito', 'no_push': 'Sin empujones', 'fast_pass': 'Pases rápidos con turbo',
+    'lock_combo': 'Bloquear el código numérico', 'no_tag': 'Sin flechas de jugador',
+    'no_drift': 'Sin deriva en los saltos de tapón', 'no_assistance': 'Sin ayuda de la máquina',
+    'aba_ball': 'Balón ABA', 'outdoor_court': 'Cancha exterior',
+    'special': 'Combo especial (balón ABA, cancha exterior, porcentaje de tiro, cabeza grande)',
+}
+
+
+def label(cid, en):
+    return '{ es = ' + lua_str(ES.get(cid, en)) + ', en = ' + lua_str(en) + ' }'
+
+
 
 def write(game, rev, path_select2, out):
     rows, limit = secret_players(path_select2)
@@ -120,10 +140,10 @@ def write(game, rev, path_select2, out):
          '-- kind: "flag" (nonzero = on), "players" (bit 0-3 = player 1-4), "taps" (the player\'s',
          '-- tap count pNtaps must equal value), "team" (bigroster1/2, team1/2_switch), "initials"',
          '-- (special_heads[player] = value). when: matchup, tipoff, team_select, halftime, initials.',
-         '-- Spanish labels: roadmap 2.5.',
+         '-- labels: es, en (roadmap 2.5).',
          'return {']
     for c in CODES:
-        f = [f'id = {lua_str(c["id"])}', f'label = {{ en = {lua_str(c["en"])} }}', f'original = {lua_str(c["original"])}',
+        f = [f'id = {lua_str(c["id"])}', f'label = {label(c["id"], c["en"])}', f'original = {lua_str(c["original"])}',
              f'sym = {lua_str(c["sym"])}', f'kind = {lua_str(c["kind"])}']
         if 'value' in c: f.append(f'value = {c["value"]}')
         if 'taps' in c: f.append(f'taps = {c["taps"]}')
@@ -139,7 +159,7 @@ def write(game, rev, path_select2, out):
     for i, r in enumerate(rows[:limit]):
         ini = letters_of(r['ini'])
         slug = re.sub(r'[^a-z0-9]+', '_', r['name'].lower()).strip('_')
-        L.append(f'  {{ id = "player_{slug}", label = {{ en = {lua_str(r["name"].title())} }}, original = "{ini} {r["month"]:02d}/{r["day"]:02d}", '
+        L.append(f'  {{ id = "player_{slug}", label = {label("", r["name"].title())}, original = "{ini} {r["month"]:02d}/{r["day"]:02d}", '
                  f'sym = "special_heads", kind = "initials", value = {i}, when = "initials" }},')
     L.append('}')
     open(out, 'w', newline='\n').write('\n'.join(L) + '\n')
@@ -174,10 +194,10 @@ def write_jam(out):
          '-- No source: read from the disassembly (tools/dasm) at the places in "source"; written by',
          '-- tools/codes_from_source.py; checked in modtest by tools/modtests/codes_te.lua (codes 3, 4,',
          '-- 7, 10, 11). Kinds as in codes_nbajamte.lua. NBA JAM 1993 has no tournament mode, maximum',
-         '-- power, huge head or baby mode (T.E. added them). Spanish labels: roadmap 2.5.',
+         '-- power, huge head or baby mode (T.E. added them). labels: es, en (roadmap 2.5).',
          'return {']
     for c in JAM_CODES:
-        f = [f'id = {lua_str(c["id"])}', f'label = {{ en = {lua_str(c["en"])} }}', f'original = {lua_str(c["original"])}',
+        f = [f'id = {lua_str(c["id"])}', f'label = {label(c["id"], c["en"])}', f'original = {lua_str(c["original"])}',
              f'sym = {lua_str(c["sym"])}', f'kind = {lua_str(c["kind"])}']
         if 'value' in c: f.append(f'value = {c["value"]}')
         f.append(f'when = {lua_str(c["when"])}')
@@ -251,7 +271,7 @@ def write_mht(src, out, game='nbamht', rev='NBA Maximum Hangtime 1.3'):
          '-- teams both teams must enter it (tournament: any one player, refused with one human).',
          '-- kind "players": bit 0-3 = player 1-4, set at once; "flag": nonzero = on.',
          '-- All are cleared at game start and at game over. Tournament mode clears the others than',
-         '-- those marked tournament = "kept". Spanish labels: roadmap 2.5.',
+         '-- those marked tournament = "kept". labels: es, en (roadmap 2.5).',
          '-- revisions: how a revision without source differs, when it does (seen in modtest).',
          '-- Not in 1.3 although named in the source: show hot spots (pup_showhotspots is only cleared;',
          '-- its number code 030 is commented out).',
@@ -259,11 +279,11 @@ def write_mht(src, out, game='nbamht', rev='NBA Maximum Hangtime 1.3'):
     for code, lab in nums:
         sym, cid, en = MHT_NUM[lab]
         kept = sym in MHT_COSMETIC
-        L.append(f'  {{ id = {lua_str(cid)}, label = {{ en = {lua_str(en)} }}, original = "{code}", sym = {lua_str(sym)}, '
+        L.append(f'  {{ id = {lua_str(cid)}, label = {label(cid, en)}, original = "{code}", sym = {lua_str(sym)}, '
                  f'kind = "number", value = {int(code)}, when = "matchup", '
                  f'tournament = {lua_str("this is tournament mode" if cid == "tournament" else "kept" if kept else "cleared")} }},')
     for c in MHT_STICK:
-        f = [f'id = {lua_str(c["id"])}', f'label = {{ en = {lua_str(c["en"])} }}', f'original = {lua_str(c["original"])}',
+        f = [f'id = {lua_str(c["id"])}', f'label = {label(c["id"], c["en"])}', f'original = {lua_str(c["original"])}',
              f'sym = {lua_str(c["sym"])}', f'kind = {lua_str(c["kind"])}', 'when = "matchup"']
         if 'conflicts' in c: f.append('conflicts = { ' + ', '.join(lua_str(x) for x in c['conflicts']) + ' }')
         f += [f'tournament = {lua_str(c.get("tournament", "cleared"))}', f'source = {lua_str(c["source"])}']
@@ -275,6 +295,59 @@ def write_mht(src, out, game='nbamht', rev='NBA Maximum Hangtime 1.3'):
     return nums
 
 
+def md_tables(nums, ht_same=True):
+    """the README section (roadmap 2.5): one table per game, from the same lists as the Lua tables"""
+    def row(*c): return '| ' + ' | '.join(x.replace('|', '/') for x in c) + ' |'
+    L = ['<!-- codes:start (written by tools/codes_from_source.py) -->', '### Cabinet codes', '',
+         'The games accept their original cabinet codes; this is what each one does, read from the',
+         "games' source (and, for NBA JAM 1993, its program). The tables for Lua mods are in",
+         '`mods/lib/codes_<game>.lua`; the secret players are listed in [docs/CODES.md](docs/CODES.md).', '',
+         '**NBA JAM Tournament Edition and T.E. Special Edition** (the same codes): tap any button on the',
+         'matchup screen to count taps; hold the others at tip-off.', '',
+         row('Code', 'How'), row('---', '---')]
+    L += [row(c['en'], c['original']) for c in CODES]
+    L += ['', 'Tournament mode (turbo, pass, shoot and right) also turns the tap codes off. The secret players',
+          'are entered as initials and a birth date: 61 in T.E., 68 in SE.', '',
+          '**NBA JAM (1993)**:', '', row('Code', 'How'), row('---', '---')]
+    L += [row(c['en'], c['original']) for c in JAM_CODES]
+    L += ['', '**NBA Hangtime and NBA Maximum Hangtime** (the same codes): on the versus screen, the three',
+          'icons count turbo, shoot and pass presses (stick up counts down). With a human on each team,',
+          'both teams must enter a number code; tournament mode needs two humans.', '',
+          row('Number', 'Code'), row('---', '---')]
+    L += [row(code, MHT_NUM[lab][2]) for code, lab in nums]
+    L += ['', row('Stick and buttons', 'Code'), row('---', '---')]
+    L += [row(c['original'], c['en']) for c in MHT_STICK]
+    L += ['', 'Maximum Hangtime 1.03 is older: ABA ball also gives the outdoor court, and the outdoor-court',
+          'and special combos do nothing there.', '<!-- codes:end -->']
+    return '\n'.join(L)
+
+
+def md_players(rows_te, lim_te, rows_se, lim_se):
+    L = ['# Secret players', '', 'Entered on the initials screen of NBA JAM Tournament Edition and T.E. Special Edition:',
+         'three letters (`_` is the character after Z) and a birth date. Not given when the',
+         'tournament adjustment is on. Written by `tools/codes_from_source.py` from `SELECT2.ASM`.', '']
+    for title, rows, lim in (('T.E. 4.0', rows_te, lim_te), ('T.E. Special Edition 5.02', rows_se, lim_se)):
+        L += [f'## {title} ({lim})', '', '| Initials | Birth date | Player |', '|---|---|---|']
+        L += [f'| {letters_of(r["ini"])} | {r["month"]:02d}/{r["day"]:02d} | {r["name"].title()} |' for r in rows[:lim]]
+        L.append('')
+    return '\n'.join(L)
+
+
+def write_docs(top, nums, te, se):
+    p = top + '/README.md'
+    s = open(p, encoding='utf-8', newline='').read()
+    nl = '\r\n' if '\r\n' in s else '\n'
+    md = md_tables(nums).replace('\n', nl)
+    if '<!-- codes:start' in s:
+        i = s.index('<!-- codes:start'); j = s.index('<!-- codes:end -->') + len('<!-- codes:end -->')
+        s = s[:i] + md + s[j:]
+    else:
+        k = s.index(nl + '## 5. Online')
+        s = s[:k] + nl + md + nl + s[k:]
+    open(p, 'w', encoding='utf-8', newline='').write(s)
+    open(top + '/docs/CODES.md', 'w', encoding='utf-8', newline='\n').write(md_players(*te, *se) + '\n')
+
+
 if __name__ == '__main__':
     if len(sys.argv) not in (4, 5, 6):
         sys.exit(__doc__)
@@ -282,6 +355,7 @@ if __name__ == '__main__':
         nums = write_mht(sys.argv[4], sys.argv[5] + '/codes_nbahangt.lua', 'nbahangt', 'NBA Hangtime L1.3 and L1.1')
         print(f'Hangtime: {len(nums)} number codes, {len(MHT_STICK)} stick codes')
         del sys.argv[4]
+    nums = None
     if len(sys.argv) == 5:   # <T.E.> <SE> <Maximum Hangtime 1.3 source> <lib>
         nums = write_mht(sys.argv[3], sys.argv[4] + '/codes_nbamht.lua')
         print(f'Maximum Hangtime: {len(nums)} number codes ({", ".join(c for c, _ in nums)}), {len(MHT_STICK)} stick codes')
@@ -296,3 +370,7 @@ if __name__ == '__main__':
     print(f'T.E.: {len(CODES)} codes, {la} secret players; SE: {len(CODES)} codes, {lb} secret players')
     print('SE adds:', ', '.join(sorted(nb[k] for k in nb.keys() - na.keys())))
     print('SE drops:', ', '.join(sorted(na[k] for k in na.keys() - nb.keys())))
+    if nums:   # with every source given: README.md's code tables and docs/CODES.md (roadmap 2.5)
+        import os
+        write_docs(os.path.realpath(os.path.join(lib, '../../../..')), nums, (a, la), (b, lb))
+        print('README.md code tables and docs/CODES.md written')
