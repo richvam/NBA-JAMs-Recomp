@@ -51,6 +51,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - Online games run the host's Lua mods on every computer, with the host's options; any mod can be used online now. A player whose mod files differ is told which one.
 - Lua mods can use game addresses and game events on NBA Hangtime (L1.3 and L1.1), Maximum Hangtime 1.03 and NBA JAM 1993 too.
 - The README lists the cabinet codes of every game, and docs/CODES.md the secret players of T.E. and SE.
+- New Lua mod codes_te.lua: tournament mode, big head and maximum power for T.E. and T.E. Special Edition as switches, without entering the cabinet codes.
 
 ### Changed
 - The CRT mask is as coarse at 4K as at 1080p (it was twice as fine at 4K), and it lines up

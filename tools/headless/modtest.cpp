@@ -204,6 +204,18 @@ int main(int argc, char **argv)
 				printf("%s %s:%d: frame %d: %s = %lld (0x%llX), expected %s %lld\n", ok ? "PASS" : "FAIL", expect_file, e.line, f, e.name.c_str(), v, v, e.op.c_str(), e.value);
 				if (!ok) failed++;
 			}
+		// HASH=<frame>[,<frame>...]: the main RAM hash after that frame (roadmap 3.1: a mod
+		// with every option off must leave the game as unmodded), into the log as "hash <f> <h>"
+		if (const char *hs = getenv("HASH"))
+			for (const char *p = hs; *p; )
+			{
+				if (atoi(p) == f)
+				{
+					char b[48]; snprintf(b, sizeof b, "hash %d %08x", f, m.state_hash());
+					printf("  %s\n", b); log.push_back(b);
+				}
+				const char *c = strchr(p, ','); if (!c) break; p = c + 1;
+			}
 		if (watch && f % 500 == 0)
 		{
 			u32 a = u32(strtoul(watch, nullptr, 0));

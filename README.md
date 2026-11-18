@@ -270,9 +270,10 @@ Included:
 |---|---|
 | `quarter_length.lua` | Quarter and overtime length from 0:30 to 12:00 (the original is 3:00). The scoreboard has one minutes digit, so above 9:00 it shows 9 until nine minutes are left. |
 | `no_select_timer.lua` | Removes the countdown on the team select screen, and optionally on initials entry. |
+| `codes_te.lua` | T.E. and T.E. Special Edition: tournament mode, big head and maximum power as switches, without entering the cabinet codes (big head and maximum power for each player you tick). More codes and games follow. |
 
-Both were checked on T.E. rev 4.0, T.E. Special Edition rev 5.02, Hangtime and Maximum
-Hangtime. If a mod cannot find what it needs in a game, it says so on screen and changes
+The first two were checked on T.E. rev 4.0, T.E. Special Edition rev 5.02, Hangtime and
+Maximum Hangtime; `codes_te.lua` on T.E. rev 4.0 and Special Edition rev 5.02. If a mod cannot find what it needs in a game, it says so on screen and changes
 nothing. To write your own, see [`mods/README.txt`](dist/NBAJamRecomp/mods/README.txt).
 
 ## 7. Troubleshooting
