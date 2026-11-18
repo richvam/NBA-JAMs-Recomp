@@ -1,7 +1,7 @@
 -- codes_table.lua - roadmap 2.1 check: lib/codes_<game>.lua loads, every id is unique,
 -- and every symbol it names exists in the running revision's symbol file (unless the entry
 -- says why not, in sym_note).
-mod = { name = "Codes table check", games = { "nbajamte", "nbajamse", "nbamht" } }
+mod = { name = "Codes table check", games = { "nbajamte", "nbajamse", "nbamht", "nbahangt" } }
 function on_load()
   local t = nba.include("lib/codes_" .. nba.game .. ".lua")
   local ids, bad, kinds = {}, {}, {}

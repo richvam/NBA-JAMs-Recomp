@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """codes_from_source.py - write mods/lib/codes_nbajamte.lua and codes_nbajamse.lua (roadmap 2.1).
 
-    codes_from_source.py <T.E. source dir> <SE source dir> [<MHT 1.3 source dir>] <mods/lib folder>
+    codes_from_source.py <T.E. source dir> <SE source dir> [<MHT 1.3 source dir> [<Hangtime L1.3 source dir>]] <mods/lib folder>
 
 The Maximum Hangtime 1.3 source is the repository's SRC/ with BACKUP/CODE113M/ copied over it
-(as tools/build_roms.sh builds it); it writes codes_nbamht.lua (roadmap 2.2).
+(as tools/build_roms.sh builds it); it writes codes_nbamht.lua (roadmap 2.2). The Hangtime L1.3
+source is that tree with BACKUP/CODE113L/ over it; it writes codes_nbahangt.lua (2.3). The code
+entry of Hangtime L1.3 and L1.1 is the same as Maximum Hangtime 1.3's (SELECT3.ASM, BB3.ASM,
+PLYR.ASM are identical).
 
 The cabinet codes of T.E. 4.0 and SE 5.02 are the same (SCORE.ASM, PLYR.ASM, SELECT.ASM and
 SELECT2.ASM differ only in formatting, apart from the secret players); they are listed by
@@ -183,20 +186,23 @@ MHT_STICK = [  # BB3.ASM #special_moves, entered on the versus screen, set at on
     dict(id="no_assistance", en="Computer assistance off", sym="pup_noassistance", kind="flag",
          original="Hold right and press pass twice (within 1 s)", source="BB3.ASM sp_noassistance"),
     dict(id="aba_ball", en="ABA ball", sym="pup_aba", kind="flag",
-         original="Hold right and press shoot, turbo, pass (within 1 s)", tournament="kept", source="BB3.ASM sp_aba"),
+         original="Hold right and press shoot, turbo, pass (within 1 s)", tournament="kept", source="BB3.ASM sp_aba",
+         rev_1_03="also sets the outdoor court (seen in modtest)"),
     dict(id="outdoor_court", en="Outdoor court", sym="pup_court", kind="flag",
-         original="Hold left and press turbo twice (within 1 s)", tournament="kept", source="BB3.ASM sp_court"),
+         original="Hold left and press turbo twice (within 1 s)", tournament="kept", source="BB3.ASM sp_court",
+         rev_1_03="not in Maximum Hangtime 1.03 (nothing is set; seen in modtest)"),
     dict(id="special", en="Special combo (ABA ball, outdoor court, shot percentage, big head)", sym="pup_aba", kind="flag",
          original="Shoot, shoot, then hold shoot and turn the stick a full circle clockwise from up (within 1.3 s)",
-         tournament="kept", source="BB3.ASM sp_special"),
+         tournament="kept", source="BB3.ASM sp_special",
+         rev_1_03="not in Maximum Hangtime 1.03 (nothing is set; seen in modtest)"),
 ]
 
 
-def write_mht(src, out):
+def write_mht(src, out, game='nbamht', rev='NBA Maximum Hangtime 1.3'):
     s = open(src + '/SELECT3.ASM', encoding='latin-1').read().replace('\r', '')
     t = s[s.index('\ncombination_tbl\n'):s.index('\ncombination_tbl_end')]
     nums = re.findall(r'^\s*WL\s+>([0-9A-Fa-f]{3}),(\w+)\s*$', t, re.M)   # commented lines start with ';'
-    L = ['-- codes_nbamht.lua - the cabinet codes of NBA Maximum Hangtime 1.3 (roadmap 2.2), from the sources.',
+    L = [f'-- codes_{game}.lua - the cabinet codes of {rev} (roadmap 2.2, 2.3), from the sources.',
          '-- Written by tools/codes_from_source.py; checked in modtest by tools/modtests/codes_mht.lua.',
          '-- kind "number": a 3-digit code on the versus screen (turbo, shoot, pass presses), value = the',
          '-- digits. When the screen ends the variable is 0 or 0xF for every player; with humans on both',
@@ -204,6 +210,7 @@ def write_mht(src, out):
          '-- kind "players": bit 0-3 = player 1-4, set at once; "flag": nonzero = on.',
          '-- All are cleared at game start and at game over. Tournament mode clears the others than',
          '-- those marked tournament = "kept". Spanish labels: roadmap 2.5.',
+         '-- revisions: how a revision without source differs, when it does (seen in modtest).',
          '-- Not in 1.3 although named in the source: show hot spots (pup_showhotspots is only cleared;',
          '-- its number code 030 is commented out).',
          'return {']
@@ -218,6 +225,8 @@ def write_mht(src, out):
              f'sym = {lua_str(c["sym"])}', f'kind = {lua_str(c["kind"])}', 'when = "matchup"']
         if 'conflicts' in c: f.append('conflicts = { ' + ', '.join(lua_str(x) for x in c['conflicts']) + ' }')
         f += [f'tournament = {lua_str(c.get("tournament", "cleared"))}', f'source = {lua_str(c["source"])}']
+        if game == 'nbamht' and 'rev_1_03' in c:
+            f.append(f'revisions = {{ ["1.03"] = {lua_str(c["rev_1_03"])} }}')
         L.append('  { ' + ', '.join(f) + ' },')
     L.append('}')
     open(out, 'w', newline='\n').write('\n'.join(L) + '\n')
@@ -225,8 +234,12 @@ def write_mht(src, out):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) not in (4, 5):
+    if len(sys.argv) not in (4, 5, 6):
         sys.exit(__doc__)
+    if len(sys.argv) == 6:   # <T.E.> <SE> <Maximum Hangtime 1.3 source> <Hangtime L1.3 source> <lib>
+        nums = write_mht(sys.argv[4], sys.argv[5] + '/codes_nbahangt.lua', 'nbahangt', 'NBA Hangtime L1.3 and L1.1')
+        print(f'Hangtime: {len(nums)} number codes, {len(MHT_STICK)} stick codes')
+        del sys.argv[4]
     if len(sys.argv) == 5:   # <T.E.> <SE> <Maximum Hangtime 1.3 source> <lib>
         nums = write_mht(sys.argv[3], sys.argv[4] + '/codes_nbamht.lua')
         print(f'Maximum Hangtime: {len(nums)} number codes ({", ".join(c for c, _ in nums)}), {len(MHT_STICK)} stick codes')

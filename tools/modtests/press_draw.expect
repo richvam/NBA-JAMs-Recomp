@@ -1,16 +1,19 @@
 # press_draw.lua: the script's start presses reach team select; before them it is not there.
-# Its text, filled box, outline and line are on the overlay. NBA Jam and NBA Hangtime have no
-# symbol for team select yet, so only the drawing is checked there.
-game nbajamte nbajamse nbamht nbajam nbahangt
+# Its text, filled box, outline and line are on the overlay. NBA Jam has no symbol for
+# team select yet, so only the drawing is checked there.
+game nbajamte nbajamse nbamht nbajam nbahangt nbahangt:nbahangt13 nbamht:nbamht103
 frames 2600
 env SHOT=2590:/dev/null
 nbajamte: expect 999 in_team_select == 0
 nbajamse: expect 999 in_team_select == 0
 nbamht: expect 999 in_team_select == 0
+nbahangt: expect 999 in_team_select == 0
 nbajamte: expect 2599 in_team_select != 0
 nbajamse: expect 2599 in_team_select != 0
 nbamht: expect 2599 in_team_select != 0
+nbahangt: expect 2599 in_team_select != 0
 nbajamte: once team select reached
 nbajamse: once team select reached
 nbamht: once team select reached
+nbahangt: once team select reached
 once picture with 4 draws
