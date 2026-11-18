@@ -4,6 +4,8 @@
 #include "wunit.h"
 #include <memory>
 #include "mods.h"
+#include "mod_draw.h"
+#include "miniz.h"
 #include <cstdio>
 #include <cstring>
 #include <fstream>
@@ -82,6 +84,7 @@ int main(int argc, char **argv)
 			in.p[0].start = f < p0 + 800 && t < 4;
 			in.p[0].shoot = getenv("NOPICK") == nullptr && f >= p0 + 800 && t >= 20 && t < 24;
 		}
+		mods.apply_presses(in);   // nba.press (roadmap 1.6)
 		m.set_inputs(in);
 		if (f == live_at)
 		{
@@ -101,6 +104,20 @@ int main(int argc, char **argv)
 		}
 		m.run_frame();
 		mods.frame();
+		// SHOT=<frame>:<file.png>: the picture of that frame with the mods' overlay (roadmap 1.6)
+		if (const char *shot = getenv("SHOT"); shot && f == atoi(shot) && strchr(shot, ':'))
+		{
+			int w = m.width(), h = m.height();
+			canvas cv(w, h);
+			std::memcpy(cv.px.data(), m.frame(), size_t(w) * h * 4);
+			draw_mod_overlay(cv, mods.draws());
+			std::vector<u8> rgb(size_t(w) * h * 3);
+			for (size_t i = 0; i < size_t(w) * h; i++) { u32 c = cv.px[i]; rgb[i * 3] = u8(c >> 16); rgb[i * 3 + 1] = u8(c >> 8); rgb[i * 3 + 2] = u8(c); }
+			size_t len = 0;
+			void *png = tdefl_write_image_to_png_file_in_memory(rgb.data(), w, h, 3, &len);
+			if (FILE *fp = fopen(strchr(shot, ':') + 1, "wb")) { fwrite(png, 1, len, fp); fclose(fp); printf("  frame %6d  picture with the overlay: %s (%d draws)\n", f, strchr(shot, ':') + 1, int(mods.draws().size())); }
+			mz_free(png);
+		}
 		if (watch && f % 500 == 0)
 		{
 			u32 a = u32(strtoul(watch, nullptr, 0));

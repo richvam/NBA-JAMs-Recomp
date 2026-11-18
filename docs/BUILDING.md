@@ -74,7 +74,7 @@ With your own ROMs:
 
 | Program | Use |
 |---|---|
-| `build/linux/modtest prog_lo prog_hi mods_dir game_id [frames] [opt=value]` | runs the Lua mods on a program ROM and prints what they patched. `PLAY=1` presses start and shoot to reach a game; `WATCH=<address>` prints a memory value every 500 frames |
+| `build/linux/modtest prog_lo prog_hi mods_dir game_id [frames] [opt=value]` | runs the Lua mods on a program ROM and prints what they patched. `PLAY=1` presses start and shoot to reach a game; `WATCH=<address>` prints a memory value every 500 frames; `LIVE=<frame>:<id>=<value>` changes a live option; `SHOT=<frame>:<file.png>` saves that frame's picture with the mods' overlay (program ROMs only, so the game picture is black). Scripts for it are in `tools/modtests/` |
 | `build/linux/nattest` | connecting through routers, without ROMs or a network: connection codes, STUN messages, UPnP port mapping against a test router run inside it, and hole punching between simulated routers (every pair of full cone, restricted, port restricted and symmetric). Linux only (uses 127.0.1.x). `nattest --stun <host:port>` asks a real STUN server and prints the code |
 | `build/linux/nettest <base> <game> host <port> <frames> <delay>` and `... client <ip> <port> <frames>` | one side of an online game with scripted inputs; prints state hashes to compare. `MODS=<dir>` switches on the mods in a folder; `MENU=<frame>` has that side send nothing pressed for 600 frames from that frame, as the pause menu does online |
 

@@ -76,6 +76,33 @@ The program ROM is at nba.ROM_BASE (0xFF800000); a word is 16 bits = 0x10 apart.
   nba.read8/16/32(a), nba.write8/16/32(a, v)
                                live memory (RAM, I/O) as the main CPU sees it
 
+Buttons and drawing
+-------------------
+  nba.press(player, buttons [, frames])
+                               holds buttons for player 1-4 for `frames` frames (default
+                               1), from the next frame on, together with the real ones.
+                               buttons: a name or a table of names: up, down, left,
+                               right, shoot, pass, turbo, start, coin.
+  nba.text(x, y, str [, color [, scale]])
+  nba.rect(x, y, w, h [, color [, filled]])
+  nba.line(x1, y1, x2, y2 [, color])
+                               draw over the game picture, in the game's own pixels
+                               (0,0 is the top left of the game picture, 400 x 254 on
+                               T.E., SE and Maximum Hangtime). Colors are 0xRRGGBB (opaque, white
+                               by default) or 0xAARRGGBB (AA = 80 is half transparent). The
+                               drawing is on the program's overlay, never in the game's
+                               memory, and screenshots (F12) leave it out. Draw again in every
+                               on_frame: the drawings are cleared before each one.
+Example:
+  function on_frame(f)
+    if f == 2000 then nba.press(1, "start", 4) end
+    nba.rect(8, 8, 120, 14, 0x80000000, true)
+    nba.text(12, 11, "FRAME " .. f, 0xffff00)
+  end
+Online, a press counts only for this computer's own player, and is sent to the others like
+the pad. on_frame does not run in an online game yet (see Online play), so today that is
+only a press from on_load.
+
 Shared code
 -----------
   nba.include("lib/name.lua")  runs mods/lib/name.lua (sub-folders allowed) and returns
