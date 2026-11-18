@@ -384,6 +384,8 @@ All Opus unless marked. Each one extends `src/app/mods.{h,cpp}` and `mods/README
 **Gate:** advisor reviews the API as documented in `mods/README.txt` before any Phase 3
 script is written. API changes after this point cost every script.
 
+**Gate passed (2026-11-18):** the owner closed Phase 1 on the review in pull request 40: a test per task (`tools/modtests/p1_*.lua`, `events`, `press_draw`, `net_ram`) on all five games, 31 of 31 runs passed; the symbol files equal a fresh build's; nettest kept T.E., SE and Maximum Hangtime in sync. Not checked: a real controller, two real computers, online play on NBA Jam and NBA Hangtime.
+
 ## Phase 2: code inventory
 
 The scripts in Phases 3 to 5 are table-driven, so this phase produces the tables. Output:
