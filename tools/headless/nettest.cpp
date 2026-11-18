@@ -1,6 +1,8 @@
 // nettest - run one side of a netplay session headless with scripted inputs.
-// MODS=<dir> enables every script in <dir>, as the app does with the user's mods; the run
-// refuses to start (exit code 3) if one of them writes RAM or has an on_frame hook.
+// MODS=<dir> loads the scripts in <dir>, as the app does with the user's mods. This peer's own
+// settings: MODS_ON=<file,file> (default: every script) and MODOPT=<file>:<id>=<index>. The host
+// sends its set with the game start; the client runs exactly that set (roadmap 1.7) or stops
+// with exit code 3 and names the file that differs.
 // usage: nettest <base> <game> host <port> <frames> <delay> [loss]
 //        nettest <base> <game> client <ip> <port> <frames> [loss]
 #include "games.h"
@@ -36,15 +38,18 @@ int main(int argc, char **argv)
 	if (const char *md = getenv("MODS"))
 	{
 		mods.scan(md, "");
-		for (auto &s : mods.mods()) s.enabled = true;
-		auto blocked = mods.netplay_blockers(id);
-		if (!blocked.empty())
+		std::string on = getenv("MODS_ON") ? getenv("MODS_ON") : "";
+		for (auto &s : mods.mods()) s.enabled = on.empty() || ("," + on + ",").find("," + s.file + ",") != std::string::npos;
+		if (const char *mo = getenv("MODOPT"))
 		{
-			std::string names;
-			for (auto &b : blocked) names += (names.empty() ? "" : ", ") + b;
-			fprintf(stderr, "%s: refused to start: Lua mods that write RAM or run every frame are on: %s\n", role.c_str(), names.c_str());
-			return 3;
+			std::string kv = mo;
+			size_t c = kv.find(':'), e = kv.find('=');
+			for (auto &s : mods.mods())
+				if (c != std::string::npos && e != std::string::npos && s.file == kv.substr(0, c)) s.opt[kv.substr(c + 1, e - c - 1)] = atoi(kv.c_str() + e + 1);
 		}
+		std::string names;
+		for (auto &n : mods.active_names(id)) names += (names.empty() ? "" : ", ") + n;
+		fprintf(stderr, "%s: own Lua mods on: %s\n", role.c_str(), names.empty() ? "none" : names.c_str());
 		mods.set_netplay(true);
 	}
 	netplay np;
@@ -84,7 +89,7 @@ int main(int argc, char **argv)
 		m->set_dips(d);
 		mods.start(id, *m);
 		m->reset();
-		np.host_start(id, m->fingerprint(), d, m->nvram(), delay);
+		np.host_start(id, m->fingerprint(), d, m->nvram(), delay, mods.net_description(id));
 	}
 	else
 	{
@@ -95,6 +100,11 @@ int main(int argc, char **argv)
 		}
 		m = cat.create(*gi, err);
 		if (!m) { np.client_ready(false, err); return 1; }
+		// NOSYNC=1 (a control for the test): keep this peer's own mods instead of the host's
+		if (!getenv("NOSYNC") && !mods.net_apply(id, np.start_mods(), err)) { np.client_ready(false, err); np.poll(); fprintf(stderr, "client: refused: %s\n", err.c_str()); return 3; }
+		std::string names;
+		for (auto &n : mods.active_names(id)) names += (names.empty() ? "" : ", ") + n;
+		fprintf(stderr, "client: running the host's Lua mods: %s\n", names.empty() ? "none" : names.c_str());
 		mods.start(id, *m);
 		if (m->fingerprint() != np.start_fingerprint()) { np.client_ready(false, "different ROMs"); np.poll(); fprintf(stderr, "fingerprint mismatch\n"); return 1; }
 		m->set_nvram(np.start_nvram());

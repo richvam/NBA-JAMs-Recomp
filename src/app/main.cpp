@@ -318,7 +318,7 @@ private:
 	bool use_overlay(const std::string &name);   // loads it into the presenter; false if it is not there or unreadable
 	void next_side_fill();
 	void save_screenshot(const u32 *px, int w, int h);
-	std::string net_mod_block(const std::string &game_id);
+	std::string net_mod_names(const std::string &game_id);
 	void refresh_availability();
 	void message(const std::string &m, u32 ms = 2500) { m_message = m; m_message_until = SDL_GetTicks() + ms; }
 	std::string nv_path(const game_info &g) const { return path_join(path_join(m_base, "saves"), std::string(g.id) + ".nv"); }
@@ -862,6 +862,7 @@ void app::stop_game()
 	if (m_mach && m_cur_game >= 0 && save)
 		write_whole_file(nv_path(game_list()[size_t(m_cur_game)]), m_mach->nvram());
 	m_mods.stop();
+	m_mods.net_restore();   // a player's own Lua mod settings, after the host's set (1.7)
 	m_mach.reset();
 	m_cur_game = -1;
 	if (m_net_game)
@@ -1839,16 +1840,12 @@ std::string app::net_code_note(std::string &code)
 	return "No public address found. Forward the UDP port on your router, or use a virtual LAN.";
 }
 
-// Interim netplay guard (roadmap 0.3): scripts that run every frame or write RAM are not
-// covered by the netplay fingerprint, so an online game does not start while one is on.
-std::string app::net_mod_block(const std::string &game_id)
+// the Lua mods the host runs for this game, for the lobby (roadmap 1.7)
+std::string app::net_mod_names(const std::string &game_id)
 {
-	auto b = m_mods.netplay_blockers(game_id);
-	if (b.empty()) return "";
 	std::string names;
-	for (const auto &n : b) names += (names.empty() ? "" : ", ") + n;
-	return "Online play is not possible with these Lua mods on (they write RAM or run every frame): "
-	     + names + ". Turn them off in the Lua mods menu.";
+	for (const auto &n : m_mods.active_names(game_id)) names += (names.empty() ? "" : ", ") + n;
+	return names.empty() ? "none" : names;
 }
 
 void app::net_lobby_frame()
@@ -1879,6 +1876,8 @@ void app::net_lobby_frame()
 		st.code_note = net_code_note(st.code);
 		st.inviting = m_net.invites();
 		st.no_answer = !host && st.slot < 0 && SDL_GetTicks() - m_join_t > 5000;
+		if (host) m_net.set_lobby_mods(net_mod_names(g.id));
+		st.mods = m_net.lobby_mods();
 		if (host)
 		{
 			st.players.push_back({ "Player 1", "you (host)" });
@@ -1928,11 +1927,9 @@ void app::net_lobby_frame()
 
 	if (host && start)
 	{
-		std::string blocked = net_mod_block(g.id);
-		if (!blocked.empty()) { message(blocked, 8000); return; }
 		m_net_game = true;
 		if (!start_game(m_sel)) { m_net_game = false; m_net.stop(); m_screen = screen::net_menu; return; }
-		m_net.host_start(g.id, m_mach->fingerprint(), m_cfg.dips, m_mach->nvram(), m_cfg.net_delay);
+		m_net.host_start(g.id, m_mach->fingerprint(), m_cfg.dips, m_mach->nvram(), m_cfg.net_delay, m_mods.net_description(g.id));
 		message("Online game: " + std::to_string(m_net.players()) + " players", 3000);
 		return;
 	}
@@ -1943,7 +1940,9 @@ void app::net_lobby_frame()
 		std::string why;
 		if (idx < 0) why = "unknown game: " + m_net.start_game_id();
 		else if (!m_avail[size_t(idx)]) why = std::string("you don't have ") + game_list()[size_t(idx)].title;
-		if (why.empty()) why = net_mod_block(game_list()[size_t(idx)].id);
+		// exactly the host's Lua mods, with its options (roadmap 1.7); this computer's own
+		// settings come back when the game ends
+		if (why.empty()) m_mods.net_apply(game_list()[size_t(idx)].id, m_net.start_mods(), why);
 		if (why.empty())
 		{
 			m_net_game = true;
@@ -1953,6 +1952,7 @@ void app::net_lobby_frame()
 		if (!why.empty())
 		{
 			m_net.client_ready(false, why);
+			m_mods.net_restore();
 			m_net.poll();
 			m_mach.reset();
 			m_net_game = false;

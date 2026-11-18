@@ -64,7 +64,7 @@ struct mod_script
 	std::string name, description, error;
 	std::vector<std::string> supported;  // empty = any game
 	std::vector<mod_option> options;
-	// found when the script is scanned; used by the interim netplay guard (roadmap 0.3)
+	// found when the script is scanned (the 0.3 netplay guard used them; 1.7 replaced it)
 	bool has_frame = false;              // defines on_frame
 	bool writes_ram = false;             // mentions nba.write8 / write16 / write32
 	// user settings
@@ -114,13 +114,18 @@ public:
 	std::vector<std::string> take_log();                         // messages for the UI
 	int active_count() const { return int(m_running.size()); }
 
-	// Interim netplay guard (roadmap 0.3, removed again by 1.7). The netplay fingerprint only
-	// covers the program ROM, so two players whose scripts write RAM or run every frame would
-	// pass the lobby check and desync later. netplay_blockers lists the names of the enabled
-	// scripts for this game that do so; a netplay game must not start while it is not empty.
-	// set_netplay(true) is the backstop: RAM writes raise a script error and on_frame hooks
-	// are not run until it is cleared.
-	std::vector<std::string> netplay_blockers(const std::string &game_id) const;
+	// Online games (roadmap 1.7; replaces the 0.3 guard). The host sends net_description()
+	// with the game start: one line per script it runs for the game, with a hash of the
+	// script and every library it names, and its option choices. A player calls net_apply()
+	// before starting the game: exactly that set runs, with the host's options, or err names
+	// the file that is missing or differs. Its own settings are kept aside, not saved, and
+	// net_restore() puts them back after the game. set_netplay(true) gives scripts
+	// nba.netplay = true.
+	std::string net_description(const std::string &game_id) const;
+	std::vector<std::string> active_names(const std::string &game_id) const;
+	bool net_apply(const std::string &game_id, const std::string &desc, std::string &err);
+	void net_restore();
+	static u32 source_hash(const std::string &path, const std::string &dir);
 	void set_netplay(bool on) { m_netplay = on; }
 
 private:
@@ -143,6 +148,8 @@ private:
 	struct press { int player; u32 buttons; int frames; };
 	std::vector<press> m_press;
 	std::vector<mod_draw> m_draw;
+	struct saved { bool enabled, all_games; std::vector<std::string> games; std::map<std::string, int> opt; };
+	std::vector<saved> m_saved;      // a player's own settings during an online game
 
 	lua_State *new_state(mod_script *mod, bool with_game);
 	bool load_meta(mod_script &m);
