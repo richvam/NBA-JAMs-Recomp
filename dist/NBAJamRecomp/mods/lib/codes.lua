@@ -12,6 +12,8 @@
 --   flag             a toggle
 --   players, taps    a players option (a tick per player)
 --   team             a toggle (both teams)
+--   number           a toggle (Maximum Hangtime: forced as 0xF, what a code entered by every
+--                    player that has to enter it leaves)
 --   "secret_players" (not a code id) one list option per player, secret_p1 to secret_p4: none,
 --                    or one of the secret players of codes.secret_list(T, ...) (by name); pass
 --                    the list as extra.secret_list when it should cover several tables
@@ -76,7 +78,7 @@ function codes.options(T, ids, extra)
       local c = assert(find(T, id), "no code " .. id)
       local o = { id = c.id, label = c.label.en, conflicts = merge(c.conflicts, extra[id]) }
       if c.kind == "players" or c.kind == "taps" then o.type = "players"; o.default = 0
-      elseif c.kind == "flag" or c.kind == "team" then o.type = "toggle"; o.default = false
+      elseif c.kind == "flag" or c.kind == "team" or c.kind == "number" then o.type = "toggle"; o.default = false
       else error("codes.options: kind " .. c.kind .. " is not supported (" .. id .. ")") end
       out[#out + 1] = o
     end
@@ -104,14 +106,16 @@ end
 local function value_of(v) if v == true then return 1 elseif v == false or v == nil then return 0 end return v end
 
 -- the writes of code c with option value v: { addr, value or function, window }
-local function writes(c, v, out)
+local function writes(c, v, out, slots)
   local addr = codes.sym(c.sym)
   if not addr then return end
   local win = (c.when == "team_select" and "select") or (c.when == "halftime" and "halftime") or "game"
   if c.kind == "flag" then
     out[#out + 1] = { addr = addr, value = 1, win = win }
+  elseif c.kind == "number" then
+    out[#out + 1] = { addr = addr, value = 0xF, win = win }
   elseif c.kind == "players" then
-    out[#out + 1] = { addr = addr, value = v, win = win }
+    out[#out + 1] = { addr = addr, value = slots and function() return slots(v) end or v, win = win }
     if c.taps then
       local taps = nba.sym("p1taps")
       for k = 0, 3 do
@@ -136,7 +140,9 @@ local function writes(c, v, out)
 end
 
 -- list: the secret player list the options were made with (codes.secret_list)
-function codes.driver(T, list)
+-- slots: function(mask) -> mask, from the option's cabinet players to the game's player bits,
+--        read when written (Maximum Hangtime: they depend on the cabinet's player count)
+function codes.driver(T, list, slots)
   local d, on = {}, {}
   for _, c in ipairs(T) do
     if c.kind ~= "initials" then
@@ -144,7 +150,7 @@ function codes.driver(T, list)
       v = ok and value_of(v) or 0
       if v ~= 0 then
         local w = {}
-        writes(c, v, w)
+        writes(c, v, w, slots)
         if #w > 0 then on[#on + 1] = { c = c, value = v, w = w } end
       end
     end
