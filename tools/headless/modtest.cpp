@@ -2,6 +2,11 @@
 // what they changed. usage: modtest [--expect file] prog_lo prog_hi mods_dir game_id [frames] [opt=value...]
 // --expect (roadmap 1.8): lines "expect <frame> <symbol or 0xaddress>[:8|:16|:32] <op> <value>",
 // op one of == != < > <= >=; after that frame the value is read and compared. Other lines
+// "log <text>": a line of the mods' log contains the text, after the line the previous
+// log/once matched (so they check the order); "once <text>": the same, and exactly one line
+// contains it; "nolog <text>": no line does. These are checked at the end of the run.
+// A line may start with "<game id>:" to apply only to that game. The log also holds a line
+// "listed <file>" for each script the mods folder lists.
 // (game, frames, env, opt: read by tools/modtests/run_all.sh) and # comments are skipped.
 // Exit code 4 when an expectation fails or its symbol is unknown.
 #include "tunit.h"
@@ -38,6 +43,9 @@ static bool compare(long long a, const std::string &op, long long b)
 int main(int argc, char **argv)
 {
 	std::vector<expectation> expects;
+	struct log_expectation { std::string kind, text; int line; };
+	std::vector<log_expectation> log_expects;
+	std::vector<std::string> log;
 	const char *expect_file = nullptr;
 	if (argc > 2 && !strcmp(argv[1], "--expect"))
 	{
@@ -50,6 +58,18 @@ int main(int argc, char **argv)
 			n++;
 			if (!l.empty() && l.back() == '\r') l.pop_back();
 			std::istringstream is(l); std::string kw; is >> kw;
+			if (kw.size() > 1 && kw.back() == ':')
+			{
+				if (argc < 7 || kw.substr(0, kw.size() - 1) != argv[6]) continue;   // argv[6]: game_id before the shift
+				is >> kw;
+			}
+			if (kw == "log" || kw == "once" || kw == "nolog")
+			{
+				std::string t; std::getline(is, t);
+				t.erase(0, t.find_first_not_of(" \t"));
+				log_expects.push_back({ kw, t, n });
+				continue;
+			}
 			if (kw != "expect") continue;
 			expectation e; std::string v; e.line = n; e.bits = 16;
 			if (!(is >> e.frame >> e.name >> e.op >> v) || (e.op != "==" && e.op != "!=" && e.op != "<" && e.op != ">" && e.op != "<=" && e.op != ">="))
@@ -83,7 +103,7 @@ int main(int argc, char **argv)
 		r.program = prog;
 		r.gfx.assign(0xc00000, 0);
 		r.snd_u3.assign(0x20000, 0xff); r.snd_u12.assign(0x80000, 0xff); r.snd_u13.assign(0x80000, 0xff);
-		mp = std::make_unique<tunit_machine>(std::move(r), tunit_protection::nbajamte);
+		mp = std::make_unique<tunit_machine>(std::move(r), gid == "nbajam" ? tunit_protection::nbajam : tunit_protection::nbajamte);
 	}
 	arcade_machine &m = *mp;
 	mod_manager mods;
@@ -92,6 +112,7 @@ int main(int argc, char **argv)
 	for (auto &s : mods.mods())
 	{
 		s.enabled = true;
+		log.push_back("listed " + s.file);
 		printf("mod %s: \"%s\" %s\n", s.file.c_str(), s.name.c_str(), s.error.empty() ? "" : ("ERROR " + s.error).c_str());
 		for (int a = 6; a < argc; a++)
 		{
@@ -102,6 +123,7 @@ int main(int argc, char **argv)
 		}
 	}
 	mods.start(argv[4], m);
+	for (auto &l : mods.take_log()) log.push_back(l);
 	const std::vector<u8> &now = *m.program_rom();
 	for (size_t w = 0; w < now.size() / 2; w++)
 		if (now[w * 2] != orig[w * 2] || now[w * 2 + 1] != orig[w * 2 + 1])
@@ -146,6 +168,7 @@ int main(int argc, char **argv)
 		}
 		m.run_frame();
 		mods.frame();
+		for (auto &l : mods.take_log()) log.push_back(l);
 		// SHOT=<frame>:<file.png>: the picture of that frame with the mods' overlay (roadmap 1.6)
 		if (const char *shot = getenv("SHOT"); shot && f == atoi(shot) && strchr(shot, ':'))
 		{
@@ -157,7 +180,7 @@ int main(int argc, char **argv)
 			for (size_t i = 0; i < size_t(w) * h; i++) { u32 c = cv.px[i]; rgb[i * 3] = u8(c >> 16); rgb[i * 3 + 1] = u8(c >> 8); rgb[i * 3 + 2] = u8(c); }
 			size_t len = 0;
 			void *png = tdefl_write_image_to_png_file_in_memory(rgb.data(), w, h, 3, &len);
-			if (FILE *fp = fopen(strchr(shot, ':') + 1, "wb")) { fwrite(png, 1, len, fp); fclose(fp); printf("  frame %6d  picture with the overlay: %s (%d draws)\n", f, strchr(shot, ':') + 1, int(mods.draws().size())); }
+			if (FILE *fp = fopen(strchr(shot, ':') + 1, "wb")) { fwrite(png, 1, len, fp); fclose(fp); printf("  frame %6d  picture with the overlay: %s (%d draws)\n", f, strchr(shot, ':') + 1, int(mods.draws().size())); log.push_back("picture with " + std::to_string(mods.draws().size()) + " draws"); }
 			mz_free(png);
 		}
 		for (auto &e : expects)
@@ -184,6 +207,26 @@ int main(int argc, char **argv)
 	mods.stop();
 	for (auto &e : expects)
 		if (!e.done) { printf("FAIL %s:%d: frame %d was not reached (ran %d frames)\n", expect_file, e.line, e.frame, frames); failed++; }
-	if (expect_file) printf("%s: %d of %d expectations passed\n", expect_file, int(expects.size()) - failed, int(expects.size()));
+	for (auto &l : mods.take_log()) log.push_back(l);
+	size_t from = 0;
+	for (auto &e : log_expects)
+	{
+		int count = 0; size_t first = log.size();
+		for (size_t i = 0; i < log.size(); i++)
+			if (log[i].find(e.text) != std::string::npos) { count++; if (i >= from && first == log.size()) first = i; }
+		bool ok;
+		std::string why;
+		if (e.kind == "nolog") { ok = count == 0; why = ok ? "not in the log" : "in the log " + std::to_string(count) + " times"; }
+		else
+		{
+			ok = first < log.size() && (e.kind == "log" || count == 1);
+			why = first == log.size() ? (count ? "only before the previous match" : "not in the log") : e.kind == "once" && count != 1 ? "in the log " + std::to_string(count) + " times" : "log line " + std::to_string(first + 1) + ": " + log[first];
+			if (first < log.size()) from = first + 1;
+		}
+		printf("%s %s:%d: %s \"%s\": %s\n", ok ? "PASS" : "FAIL", expect_file, e.line, e.kind.c_str(), e.text.c_str(), why.c_str());
+		if (!ok) failed++;
+	}
+	int total = int(expects.size() + log_expects.size());
+	if (expect_file) printf("%s: %d of %d expectations passed\n", expect_file, total - failed, total);
 	return failed ? 4 : 0;
 }
