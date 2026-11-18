@@ -6,6 +6,7 @@
 -- kind "players": bit 0-3 = player 1-4, set at once; "flag": nonzero = on.
 -- All are cleared at game start and at game over. Tournament mode clears the others than
 -- those marked tournament = "kept". Spanish labels: roadmap 2.5.
+-- revisions: how a revision without source differs, when it does (seen in modtest).
 -- Not in 1.3 although named in the source: show hot spots (pup_showhotspots is only cleared;
 -- its number code 030 is commented out).
 return {

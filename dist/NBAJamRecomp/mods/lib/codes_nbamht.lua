@@ -6,6 +6,7 @@
 -- kind "players": bit 0-3 = player 1-4, set at once; "flag": nonzero = on.
 -- All are cleared at game start and at game over. Tournament mode clears the others than
 -- those marked tournament = "kept". Spanish labels: roadmap 2.5.
+-- revisions: how a revision without source differs, when it does (seen in modtest).
 -- Not in 1.3 although named in the source: show hot spots (pup_showhotspots is only cleared;
 -- its number code 030 is commented out).
 return {
@@ -29,7 +30,7 @@ return {
   { id = "no_tag", label = { en = "No tag arrows" }, original = "Left, left, pass, turbo (within 1 s)", sym = "pup_notag", kind = "players", when = "matchup", tournament = "cleared", source = "BB3.ASM sp_notag" },
   { id = "no_drift", label = { en = "No drift on block jumps" }, original = "Down, down, shoot, turbo (within 1 s)", sym = "pup_nodrift", kind = "players", when = "matchup", tournament = "cleared", source = "BB3.ASM sp_nodrift" },
   { id = "no_assistance", label = { en = "Computer assistance off" }, original = "Hold right and press pass twice (within 1 s)", sym = "pup_noassistance", kind = "flag", when = "matchup", tournament = "cleared", source = "BB3.ASM sp_noassistance" },
-  { id = "aba_ball", label = { en = "ABA ball" }, original = "Hold right and press shoot, turbo, pass (within 1 s)", sym = "pup_aba", kind = "flag", when = "matchup", tournament = "kept", source = "BB3.ASM sp_aba" },
-  { id = "outdoor_court", label = { en = "Outdoor court" }, original = "Hold left and press turbo twice (within 1 s)", sym = "pup_court", kind = "flag", when = "matchup", tournament = "kept", source = "BB3.ASM sp_court" },
-  { id = "special", label = { en = "Special combo (ABA ball, outdoor court, shot percentage, big head)" }, original = "Shoot, shoot, then hold shoot and turn the stick a full circle clockwise from up (within 1.3 s)", sym = "pup_aba", kind = "flag", when = "matchup", tournament = "kept", source = "BB3.ASM sp_special" },
+  { id = "aba_ball", label = { en = "ABA ball" }, original = "Hold right and press shoot, turbo, pass (within 1 s)", sym = "pup_aba", kind = "flag", when = "matchup", tournament = "kept", source = "BB3.ASM sp_aba", revisions = { ["1.03"] = "also sets the outdoor court (seen in modtest)" } },
+  { id = "outdoor_court", label = { en = "Outdoor court" }, original = "Hold left and press turbo twice (within 1 s)", sym = "pup_court", kind = "flag", when = "matchup", tournament = "kept", source = "BB3.ASM sp_court", revisions = { ["1.03"] = "not in Maximum Hangtime 1.03 (nothing is set; seen in modtest)" } },
+  { id = "special", label = { en = "Special combo (ABA ball, outdoor court, shot percentage, big head)" }, original = "Shoot, shoot, then hold shoot and turn the stick a full circle clockwise from up (within 1.3 s)", sym = "pup_aba", kind = "flag", when = "matchup", tournament = "kept", source = "BB3.ASM sp_special", revisions = { ["1.03"] = "not in Maximum Hangtime 1.03 (nothing is set; seen in modtest)" } },
 }

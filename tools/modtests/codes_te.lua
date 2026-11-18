@@ -5,8 +5,8 @@
 -- Option "code" picks the code (see CODES below). Run with run_all.sh (codes_te.expect).
 mod = {
   name = "Codes check (T.E.)",
-  games = { "nbajamte", "nbajamse" },
-  options = { { id = "code", label = "Code", values = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 }, default = 0 } },
+  games = { "nbajamte", "nbajamse", "nbajam" },
+  options = { { id = "code", label = "Code", values = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 }, default = 0 } },
 }
 
 -- each: taps = shoot taps on the matchup screen; hold = held through the matchup screen;
@@ -22,6 +22,9 @@ local CODES = {
   [6] = { name = "quick_hands", taps = 5, tip = { "shoot", "down" } },
   [7] = { name = "big_head", tip = { "up", "turbo", "pass" } },
   [8] = { name = "huge_head", taps = 6, tip = { "up", "turbo", "pass" } },
+  -- NBA Jam 1993 (roadmap 2.4): goaltending takes 8 taps, quick hands all three buttons and down
+  [10] = { name = "goaltend_8", taps = 8 },
+  [11] = { name = "quick_hands_1993", taps = 5, tip = { "turbo", "pass", "shoot", "down" } },
   [9] = { name = "baby", seq = { { "down", "right" }, "turbo", "shoot", "pass", "turbo", "shoot", "pass", "turbo", "shoot", "pass" } },
 }
 
@@ -39,7 +42,8 @@ end
 
 function on_frame(f)
   if phase == "boot" then
-    if r("in_team_select") ~= 0 then phase = "select"
+    -- NBA Jam 1993 has no in_team_select symbol: two start presses reach it by frame 2400
+    if r("in_team_select") > 0 or (not S.in_team_select and f >= 2400) then phase = "select"
     elseif f >= 1000 and f % 200 == 0 then nba.press(1, "start", 4) end
   elseif phase == "select" then
     if r("inmatchup") ~= 0 then phase = "matchup"; t0 = f; step = 0; nba.log("matchup at frame " .. f)

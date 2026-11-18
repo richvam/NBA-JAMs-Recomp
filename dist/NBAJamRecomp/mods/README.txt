@@ -138,8 +138,8 @@ Each is called once per game, in that order; define only the ones you need. Demo
 attract mode give none. jam.quarter() is the current quarter (0 before tip-off) and
 jam.scores() the two teams' points. jam.available is false, and nothing is called, on a game
 without a symbol file (see Symbols): today T.E. 4.0, T.E. Special Edition 5.02, Maximum
-Hangtime 1.3 and 1.03, and NBA Hangtime L1.3 and L1.1 have events; NBA Jam does not yet. The
-library only reads RAM.
+Hangtime 1.3 and 1.03, NBA Hangtime L1.3 and L1.1, and NBA JAM 1993 rev 3.01 have events.
+The library only reads RAM.
 
 Each instruction of the original source assembles to fixed words (e.g. "movi X,a0" is
 09E0 followed by X, low word first), so a mod can find the code it wants by pattern
