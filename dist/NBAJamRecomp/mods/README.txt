@@ -100,8 +100,7 @@ Example:
     nba.text(12, 11, "FRAME " .. f, 0xffff00)
   end
 Online, a press counts only for this computer's own player, and is sent to the others like
-the pad. on_frame does not run in an online game yet (see Online play), so today that is
-only a press from on_load.
+the pad.
 
 Shared code
 -----------
@@ -109,8 +108,8 @@ Shared code
                                what it returns, like require. A file runs once per script,
                                however often it is included. Only paths starting with lib/
                                and ending in .lua are accepted: nothing outside mods/lib/.
-Files in lib/ are not listed as mods. A library that writes RAM counts as a RAM write of
-every script that includes it (see Online play).
+Files in lib/ are not listed as mods. Online, a library counts as part of every script that
+includes it (see Online play).
 
 Symbols
 -------
@@ -151,8 +150,12 @@ the same mods turned on with the same options.
 
 Online play
 -----------
-For now, an online game does not start while a mod that has an on_frame hook or that
-writes RAM (nba.write8 / write16 / write32) is on for that game: the players could not be
-kept in sync. Mods that only patch the ROM in on_load work online; every player must
-have the same ones on with the same options. ("Quarter length" has an on_frame hook for
-quarters longer than 9 minutes, so it has to be off online.)
+In an online game the host's Lua mods run on every computer, with the host's options: the
+host sends the list with the game start, and each player runs exactly that set for the game
+(their own settings come back afterwards; nothing is saved). The lobby shows the host's mods.
+Every player needs the same files: each script, and every library it names, is compared by
+a hash (line ends do not matter). When a file is missing or differs, that player does not
+start, and the message names the file. Mods may write RAM and use on_frame online.
+  nba.netplay                  true in an online game: a script that should not run online
+                               can check it in on_load and do nothing.
+The pause menu's mods page stays offline only.

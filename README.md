@@ -179,10 +179,10 @@ Good to know:
   stopping with "Waiting for the network...", raise it (on the Online screen or in the lobby).
 * The pause menu opens online too, but the game goes on for everybody while it is open.
 * If "DESYNC" appears, leave (pause menu, "Leave the online game") and host the game again.
-* Lua mods: mods that only change the game when it loads work online if every player has
-  the same ones switched on with the same options. A mod that writes memory or runs every
-  frame stops an online game from starting, and the program names it. Of the two included
-  mods, "Quarter length" has to be off online.
+* Lua mods: the host's mods run on every computer, with the host's options, whatever each
+  player has switched on (their own settings come back afterwards). The lobby lists them.
+  Every player needs the same mod files; if one differs or is missing, that player is told
+  which.
 
 ## 6. Lua mods
 
@@ -212,7 +212,8 @@ nothing. To write your own, see [`mods/README.txt`](dist/NBAJamRecomp/mods/READM
 | Borders on every side | That is Integer scaling, which only grows in whole steps. Press F5 until it says "Fit". |
 | A controller does nothing | Open **Controls**: the top line shows the pad the program sees. Select an action and press the button you want. |
 | I cannot find my saves or settings | Open **About**: the "Data" line shows the folder. |
-| Online: "your ROMs (or Lua mods) are not the same as the host's" | Use the same ROM files and switch the same mods on, with the same options. |
+| Online: "your ROMs (or Lua mods) are not the same as the host's" | Use the same ROM files. |
+| Online: "your Lua mod ... is not the same as the host's" | Copy the host's file (and the `mods/lib/` files it uses) into your `mods` folder. |
 | Online: the others cannot join | A player on the host's own home network finds the host by the code by itself; if that fails, they type the host's local address (shown under "Same network"). From elsewhere, join with the host's code, not a `10.`, `192.168.` or `172.16`-`31` address: those only work on the same network. If there is still no answer, the player sends their own code and the host chooses **Let a player in**. If that fails too, forward UDP port 7845 on the host's router or use a virtual network. |
 | The menu never mentions new versions | News needs an internet connection and "News and updates: on". With no connection it stays quiet. |
 

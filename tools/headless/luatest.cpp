@@ -163,38 +163,51 @@ function on_frame(n) if n == 2 then error("boom") end end
 	mm.stop();
 	CHECK(mm.active_count() == 0, "stop closes every script");
 
-	// ---- interim netplay guard (roadmap 0.3) ----
-	write_file(dir / "ram.lua", "mod = { name = 'Ram' }\nfunction on_load() nba.write16(0x01000000, 1) end\n");
-	write_file(dir / "ram_alias.lua", "mod = { name = 'RamAlias' }\nlocal w = nba.write8\n");
+	// ---- online games (roadmap 1.7; the 0.3 guard is gone) ----
+	write_file(dir / "ram.lua", "mod = { name = 'Ram' }\nfunction on_load() nba.write16(0x01000000, 1); nba.log('online ' .. tostring(nba.netplay)) end\n");
 	mod_manager g;
 	g.scan(d, "");
-	for (auto &s : g.mods()) s.enabled = true;
-	auto bl = g.netplay_blockers("nbajamte");
-	auto blocked = [&](const std::string &n) { for (auto &b : bl) if (b == n) return true; return false; };
-	CHECK(blocked("Ram") && blocked("RamAlias"), "netplay guard: scripts that write RAM are listed, also through an alias");
-	CHECK(blocked("Frames") && blocked("FrameErr"), "netplay guard: scripts with on_frame are listed");
-	CHECK(!blocked("Patch") && !blocked("Options test") && !blocked("Sandbox"), "netplay guard: ROM-only scripts are allowed (rom_write* is not a RAM write)");
-	for (auto &s : g.mods()) s.enabled = s.file == "patch.lua" || s.file == "opts.lua";
-	CHECK(g.netplay_blockers("nbajamte").empty(), "netplay guard: nothing blocks when only ROM scripts are on");
-	for (auto &s : g.mods()) s.enabled = s.file == "ram.lua";
-	CHECK(g.netplay_blockers("nbajamte").size() == 1, "netplay guard: only enabled scripts count");
-	for (auto &s : g.mods()) s.enabled = false;
-	CHECK(g.netplay_blockers("nbajamte").empty(), "netplay guard: a disabled script does not block");
-	// backstop: with netplay on, a RAM write is a script error and on_frame does not run
 	for (auto &s : g.mods()) s.enabled = s.file == "ram.lua" || s.file == "frames.lua";
 	m = make_machine(100, pattern, 4);
 	g.set_netplay(true);
 	g.start("nbajamte", *m);
 	for (int i = 0; i < 4; i++) g.frame();
 	log = g.take_log();
-	CHECK(has("[Ram] error") && has("online"), "netplay backstop: RAM write raises a script error");
-	CHECK(!has("frame3"), "netplay backstop: on_frame is not run");
+	CHECK(!has("[Ram] error") && has("online true") && has("frame3"), "online: RAM writes and on_frame run, and nba.netplay is true");
 	g.set_netplay(false);
 	g.start("nbajamte", *m);
-	for (int i = 0; i < 4; i++) g.frame();
 	log = g.take_log();
-	CHECK(!has("[Ram] error") && has("frame3"), "offline: the same scripts run normally");
+	CHECK(has("online false"), "offline: nba.netplay is false");
 	g.stop();
+	{
+		// the host's set, applied on a player whose own settings differ, then given back
+		mod_manager hostm, pl;
+		hostm.scan(d, ""); pl.scan(d, "");
+		for (auto &s : hostm.mods()) s.enabled = s.file == "ram.lua" || s.file == "opts.lua";
+		mod_script *ho = find(hostm, "opts.lua");
+		if (ho && !ho->options.empty()) ho->opt[ho->options[0].id] = 3;
+		std::string desc = hostm.net_description("nbajamte");
+		for (auto &s : pl.mods()) s.enabled = s.file == "frames.lua";
+		std::string err;
+		bool ok = pl.net_apply("nbajamte", desc, err);
+		mod_script *po = find(pl, "opts.lua");
+		bool same = ok && find(pl, "ram.lua")->enabled && po && po->enabled && !find(pl, "frames.lua")->enabled && po->option_index(po->options[0]) == 3;
+		CHECK(same, ("sync: the player runs exactly the host's scripts with the host's options " + err).c_str());
+		pl.net_restore();
+		CHECK(find(pl, "frames.lua")->enabled && !find(pl, "ram.lua")->enabled && !find(pl, "opts.lua")->enabled, "sync: the player's own settings come back after the game");
+		write_file(dir / "ram.lua", "mod = { name = 'Ram' }\nfunction on_load() nba.write16(0x01000000, 2) end\n");
+		ok = pl.net_apply("nbajamte", desc, err);
+		CHECK(!ok && err.find("ram.lua") != std::string::npos && err.find("not the same") != std::string::npos && find(pl, "frames.lua")->enabled,
+		      "sync: a script that differs from the host's is named, and the player's settings stay");
+		err.clear();
+		ok = pl.net_apply("nbajamte", "missing.lua\t00000000\t\n", err);
+		CHECK(!ok && err.find("missing.lua") != std::string::npos && err.find("not in your mods folder") != std::string::npos, "sync: a script the player does not have is named");
+		write_file(dir / "ram.lua", "mod = { name = 'Ram' }\nfunction on_load() nba.write16(0x01000000, 1); nba.log('online ' .. tostring(nba.netplay)) end\n");
+		std::string crlf = "mod = { name = 'Ram' }\r\nfunction on_load() nba.write16(0x01000000, 1); nba.log('online ' .. tostring(nba.netplay)) end\r\n";
+		u32 h1 = mod_manager::source_hash((dir / "ram.lua").string(), d);
+		write_file(dir / "ram.lua", crlf);
+		CHECK(h1 == mod_manager::source_hash((dir / "ram.lua").string(), d), "sync: Windows and Unix line ends give the same hash");
+	}
 
 	// ---- mods.ini round trip ----
 	mod_script *p = find(mm, "patch.lua");
@@ -348,11 +361,10 @@ assert(nba.include("lib/loop_a.lua") ~= nil, "libraries that include each other 
 		CHECK(lm.mods().size() == 3 && !listed_lib, "include: files in mods/lib/ are not listed as mods");
 		mod_script *u = find(lm, "user.lua");
 		CHECK(u && u->error.empty(), ("include: a script uses a library, once, with sub-folders; ../, absolute and non-.lua paths are refused" + std::string(u && !u->error.empty() ? " - " + u->error : "")).c_str());
-		for (auto &s : lm.mods()) s.enabled = true;
-		auto blk = lm.netplay_blockers("nbajamte");
-		bool ramlib = false, user = false;
-		for (auto &b : blk) { ramlib = ramlib || b == "UsesRamLib"; user = user || b == "User"; }
-		CHECK(ramlib && !user, "include: a library that writes RAM makes the script that includes it block an online game");
+		mod_script *ur = find(lm, "uses_ramlib.lua");
+		u32 before = ur ? mod_manager::source_hash(ur->path, l) : 0;
+		write_file(ld / "lib" / "ramlib.lua", "local M = {}\nfunction M.poke() nba.write16(0x01000000, 2) end\nreturn M\n");
+		CHECK(ur && before != mod_manager::source_hash(ur->path, l), "include: a change in a library changes the hash of the script that includes it (online check)");
 		fs::remove_all(ld);
 	}
 

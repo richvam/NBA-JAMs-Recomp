@@ -505,6 +505,7 @@ void update_lobby(screen &s, const lobby_state &st)
 		if (item *d = s.find(lb_delay)) d->value = float(std::clamp(st.delay, 1, 10));
 		i.push_back(header("GAME"));
 		add_text(i, st.game, px, 2);
+		add_text(i, "Lua mods: " + (st.mods.empty() ? std::string("none") : st.mods), px, 3);
 		i.push_back(header("TELL THE OTHERS"));
 		i.push_back(label("Code: " + (st.code.empty() ? std::string("none") : st.code)));
 		add_text(i, st.code_note, px, 3);
@@ -529,6 +530,7 @@ void update_lobby(screen &s, const lobby_state &st)
 		}
 		i.push_back(header("GAME"));
 		add_text(i, "The host picks the game. It starts here when the host starts it.", px, 4);
+		if (st.slot >= 0) add_text(i, "Lua mods (the host's): " + (st.mods.empty() ? std::string("none") : st.mods), px, 3);
 		i.push_back(header("YOUR CODE"));
 		i.push_back(label(st.code.empty() ? std::string("none") : st.code));
 		add_text(i, st.code_note, px, 3);

@@ -70,7 +70,10 @@ public:
 	bool desynced() const { return m_desync; }
 
 	// --- host: start the session (game must be loaded locally) ---
-	void host_start(const std::string &game_id, u32 fingerprint, const dip_settings &dips, const std::vector<u8> &nvram, int delay);
+	// mods: the Lua mods the clients must run (mod_manager::net_description; roadmap 1.7)
+	void host_start(const std::string &game_id, u32 fingerprint, const dip_settings &dips, const std::vector<u8> &nvram, int delay, const std::string &mods = "");
+	void set_lobby_mods(const std::string &names) { m_lobby_mods = names; }   // host: shown in the players' lobby
+	const std::string &lobby_mods() const { return m_lobby_mods; }
 	bool all_ready() const;                       // host: every client confirmed
 
 	// --- client: the start description, once fully received ---
@@ -78,7 +81,8 @@ public:
 	std::string start_game_id() const { return m_game_id; }
 	u32 start_fingerprint() const { return m_fp; }
 	const dip_settings &start_dips() const { return m_dips; }
-	const std::vector<u8> &start_nvram() const { return m_nv; }
+	std::vector<u8> start_nvram() const { return std::vector<u8>(m_nv.begin(), m_nv.begin() + long(std::min<size_t>(m_nvlen, m_nv.size()))); }
+	std::string start_mods() const { return m_nvlen < m_nv.size() ? std::string(m_nv.begin() + long(m_nvlen), m_nv.end()) : std::string(); }
 	void client_ready(bool ok, const std::string &why);   // after loading the game
 
 	// --- running ---
@@ -158,7 +162,9 @@ private:
 	std::string m_game_id;
 	u32 m_fp = 0;
 	dip_settings m_dips;
-	std::vector<u8> m_nv;
+	std::vector<u8> m_nv;          // the NVRAM, then the mods description (m_nvlen bytes of NVRAM)
+	size_t m_nvlen = 0;
+	std::string m_lobby_mods;
 	int m_nchunks = 0, m_chunks_ok = 0;
 	std::vector<bool> m_chunk_have;
 	bool m_client_ready_sent = false, m_client_ok = false;

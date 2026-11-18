@@ -991,6 +991,13 @@ int main(int argc, char **argv)
 		update_lobby(jn, lj);
 		CHECK(waiting && text_of(jn, 0, 0).find("You are player 3") != std::string::npos && text_of(jn, 0, 0).find("41 ms") != std::string::npos && text_of(jn, 0, 0).find("Waiting for the host to start") != std::string::npos,
 		      "Lobby: a player who joins sees the answer arrive, which player they are and the ping; only the host can start");
+		ls.mods = "Quarter length, Net RAM test";
+		update_lobby(lb, ls);
+		lj.mods = ls.mods;
+		update_lobby(jn, lj);
+		CHECK(text_of(lb, 0, 2).find("Lua mods: Quarter length, Net RAM test") != std::string::npos &&
+		      text_of(jn, 0, 2).find("Lua mods (the host's): Quarter length, Net RAM test") != std::string::npos,
+		      "Lobby: the host's Lua mods are listed for the host and for the players (roadmap 1.7)");
 
 		// About and help
 		about_state as;

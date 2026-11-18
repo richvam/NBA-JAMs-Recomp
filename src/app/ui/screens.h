@@ -174,6 +174,7 @@ struct lobby_state
 	std::string code, code_note;
 	int inviting = 0;                    // host: players being let in by their code
 	bool no_answer = false;              // joining: no answer for a few seconds
+	std::string mods;                    // the Lua mods the host runs (roadmap 1.7), "none"
 };
 
 enum lobby_id { lb_start = 1, lb_delay, lb_leave, lb_invite, lb_copy };

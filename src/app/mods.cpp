@@ -146,11 +146,6 @@ struct mod_api
 		if (!m || !m->m_mach) luaL_error(L, "no game is running");
 		return *m->m_mach;
 	}
-	static void no_ram_write_online(lua_State *L)
-	{
-		mod_manager *m = mgr(L);
-		if (m && m->m_netplay) luaL_error(L, "RAM writes are not allowed in an online game");
-	}
 	static std::vector<u8> &rom(lua_State *L)
 	{
 		std::vector<u8> *r = mach(L).program_rom();
@@ -360,7 +355,7 @@ public:
 		return 1;
 	}
 	static int read16(lua_State *L) { lua_pushinteger(L, mach(L).peek16(u32(luaL_checkinteger(L, 1)))); return 1; }
-	static int write16(lua_State *L) { no_ram_write_online(L); mach(L).poke16(u32(luaL_checkinteger(L, 1)), u16(luaL_checkinteger(L, 2))); return 0; }
+	static int write16(lua_State *L) { mach(L).poke16(u32(luaL_checkinteger(L, 1)), u16(luaL_checkinteger(L, 2))); return 0; }
 	static int read32(lua_State *L)
 	{
 		u32 a = u32(luaL_checkinteger(L, 1));
@@ -370,7 +365,6 @@ public:
 	}
 	static int write32(lua_State *L)
 	{
-		no_ram_write_online(L);
 		u32 a = u32(luaL_checkinteger(L, 1)), v = u32(luaL_checkinteger(L, 2));
 		arcade_machine &m = mach(L);
 		m.poke16(a, u16(v));
@@ -385,7 +379,6 @@ public:
 	}
 	static int write8(lua_State *L)
 	{
-		no_ram_write_online(L);
 		u32 a = u32(luaL_checkinteger(L, 1));
 		u16 v = u16(luaL_checkinteger(L, 2) & 0xff);
 		arcade_machine &m = mach(L);
@@ -442,6 +435,8 @@ lua_State *mod_manager::new_state(mod_script *mod, bool with_game)
 	lua_setfield(L, -2, "ROM_BASE");
 	if (with_game) lua_pushstring(L, m_game.c_str()); else lua_pushnil(L);
 	lua_setfield(L, -2, "game");
+	lua_pushboolean(L, with_game && m_netplay);   // an online game (roadmap 1.7): a script may refuse to run
+	lua_setfield(L, -2, "netplay");
 	lua_setglobal(L, "nba");
 	return L;
 }
@@ -671,12 +666,109 @@ const std::map<std::string, u32> &mod_manager::symbols()
 	return m_syms;
 }
 
-std::vector<std::string> mod_manager::netplay_blockers(const std::string &game_id) const
+// ---------------------------------------------------------------------------
+// online games (roadmap 1.7)
+// ---------------------------------------------------------------------------
+// FNV-1a of the script and of every "lib/....lua" it names (and they name), in the order
+// first named, each with its name: a change in any of them gives another hash
+static void hash_source(const std::string &path, const std::string &dir, std::vector<std::string> &seen, u32 &h)
+{
+	std::ifstream f(P(path), std::ios::binary);
+	std::string s((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+	s.erase(std::remove(s.begin(), s.end(), '\r'), s.end());   // the same file with Windows line ends
+	h = fnv1a(s.data(), s.size(), h);
+	for (size_t p = s.find("lib/"); p != std::string::npos; p = s.find("lib/", p + 1))
+	{
+		size_t e = s.find(".lua", p);
+		if (e == std::string::npos) break;
+		std::string rel = s.substr(p, e + 4 - p);
+		if (!mod_manager::lib_path_ok(rel) || std::find(seen.begin(), seen.end(), rel) != seen.end()) continue;
+		seen.push_back(rel);
+		h = fnv1a(rel.data(), rel.size(), h);
+		hash_source(dir + "/" + rel, dir, seen, h);
+	}
+}
+
+u32 mod_manager::source_hash(const std::string &path, const std::string &dir)
+{
+	std::vector<std::string> seen;
+	u32 h = 2166136261u;
+	hash_source(path, dir, seen, h);
+	return h;
+}
+
+// "file<TAB>hash<TAB>id=index,id=index" per line
+std::string mod_manager::net_description(const std::string &game_id) const
+{
+	std::string d;
+	for (const auto &m : m_mods)
+	{
+		if (!m.applies_to(game_id) || !m.error.empty()) continue;
+		char hx[16];
+		snprintf(hx, sizeof hx, "%08x", source_hash(m.path, m_dir));
+		d += m.file + "\t" + hx + "\t";
+		bool first = true;
+		for (const auto &o : m.options) { d += (first ? "" : ",") + o.id + "=" + std::to_string(m.option_index(o)); first = false; }
+		d += "\n";
+	}
+	return d;
+}
+
+std::vector<std::string> mod_manager::active_names(const std::string &game_id) const
 {
 	std::vector<std::string> r;
-	for (const auto &m : m_mods)
-		if (m.applies_to(game_id) && (m.has_frame || m.writes_ram)) r.push_back(m.name);
+	for (const auto &m : m_mods) if (m.applies_to(game_id) && m.error.empty()) r.push_back(m.name);
 	return r;
+}
+
+bool mod_manager::net_apply(const std::string &game_id, const std::string &desc, std::string &err)
+{
+	net_restore();
+	for (const auto &m : m_mods) m_saved.push_back({ m.enabled, m.all_games, m.games, m.opt });
+	for (auto &m : m_mods) m.enabled = false;
+	std::stringstream ss(desc);
+	std::string line;
+	while (std::getline(ss, line))
+	{
+		if (line.empty()) continue;
+		size_t t1 = line.find('\t'), t2 = t1 == std::string::npos ? t1 : line.find('\t', t1 + 1);
+		if (t2 == std::string::npos) { err = "the host sent an unreadable Lua mods list"; net_restore(); return false; }
+		std::string file = line.substr(0, t1), hash = line.substr(t1 + 1, t2 - t1 - 1), opts = line.substr(t2 + 1);
+		mod_script *m = nullptr;
+		for (auto &x : m_mods) if (x.file == file) m = &x;
+		if (!m) { err = "the host's Lua mod " + file + " is not in your mods folder"; net_restore(); return false; }
+		char hx[16];
+		snprintf(hx, sizeof hx, "%08x", source_hash(m->path, m_dir));
+		if (hash != hx) { err = "your Lua mod " + file + " (or a library it uses) is not the same as the host's"; net_restore(); return false; }
+		if (!m->error.empty()) { err = "your Lua mod " + file + " does not load: " + m->error; net_restore(); return false; }
+		m->enabled = true;
+		m->all_games = true;
+		std::stringstream os(opts);
+		std::string kv;
+		while (std::getline(os, kv, ','))
+		{
+			size_t eq = kv.find('=');
+			if (eq == std::string::npos) continue;
+			const mod_option *o = m->find_option(kv.substr(0, eq));
+			int i = atoi(kv.c_str() + eq + 1);
+			if (o && i >= 0 && i < int(o->values.size())) m->opt[o->id] = i;
+		}
+	}
+	(void)game_id;
+	return true;
+}
+
+void mod_manager::net_restore()
+{
+	if (m_saved.size() != m_mods.size()) { m_saved.clear(); return; }
+	for (size_t i = 0; i < m_mods.size(); i++)
+	{
+		m_mods[i].enabled = m_saved[i].enabled;
+		m_mods[i].all_games = m_saved[i].all_games;
+		m_mods[i].games = m_saved[i].games;
+		m_mods[i].opt = m_saved[i].opt;
+	}
+	m_saved.clear();
 }
 
 void mod_manager::scan(const std::string &dir, const std::string &ini)
@@ -852,7 +944,7 @@ void mod_manager::frame()
 	for (size_t i = 0; i < m_running.size();)
 	{
 		running &r = m_running[i];
-		if (r.has_frame && !m_netplay)
+		if (r.has_frame)
 		{
 			lua_getglobal(r.L, "on_frame");
 			lua_pushinteger(r.L, m_frame);

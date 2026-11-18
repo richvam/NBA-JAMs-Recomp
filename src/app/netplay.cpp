@@ -26,7 +26,7 @@ static void sock_close(long long fd) { ::close(int(fd)); }
 
 static constexpr u8 MAGIC = 0x4a;
 static constexpr u16 DEFAULT_PORT = 7845;   // the home-network search also asks here
-static constexpr u16 VERSION = 1;      // online protocol version, independent of the program version (version.h)
+static constexpr u16 VERSION = 2;      // online protocol version, independent of the program version (version.h)
 static constexpr u32 TIMEOUT_MS = 10000;
 static constexpr int CHUNK = 1024;
 
@@ -294,7 +294,7 @@ void netplay::reset_state()
 	m_peers.clear();
 	m_last_tick = m_hello_t = m_start_t = 0;
 	m_ping = 0;
-	m_got_start = false; m_game_id.clear(); m_fp = 0; m_dips = dip_settings(); m_nv.clear();
+	m_got_start = false; m_game_id.clear(); m_fp = 0; m_dips = dip_settings(); m_nv.clear(); m_nvlen = 0; m_lobby_mods.clear();
 	m_nchunks = m_chunks_ok = 0; m_chunk_have.clear();
 	m_client_ready_sent = m_client_ok = false; m_client_why.clear();
 	m_delay = 4; m_frame = 0;
@@ -317,12 +317,14 @@ std::vector<std::string> netplay::peer_list() const
 	return v;
 }
 
-void netplay::host_start(const std::string &game_id, u32 fingerprint, const dip_settings &dips, const std::vector<u8> &nvram, int delay)
+void netplay::host_start(const std::string &game_id, u32 fingerprint, const dip_settings &dips, const std::vector<u8> &nvram, int delay, const std::string &mods)
 {
 	m_game_id = game_id;
 	m_fp = fingerprint;
 	m_dips = dips;
 	m_nv = nvram;
+	m_nvlen = nvram.size();
+	m_nv.insert(m_nv.end(), mods.begin(), mods.end());
 	m_delay = std::clamp(delay, 1, 15);
 	m_nchunks = int((m_nv.size() + CHUNK - 1) / CHUNK);
 	m_phase = phase::transfer;
@@ -573,7 +575,7 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 		case 'r': stop(("rejected: " + r.str()).c_str()); return;
 		case 'b': stop(m_phase == phase::running ? "the host has closed the game" : "the host has cancelled"); return;
 		case 'w': m_slot = r.u8_(); m_nplayers = r.u8_(); break;
-		case 'l': m_nplayers = r.u8_(); m_slot = r.u8_(); break;
+		case 'l': { m_nplayers = r.u8_(); m_slot = r.u8_(); std::string mods = r.str(); if (r.ok) m_lobby_mods = mods; break; }
 		case 's':
 		{
 			if (m_got_start) break;
@@ -585,7 +587,9 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 			m_nchunks = r.u16_();
 			m_nplayers = r.u8_();
 			m_slot = r.u8_();
-			if (!r.ok || nvsz > 64 * CHUNK) break;
+			u32 nvlen = r.u32_();
+			if (!r.ok || nvsz > 64 * CHUNK || nvlen > nvsz) break;
+			m_nvlen = nvlen;
 			m_nv.assign(nvsz, 0);
 			m_chunk_have.assign(size_t(m_nchunks), false);
 			m_chunks_ok = 0;
@@ -660,7 +664,7 @@ void netplay::tick_host(u32 now)
 		auto hdr = [&](wbuf &w, char t) { w.u8_(u8(t)); w.u8_(MAGIC); w.u32_(now); w.u32_(p.echo ? p.echo + (now - p.echo_at) : 0); };
 		if (m_phase == phase::lobby && slow)
 		{
-			wbuf w; hdr(w, 'l'); w.u8_(u8(m_nplayers)); w.u8_(u8(p.slot)); send_raw(p.addr, w.b);
+			wbuf w; hdr(w, 'l'); w.u8_(u8(m_nplayers)); w.u8_(u8(p.slot)); w.str(m_lobby_mods); send_raw(p.addr, w.b);
 		}
 		if (m_phase == phase::transfer && slow)
 		{
@@ -669,7 +673,7 @@ void netplay::tick_host(u32 now)
 				wbuf w; hdr(w, 's');
 				w.str(m_game_id); w.u32_(m_fp);
 				w.u8_(m_dips.free_play); w.u8_(m_dips.four_players); w.u8_(u8(m_dips.country)); w.u8_(m_dips.video_clips);
-				w.u8_(u8(m_delay)); w.u32_(u32(m_nv.size())); w.u16_(u16(m_nchunks)); w.u8_(u8(m_nplayers)); w.u8_(u8(p.slot));
+				w.u8_(u8(m_delay)); w.u32_(u32(m_nv.size())); w.u16_(u16(m_nchunks)); w.u8_(u8(m_nplayers)); w.u8_(u8(p.slot)); w.u32_(u32(m_nvlen));
 				send_raw(p.addr, w.b);
 			}
 			else
