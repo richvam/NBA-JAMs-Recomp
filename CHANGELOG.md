@@ -55,7 +55,8 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - codes_te.lua now has every T.E. and Special Edition cabinet code: huge head, quick hands,
   goaltending, shot percentage, computer assistance off, baby-size players, expanded roster,
   switch teams at halftime, and the secret players (chosen by name for each player).
-- New Lua mod codes_mht.lua: the Maximum Hangtime 1.3 number and stick codes as switches.
+- New Lua mod codes_mht.lua: the number and stick codes of NBA Hangtime (L1.3, L1.1) and
+  Maximum Hangtime (1.3, 1.03) as switches.
 
 ### Changed
 - The CRT mask is as coarse at 4K as at 1080p (it was twice as fine at 4K), and it lines up
