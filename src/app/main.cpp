@@ -19,6 +19,7 @@
 #include "netplay.h"
 #include "nat.h"
 #include "mods.h"
+#include "mod_draw.h"
 #include "controls.h"
 #include "shaders.h"
 
@@ -1983,6 +1984,7 @@ bool app::step_game(bool menu_open)
 		if (m_net.can_run())
 		{
 			cabinet_inputs local = menu_open ? menu_inputs() : gather_inputs();
+			if (!menu_open) m_mods.apply_presses(local, m_net.local_slot());   // nba.press (1.6), sent like the pad
 			cabinet_inputs in = m_net.frame_inputs(local.p[0]);
 			m_mach->set_inputs(in);
 			m_mach->run_frame();
@@ -1993,7 +1995,9 @@ bool app::step_game(bool menu_open)
 	}
 	else if (!m_paused && !menu_open)
 	{
-		m_mach->set_inputs(gather_inputs());
+		cabinet_inputs in = gather_inputs();
+		m_mods.apply_presses(in);                                          // nba.press (1.6)
+		m_mach->set_inputs(in);
 		m_mach->run_frame();
 		m_mods.frame();
 		ran = true;
@@ -2026,6 +2030,7 @@ bool app::game_frame()
 	canvas cv(w, h);
 	std::memcpy(cv.px.data(), m_mach->frame(), size_t(w) * h * 4);
 	if (m_shot) save_screenshot(cv.px.data(), w, h);      // the game picture, without the overlay
+	draw_mod_overlay(cv, m_mods.draws());                  // nba.text / rect / line (1.6)
 	draw_overlay(cv);
 	present(cv.px.data(), w, h, true);
 	return ran;

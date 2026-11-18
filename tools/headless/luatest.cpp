@@ -6,6 +6,7 @@
 // usage: luatest        (exit code 0 = all passed)
 #include "tunit.h"
 #include "mods.h"
+#include "mod_draw.h"
 #include "romload.h"
 #include <cstdio>
 #include <cstdlib>
@@ -492,6 +493,75 @@ end
 		CHECK(said && unavailable && !err, "events: a revision without a symbol file says so, calls nothing, and is not an error");
 		evn.stop();
 		fs::remove_all(ed);
+	}
+
+	// ---- input and drawing (roadmap 1.6) ----
+	{
+		fs::path pd = fs::temp_directory_path() / "nbajam_luatest_press";
+		fs::remove_all(pd);
+		fs::create_directories(pd);
+		write_file(pd / "pd.lua", R"(
+mod = { name = "PD" }
+function on_frame(f)
+  if f == 1 then
+    nba.press(1, "start", 3)
+    nba.press(3, { "shoot", "turbo", "left" }, 1)
+    assert(not pcall(nba.press, 1, "jump"), "unknown button")
+    assert(not pcall(nba.press, 5, "start"), "player 5")
+    assert(not pcall(nba.press, 1, "start", 0), "0 frames")
+    nba.text(10, 20, "HELLO", 0xff0000, 2)
+    nba.rect(1, 2, 30, 40, 0x80112233, true)
+    nba.rect(1, 2, 30, 40, 0x00ff00)
+    nba.line(0, 0, 9, 4)
+    nba.log("queued")
+  end
+end
+)");
+		const u16 code[1] = { 0x7171 };
+		auto pm = make_machine(10, code, 1);
+		mod_manager pmm;
+		pmm.scan(pd.string(), "");
+		for (auto &s : pmm.mods()) s.enabled = true;
+		pmm.start("nbajamte", *pm);
+		pmm.frame();
+		auto lg = pmm.take_log();
+		bool queued = false;
+		for (auto &x : lg) queued = queued || x.find("[PD] queued") != std::string::npos;
+		CHECK(queued, "press: a name or a table of names; unknown buttons, player 5 and 0 frames are errors");
+		int start_frames = 0;
+		bool p3 = false, p3_once = true, others_clear = true;
+		for (int f = 0; f < 5; f++)
+		{
+			cabinet_inputs in{};
+			pmm.apply_presses(in);
+			if (in.p[0].start) start_frames++;
+			if (f == 0) p3 = in.p[2].shoot && in.p[2].turbo && in.p[2].left && !in.p[2].pass;
+			else p3_once = p3_once && !in.p[2].shoot;
+			others_clear = others_clear && !in.p[1].start && !in.p[3].start && !in.p[0].shoot;
+		}
+		CHECK(start_frames == 3 && p3 && p3_once && others_clear, "press: buttons are held for their frames on the right player, then let go");
+		const auto &dl = pmm.draws();
+		bool draws = dl.size() == 4 && dl[0].type == mod_draw::text && dl[0].s == "HELLO" && dl[0].color == 0xffff0000u && dl[0].scale == 2 &&
+		             dl[1].type == mod_draw::fill && dl[1].color == 0x80112233u && dl[1].x2 == 30 && dl[1].y2 == 40 &&
+		             dl[2].type == mod_draw::rect && dl[2].color == 0xff00ff00u && dl[3].type == mod_draw::line && dl[3].x2 == 9 && dl[3].y2 == 4;
+		CHECK(draws, "draw: text, a filled half-transparent box, an outline and a line are queued (0xRRGGBB is opaque)");
+		canvas cv(64, 48);
+		cv.fill(0, 0, 64, 48, 0xff000000u);
+		draw_mod_overlay(cv, dl);
+		auto at = [&](int x, int y) { return cv.px[size_t(y) * 64 + size_t(x)]; };
+		bool pix = at(1, 2) == 0xff00ff00u && at(30, 41) == 0xff00ff00u && at(5, 5) != 0xff000000u && at(5, 5) != 0xff00ff00u && at(9, 4) == 0xffffffffu && at(0, 0) == 0xffffffffu;
+		CHECK(pix, "draw: the outline, the blended box and both ends of the line land on the overlay canvas");
+		pmm.frame();
+		CHECK(pmm.draws().empty(), "draw: the list is emptied before each on_frame (a script draws every frame)");
+		// online: only presses for this computer's player, into its own input
+		pmm.stop();
+		pmm.start("nbajamte", *pm);
+		pmm.frame();
+		cabinet_inputs on{};
+		pmm.apply_presses(on, 2);
+		CHECK(on.p[0].shoot && on.p[0].turbo && !on.p[0].start && !on.p[2].shoot, "press online: only the local player's presses, sent as that player's own input");
+		pmm.stop();
+		fs::remove_all(pd);
 	}
 
 	fs::remove_all(dir);

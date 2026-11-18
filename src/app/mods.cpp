@@ -195,6 +195,77 @@ public:
 		return luaL_error(L, "unknown option '%s'", id);
 	}
 	static int frame(lua_State *L) { lua_pushinteger(L, mgr(L)->m_frame); return 1; }
+
+	// ---- input and drawing (roadmap 1.6) ----
+	static u32 button_bit(lua_State *L, const char *b)
+	{
+		static const char *names[] = { "up", "down", "left", "right", "shoot", "pass", "turbo", "start", "coin" };
+		for (u32 i = 0; i < 9; i++) if (strcmp(b, names[i]) == 0) return 1u << i;
+		luaL_error(L, "nba.press: unknown button '%s' (up, down, left, right, shoot, pass, turbo, start, coin)", b);
+		return 0;
+	}
+	// nba.press(player, buttons, frames): player 1-4; buttons a name or a table of names; held
+	// for `frames` frames (default 1), from the next frame on
+	static int press(lua_State *L)
+	{
+		int player = int(luaL_checkinteger(L, 1));
+		if (player < 1 || player > 4) return luaL_error(L, "nba.press: player is 1 to 4");
+		u32 bits = 0;
+		if (lua_istable(L, 2))
+		{
+			lua_Integer n = luaL_len(L, 2);
+			for (lua_Integer i = 1; i <= n; i++) { lua_geti(L, 2, i); bits |= button_bit(L, luaL_checkstring(L, -1)); lua_pop(L, 1); }
+		}
+		else bits = button_bit(L, luaL_checkstring(L, 2));
+		int frames = int(luaL_optinteger(L, 3, 1));
+		if (frames < 1 || frames > 36000) return luaL_error(L, "nba.press: frames is 1 to 36000");
+		mgr(L)->m_press.push_back({ player - 1, bits, frames });
+		return 0;
+	}
+	static u32 color_arg(lua_State *L, int i)
+	{
+		lua_Integer c = luaL_optinteger(L, i, 0xffffff);
+		u32 v = u32(c);
+		return v <= 0xffffff ? (0xff000000u | v) : v;   // 0xRRGGBB is opaque
+	}
+	static int text(lua_State *L)
+	{
+		mod_draw d;
+		d.type = mod_draw::text;
+		d.x = int(luaL_checkinteger(L, 1)); d.y = int(luaL_checkinteger(L, 2));
+		d.s = luaL_tolstring(L, 3, nullptr); lua_pop(L, 1);
+		d.color = color_arg(L, 4);
+		d.scale = int(luaL_optinteger(L, 5, 1));
+		if (d.scale < 1 || d.scale > 4) return luaL_error(L, "nba.text: scale is 1 to 4");
+		push_draw(L, d);
+		return 0;
+	}
+	static int rect(lua_State *L)
+	{
+		mod_draw d;
+		d.type = lua_toboolean(L, 6) ? mod_draw::fill : mod_draw::rect;
+		d.x = int(luaL_checkinteger(L, 1)); d.y = int(luaL_checkinteger(L, 2));
+		d.x2 = int(luaL_checkinteger(L, 3)); d.y2 = int(luaL_checkinteger(L, 4));
+		d.color = color_arg(L, 5);
+		push_draw(L, d);
+		return 0;
+	}
+	static int line(lua_State *L)
+	{
+		mod_draw d;
+		d.type = mod_draw::line;
+		d.x = int(luaL_checkinteger(L, 1)); d.y = int(luaL_checkinteger(L, 2));
+		d.x2 = int(luaL_checkinteger(L, 3)); d.y2 = int(luaL_checkinteger(L, 4));
+		d.color = color_arg(L, 5);
+		push_draw(L, d);
+		return 0;
+	}
+	static void push_draw(lua_State *L, const mod_draw &d)
+	{
+		mod_manager *m = mgr(L);
+		if (m->m_draw.size() >= 4096) luaL_error(L, "too many drawings in one frame (4096)");
+		m->m_draw.push_back(d);
+	}
 	// nba.include("lib/name.lua"): a shared file from mods/lib/, run once per script; returns
 	// what the file returns (true when it returns nothing), as require does
 	static int include(lua_State *L)
@@ -363,6 +434,7 @@ lua_State *mod_manager::new_state(mod_script *mod, bool with_game)
 		{ "rom_write16", mod_api::rom_write16 }, { "rom_write32", mod_api::rom_write32 }, { "rom_find", mod_api::rom_find },
 		{ "read8", mod_api::read8 }, { "write8", mod_api::write8 }, { "read16", mod_api::read16 }, { "write16", mod_api::write16 },
 		{ "read32", mod_api::read32 }, { "write32", mod_api::write32 },
+		{ "press", mod_api::press }, { "text", mod_api::text }, { "rect", mod_api::rect }, { "line", mod_api::line },
 		{ nullptr, nullptr },
 	};
 	luaL_newlib(L, api);
@@ -757,9 +829,26 @@ void mod_manager::start(const std::string &game_id, arcade_machine &mach)
 	}
 }
 
+void mod_manager::apply_presses(cabinet_inputs &in, int local_slot)
+{
+	for (size_t i = 0; i < m_press.size();)
+	{
+		press &p = m_press[i];
+		if (local_slot < 0 || p.player == local_slot)
+		{
+			cabinet_inputs::player &q = in.p[local_slot < 0 ? p.player : 0];
+			bool *b[9] = { &q.up, &q.down, &q.left, &q.right, &q.shoot, &q.pass, &q.turbo, &q.start, &q.coin };
+			for (int k = 0; k < 9; k++) if (p.buttons & (1u << k)) *b[k] = true;
+		}
+		if (--p.frames <= 0) { m_press.erase(m_press.begin() + long(i)); continue; }
+		i++;
+	}
+}
+
 void mod_manager::frame()
 {
 	m_frame++;
+	m_draw.clear();
 	for (size_t i = 0; i < m_running.size();)
 	{
 		running &r = m_running[i];
@@ -824,6 +913,8 @@ void mod_manager::stop()
 {
 	for (auto &r : m_running) lua_close(r.L);
 	m_running.clear();
+	m_press.clear();
+	m_draw.clear();
 	m_mach = nullptr;
 	m_syms.clear();
 	m_syms_loaded = false;

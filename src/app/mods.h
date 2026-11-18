@@ -46,6 +46,17 @@ struct mod_option
 	std::string value_text(int i) const;
 };
 
+// Drawing on the frontend overlay (roadmap 1.6), in game-screen pixels. The list is emptied
+// before each on_frame, so a script draws again every frame; the game's frame buffer is never
+// touched. Drawn by draw_mod_overlay (mod_draw.h).
+struct mod_draw
+{
+	enum kind { text, rect, fill, line } type = text;
+	int x = 0, y = 0, x2 = 0, y2 = 0, scale = 1;   // rect/fill: x2, y2 are the width and height
+	u32 color = 0xffffffff;                        // 0xAARRGGBB
+	std::string s;
+};
+
 struct mod_script
 {
 	std::string file;                    // file name inside mods/ (the settings key)
@@ -93,6 +104,12 @@ public:
 	static std::map<std::string, int> used_values(const mod_script &m);
 	void options_changed(mod_script &m, const std::map<std::string, int> &before);
 	bool is_running(const mod_script &m) const;
+	// Input and drawing (roadmap 1.6). nba.press queues buttons; apply_presses ORs them into
+	// the inputs of the next frame (before set_inputs) and counts them down. Online, pass
+	// local_slot: only presses for that player are applied, into in.p[0], the local player's
+	// input that the game sends to the others.
+	void apply_presses(cabinet_inputs &in, int local_slot = -1);
+	const std::vector<mod_draw> &draws() const { return m_draw; }
 	void stop();
 	std::vector<std::string> take_log();                         // messages for the UI
 	int active_count() const { return int(m_running.size()); }
@@ -123,6 +140,9 @@ private:
 	u32 m_frame = 0;
 	bool m_netplay = false;
 	std::vector<std::string> m_log;
+	struct press { int player; u32 buttons; int frames; };
+	std::vector<press> m_press;
+	std::vector<mod_draw> m_draw;
 
 	lua_State *new_state(mod_script *mod, bool with_game);
 	bool load_meta(mod_script &m);

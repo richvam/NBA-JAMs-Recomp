@@ -41,8 +41,9 @@ $(BUILD)/lua/%.o: src/third_party/lua/%.c
 $(BUILD)/liblua.a: $(patsubst src/third_party/lua/%.c,$(BUILD)/lua/%.o,$(LUA_SRC))
 	ar rcs $@ $^
 
-$(BUILD)/luatest: tools/headless/luatest.cpp src/app/mods.cpp src/app/romload.cpp $(BUILD)/libcore.a $(BUILD)/liblua.a $(BUILD)/miniz.o
-	$(CXX) $(CXXFLAGS) $(INC) $(APP_INC) $< src/app/mods.cpp src/app/romload.cpp $(BUILD)/miniz.o $(BUILD)/libcore.a $(BUILD)/liblua.a -o $@
+UI_SRC = src/app/ui/ui.cpp src/app/ui/gallery.cpp src/app/ui/lettering.cpp src/app/ui/themes.cpp src/app/ui/screens.cpp src/app/ui/keyboard.cpp
+$(BUILD)/luatest: tools/headless/luatest.cpp src/app/mods.cpp src/app/romload.cpp $(UI_SRC) $(BUILD)/libcore.a $(BUILD)/liblua.a $(BUILD)/miniz.o
+	$(CXX) $(CXXFLAGS) $(INC) $(APP_INC) $< src/app/mods.cpp src/app/romload.cpp $(UI_SRC) $(BUILD)/miniz.o $(BUILD)/libcore.a $(BUILD)/liblua.a -o $@
 
 $(BUILD)/pathtest: tools/headless/pathtest.cpp src/app/paths.cpp
 	@mkdir -p $(BUILD)
@@ -59,7 +60,6 @@ $(BUILD)/viewtest: tools/headless/viewtest.cpp src/app/view.cpp src/app/gl_prese
 	  -L$(SDL2L)/lib -Wl,-Bstatic -lSDL2 -Wl,-Bdynamic -static-libstdc++ -static-libgcc -lm -ldl -lpthread -o $@
 
 # uitest: the menu toolkit (U1), no SDL and no display
-UI_SRC = src/app/ui/ui.cpp src/app/ui/gallery.cpp src/app/ui/lettering.cpp src/app/ui/themes.cpp src/app/ui/screens.cpp src/app/ui/keyboard.cpp
 $(BUILD)/uitest: tools/headless/uitest.cpp $(UI_SRC) $(BUILD)/miniz.o
 	@mkdir -p $(BUILD)
 	$(CXX) $(CXXFLAGS) -Isrc/app -Isrc/third_party/miniz $^ -o $@
@@ -78,8 +78,8 @@ $(BUILD)/nettest: tools/headless/nettest.cpp src/app/games.cpp src/app/romload.c
 $(BUILD)/sndlog: tools/headless/sndlog.cpp src/app/games.cpp src/app/romload.cpp src/app/menu_sound.cpp $(BUILD)/libcore.a $(BUILD)/miniz.o
 	$(CXX) $(CXXFLAGS) $(INC) $(APP_INC) $< src/app/games.cpp src/app/romload.cpp src/app/menu_sound.cpp $(BUILD)/miniz.o $(BUILD)/libcore.a -lpthread -o $@
 
-$(BUILD)/modtest: tools/headless/modtest.cpp src/app/mods.cpp src/app/romload.cpp $(BUILD)/libcore.a $(BUILD)/liblua.a $(BUILD)/miniz.o
-	$(CXX) $(CXXFLAGS) $(INC) $(APP_INC) $< src/app/mods.cpp src/app/romload.cpp $(BUILD)/miniz.o $(BUILD)/libcore.a $(BUILD)/liblua.a -o $@
+$(BUILD)/modtest: tools/headless/modtest.cpp src/app/mods.cpp src/app/romload.cpp $(UI_SRC) $(BUILD)/libcore.a $(BUILD)/liblua.a $(BUILD)/miniz.o
+	$(CXX) $(CXXFLAGS) $(INC) $(APP_INC) $< src/app/mods.cpp src/app/romload.cpp $(UI_SRC) $(BUILD)/miniz.o $(BUILD)/libcore.a $(BUILD)/liblua.a -o $@
 
 # ---------------- application (Windows, llvm-mingw cross) ----------------
 SDL2W ?= /home/claude/deps/SDL2-2.30.9/x86_64-w64-mingw32
