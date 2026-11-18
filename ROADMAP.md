@@ -651,10 +651,14 @@ address and port as ten letters and digits); the player joins with the host's co
 answer comes the host lets them in by the player's code ("Let a player in"), which punches
 both ways; a player also follows a host whose router answers from another port. The STUN
 question is repeated every 20 s while waiting, which keeps the mapping open. Instead of the
-meeting point (N3) the codes are exchanged by the players themselves (a chat); IPv6 is not
+meeting point (N3) the codes are exchanged by the players themselves (a chat). When the
+player's public address equals the host's (both behind one router, which usually does not
+loop packets for its own address back inside), the player asks on the home network by
+broadcast for the host with that public address and joins it there (`nattest`: 3 more checks;
+added after the owner's first try from home). IPv6 is not
 done. UPnP and STUN can be switched off on the Online screen; the STUN server is a setting
 (`stun.l.google.com:19302` by default) and the help says it sees the player's IP address.
-`nattest` (14 checks, in CI): codes, STUN messages, UPnP against a test router run in the
+`nattest` (17 checks, in CI): codes, STUN messages, UPnP against a test router run in the
 test (mapping, removal, a router that only takes permanent forwards, a device without the
 service, no router), and the router matrix of N2.2's check: 12 of 16 pairs of full cone,
 restricted, port restricted and symmetric routers connect by codes, and the 4 that cannot

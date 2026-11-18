@@ -213,7 +213,7 @@ nothing. To write your own, see [`mods/README.txt`](dist/NBAJamRecomp/mods/READM
 | A controller does nothing | Open **Controls**: the top line shows the pad the program sees. Select an action and press the button you want. |
 | I cannot find my saves or settings | Open **About**: the "Data" line shows the folder. |
 | Online: "your ROMs (or Lua mods) are not the same as the host's" | Use the same ROM files and switch the same mods on, with the same options. |
-| Online: the others cannot join | Join with the host's code, not a `10.`, `192.168.` or `172.16`-`31` address: those only work on the same network. If there is still no answer, the player sends their own code and the host chooses **Let a player in**. If that fails too, forward UDP port 7845 on the host's router or use a virtual network. |
+| Online: the others cannot join | A player on the host's own home network finds the host by the code by itself; if that fails, they type the host's local address (shown under "Same network"). From elsewhere, join with the host's code, not a `10.`, `192.168.` or `172.16`-`31` address: those only work on the same network. If there is still no answer, the player sends their own code and the host chooses **Let a player in**. If that fails too, forward UDP port 7845 on the host's router or use a virtual network. |
 | The menu never mentions new versions | News needs an internet connection and "News and updates: on". With no connection it stays quiet. |
 
 Something else? Open an issue on this repository and say which game and which version

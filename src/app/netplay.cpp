@@ -25,6 +25,7 @@ static void sock_close(long long fd) { ::close(int(fd)); }
 #endif
 
 static constexpr u8 MAGIC = 0x4a;
+static constexpr u16 DEFAULT_PORT = 7845;   // the home-network search also asks here
 static constexpr u16 VERSION = 1;      // online protocol version, independent of the program version (version.h)
 static constexpr u32 TIMEOUT_MS = 10000;
 static constexpr int CHUNK = 1024;
@@ -77,6 +78,7 @@ bool udp_socket::open(u16 port, std::string &err, u32 bind_ip)
 #endif
 	int one = 1;
 	setsockopt(decltype(socket(0, 0, 0))(m_fd), SOL_SOCKET, SO_REUSEADDR, (const char *)&one, sizeof(one));
+	setsockopt(decltype(socket(0, 0, 0))(m_fd), SOL_SOCKET, SO_BROADCAST, (const char *)&one, sizeof(one));   // the home-network search
 	sockaddr_in a{};
 	a.sin_family = AF_INET;
 	a.sin_addr.s_addr = htonl(bind_ip ? bind_ip : INADDR_ANY);
@@ -106,7 +108,7 @@ void udp_socket::send(const net_addr &to, const void *data, size_t len)
 	}
 	sockaddr_in a{};
 	a.sin_family = AF_INET;
-	if (via.ip)
+	if (via.ip && to.ip != 0x7f000001)
 	{
 		std::vector<u8> w(6 + len);
 		w[0] = u8(to.ip >> 24); w[1] = u8(to.ip >> 16); w[2] = u8(to.ip >> 8); w[3] = u8(to.ip); w[4] = u8(to.port >> 8); w[5] = u8(to.port);
@@ -139,6 +141,15 @@ int udp_socket::recv(net_addr &from, void *data, size_t cap)
 		n -= 6;
 	}
 	return n;
+}
+
+u16 udp_socket::local_port() const
+{
+	if (m_fd < 0) return 0;
+	sockaddr_in a{};
+	socklen_t al = sizeof(a);
+	if (getsockname(decltype(socket(0, 0, 0))(m_fd), (sockaddr *)&a, &al) != 0) return 0;
+	return ntohs(a.sin_port);
 }
 
 bool udp_socket::resolve(const std::string &host, u16 port, net_addr &out, std::string &err)
@@ -252,6 +263,7 @@ bool netplay::join(const std::string &host, u16 port, std::string &err)
 	m_phase = phase::lobby;
 	peer h;
 	h.addr = a;
+	m_target = a;
 	h.last_seen = net_now_ms();
 	m_peers.push_back(h);
 	m_slot = -1;
@@ -289,6 +301,7 @@ void netplay::reset_state()
 	for (auto &m : m_in) m.clear();
 	m_merged.clear(); m_merged_upto = 0; m_stall_since = 0; m_hash.clear();
 	m_desync = false;
+	m_target = {}; m_also_public = 0; m_lan_t = 0; m_lan_found = false;
 }
 
 void netplay::send_raw(const net_addr &to, const std::vector<u8> &b)
@@ -443,6 +456,19 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 
 	if (m_mode == mode::host)
 	{
+		if (type == 'q')
+		{
+			// a player on the home network looks for the host with this public address
+			u32 ip = r.u32_();
+			bool mine = r.ok && ip && ((m_stun == stun_state::found && ip == m_public.ip) || ip == m_also_public);
+			if (mine && m_phase == phase::lobby)
+			{
+				wbuf w;
+				w.u8_('Q'); w.u8_(MAGIC); w.u32_(now); w.u32_(tsend);
+				send_raw(from, w.b);
+			}
+			return;
+		}
 		if (type == 'h')
 		{
 			u16 ver = r.u16_();
@@ -521,6 +547,19 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 	}
 
 	// ---- client ----
+	if (type == 'q') return;
+	if (type == 'Q')
+	{
+		// the host answered on the home network: talk to it there
+		if (m_slot < 0 && !m_peers.empty() && !m_lan_found)
+		{
+			m_peers[0].addr = from;
+			m_peers[0].last_seen = now;
+			m_lan_found = true;
+			m_start_t = 0;
+		}
+		return;
+	}
 	// Until the host has answered, a packet from the host's IP address on another port is the
 	// host behind a router that gives each destination its own port: talk to that port.
 	if (!pp && m_slot < 0 && !m_peers.empty() && from.ip == m_peers[0].addr.ip) { m_peers[0].addr = from; pp = &m_peers[0]; }
@@ -681,6 +720,22 @@ void netplay::tick_client(u32 now)
 
 	if (!m_got_start)
 	{
+		// the same public address as the host: both are behind one router, which may not send
+		// packets for its own address back inside, so ask on the home network too
+		if (m_slot < 0 && !m_lan_found && m_stun == stun_state::found && m_public.ip == m_target.ip && now - m_lan_t >= 500)
+		{
+			m_lan_t = now;
+			wbuf w;
+			w.u8_('q'); w.u8_(MAGIC); w.u32_(now); w.u32_(0);
+			w.u32_(m_target.ip);
+			if (!lan_probe_to.empty())
+				for (auto &t : lan_probe_to) send_raw(t, w.b);
+			else
+			{
+				send_raw({ 0xffffffffu, m_target.port }, w.b);
+				if (m_target.port != DEFAULT_PORT) send_raw({ 0xffffffffu, DEFAULT_PORT }, w.b);
+			}
+		}
 		if (slow && (now - m_start_t >= 400 || m_slot < 0))
 		{
 			m_start_t = now;
