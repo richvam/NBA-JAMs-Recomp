@@ -145,6 +145,80 @@ folder otherwise) and choose it in Settings, or press F8 until its name appears.
   `nbajam_recomp.ini` makes a border see-through (0.1 to 1).
 * PNGs must be 8 bits per channel and not interlaced.
 
+<!-- codes:start (written by tools/codes_from_source.py) -->
+### Cabinet codes
+
+The games accept their original cabinet codes; this is what each one does, read from the
+games' source (and, for NBA JAM 1993, its program). The tables for Lua mods are in
+`mods/lib/codes_<game>.lua`; the secret players are listed in [docs/CODES.md](docs/CODES.md).
+
+**NBA JAM Tournament Edition and T.E. Special Edition** (the same codes): tap any button on the
+matchup screen to count taps; hold the others at tip-off.
+
+| Code | How |
+| --- | --- |
+| Tournament mode | Hold turbo, pass, shoot and right on the matchup screen |
+| Maximum power | Hold turbo, pass, shoot and down on the matchup screen (player 1 without start; players 2-4 with start held) |
+| Show shot percentage | Tap any button 15 times or more, then turn the stick a full circle, on the matchup screen |
+| Computer assistance off | Tap any button exactly 10 times on the matchup screen (about 1.5 s in, when the game checks) |
+| Powerup goaltending | Tap any button exactly 24 times on the matchup screen |
+| Quick hands | Tap any button 5 times or more on the matchup screen, then hold shoot and down at tip-off |
+| Big head | Hold up, turbo and pass at tip-off |
+| Huge head | Tap any button exactly 6 times on the matchup screen, then hold up, turbo and pass at tip-off |
+| Baby-size players | Hold down and right, and press turbo, shoot, pass three times (one at a time) on the matchup screen |
+| Expanded roster | On team select, tap pass 4 times or more while the stick has been turned all the way round |
+| Switch teams at halftime | On the halftime team screen, hold pass and right for 2 seconds (120 frames); then pass changes the team |
+
+Tournament mode (turbo, pass, shoot and right) also turns the tap codes off. The secret players
+are entered as initials and a birth date: 61 in T.E., 68 in SE.
+
+**NBA JAM (1993)**:
+
+| Code | How |
+| --- | --- |
+| Show shot percentage | Tap any button 15 times or more, then turn the stick a full circle, on the matchup screen |
+| Computer assistance off | Tap any button exactly 10 times on the matchup screen |
+| Powerup goaltending | Tap any button exactly 8 times on the matchup screen |
+| Quick hands | Tap any button 5 times or more on the matchup screen, then hold turbo, pass, shoot and down at tip-off |
+| Big head | Hold up, turbo and pass at tip-off |
+
+**NBA Hangtime and NBA Maximum Hangtime** (the same codes): on the versus screen, the three
+icons count turbo, shoot and pass presses (stick up counts down). With a human on each team,
+both teams must enter a number code; tournament mode needs two humans.
+
+| Number | Code |
+| --- | --- |
+| 111 | Tournament mode |
+| 025 | Baby-sized players |
+| 048 | No music during play |
+| 937 | Goaltending allowed |
+| 616 | Shot blocking |
+| 709 | Maximum steals |
+| 802 | Maximum power |
+| 284 | Maximum speed |
+| 552 | Hyper speed |
+| 273 | Stealth turbo |
+| 461 | Infinite turbo |
+| 390 | No pushing |
+| 120 | Fast turbo passes |
+
+| Stick and buttons | Code |
+| --- | --- |
+| Press down on the versus screen: the player's three icons stop changing | Lock the number code |
+| Hold up, turbo and pass together | Big head |
+| Up, up, pass, turbo (within 1 s) | Huge head |
+| Turn the stick a full circle clockwise from up (within 1 s); only the first player to do it | Show shot percentage |
+| Left, left, pass, turbo (within 1 s) | No tag arrows |
+| Down, down, shoot, turbo (within 1 s) | No drift on block jumps |
+| Hold right and press pass twice (within 1 s) | Computer assistance off |
+| Hold right and press shoot, turbo, pass (within 1 s) | ABA ball |
+| Hold left and press turbo twice (within 1 s) | Outdoor court |
+| Shoot, shoot, then hold shoot and turn the stick a full circle clockwise from up (within 1.3 s) | Special combo (ABA ball, outdoor court, shot percentage, big head) |
+
+Maximum Hangtime 1.03 is older: ABA ball also gives the outdoor court, and the outdoor-court
+and special combos do nothing there.
+<!-- codes:end -->
+
 ## 5. Online
 
 Up to four players, each on their own computer.

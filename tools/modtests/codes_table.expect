@@ -1,4 +1,5 @@
-# roadmap 2.1: the code tables load, ids are unique, every symbol exists in that revision.
+# roadmap 2.1-2.5: the code tables load, ids are unique, every symbol exists in that revision,
+# and every entry has its Spanish and English label.
 game nbajamte nbajamse nbamht nbahangt nbamht:nbamht103 nbajam
 frames 10
 nbajamte: once 72 entries (flag 4, initials 61, players 4, taps 1, team 2), 0 problems
