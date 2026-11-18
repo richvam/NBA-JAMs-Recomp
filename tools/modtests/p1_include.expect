@@ -1,0 +1,15 @@
+# Phase 1 review, 1.1: a mod using a lib runs; paths outside mods/lib/ are refused; lib/ is not listed.
+game nbajamte nbajamse nbamht nbajam nbahangt
+frames 10
+once listed p1_include.lua
+nolog listed lib/
+once include lib/jam.lua: table with update
+once included twice, same table: true
+once include ../mods.ini: refused
+once include lib/../p1_include.lua: refused
+once include lib\jam.lua: refused
+once include lib//jam.lua: refused
+once include sym/nbajamte_70646d2c.lua: refused
+once include lib/jam.txt: refused
+once include lib/missing.lua: refused
+nolog ALLOWED

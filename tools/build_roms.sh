@@ -15,6 +15,12 @@
 #  Needs bash and python3. Tested on Linux; on Windows use WSL.
 #  The app only uses data/<id>/ when it does not find the game's ROMs in roms/.
 #
+#  PROGRAM_ONLY=1 (used by tools/build_program_roms.sh): only the program ROMs, as
+#  <out>/<id>/program.lo and program.hi, for modtest. No graphics, no sound. T.E. and
+#  Maximum Hangtime still run LOAD2 under emu2: their sources include the image tables
+#  (*.GLO, *.TBL) that LOAD2 writes from the art.
+#  Each repository folder may also carry GitHub's "-main" suffix (a downloaded ZIP).
+#
 #  Verified result:
 #    - SE  : program ROM byte-identical to l4_* of the SE repository (rev 5.02)
 #    - MHT : program ROM byte-identical to ROMS/7M_13M (Maximum Hangtime 1.3)
@@ -26,6 +32,12 @@ REPOS=$(realpath "$1"); EMU2=$(realpath "$2"); OUT=$(realpath -m "$3")
 TOOLS=$(dirname "$(realpath "$0")")
 GSPASM="python3 $TOOLS/gspasm/gspasm.py"
 WORK=${WORK:-/tmp/nbajam_build}
+PO=${PROGRAM_ONLY:-}
+repo() { if [ -d "$REPOS/$1" ]; then echo "$REPOS/$1"; else echo "$REPOS/$1-main"; fi; }
+program() { # id lo hi: program.bin, or program.lo/.hi with PROGRAM_ONLY
+  mkdir -p "$OUT/$1"
+  if [ -n "$PO" ]; then cp "$2" "$OUT/$1/program.lo"; cp "$3" "$OUT/$1/program.hi"; else interleave "$2" "$3" "$OUT/$1/program.bin"; fi
+}
 rm -rf "$WORK"; mkdir -p "$WORK" "$OUT"
 
 interleave() { # lo hi out  -> 16-bit interleaved program
@@ -46,12 +58,13 @@ upcopy() { # copy files with upper-case names: src... dst
 
 # -----------------------------------------------------------------------------
 echo "== NBA JAM T.E. Special Edition (rev 5.02)"
-SE=$REPOS/nba-jam-tournament-edition-SE
+SE=$(repo nba-jam-tournament-edition-SE)
 mkdir -p "$WORK/se"
 ( cd "$SE" && $GSPASM . BB.CMD "$WORK/se/se" --no-preasm --ext .axx --asm IMGTBL,BGNDTBL --irw rom/BBVDA.IRW )
 cmp "$WORK/se/se.lo" "$SE/rom/l4_nba_jam_tournament_game_rom_uj12.uj12" && echo "   SE program identical to the original"
+program nbajamse "$WORK/se/se.lo" "$WORK/se/se.hi"
+if [ -z "$PO" ]; then
 mkdir -p "$OUT/nbajamse/sound"
-interleave "$WORK/se/se.lo" "$WORK/se/se.hi" "$OUT/nbajamse/program.bin"
 cat "$SE"/rom/se1.bin "$SE"/rom/se2.bin "$SE"/rom/se3.bin "$SE"/rom/se4.bin > "$WORK/se/gfx.bin"
 # se*.bin (a MAME dump) predates the faces of Jordan, Laimbeer, Petrovic...: the current
 # BB3 (img/bb3/BB3.IRW, identical to LOAD2's output for img/bb3/BB3.LOD and consistent with
@@ -67,14 +80,16 @@ PYEOF
 cp "$SE/rom/ROM5.02/l1_nba_jam_tournament_u3_sound_rom.u3"   "$OUT/nbajamse/sound/u3.bin"
 cp "$SE/rom/ROM5.02/l1_nba_jam_tournament_u12_sound_rom.u12" "$OUT/nbajamse/sound/u12.bin"
 cp "$SE/rom/ROM5.02/l1_nba_jam_tournament_u13_sound_rom.u13" "$OUT/nbajamse/sound/u13.bin"
+fi
 
 # -----------------------------------------------------------------------------
 echo "== NBA JAM Tournament Edition (rev 4.0)"
-TE=$REPOS/nba-jam-tournament-edition
+TE=$(repo nba-jam-tournament-edition)
+HT=$(repo nba-hangtime)
 I=$WORK/teimg; B=$WORK/te
 mkdir -p "$I" "$B"
 cp "$TE"/IMG/* "$I"/ 2>/dev/null || true
-cp "$REPOS"/nba-hangtime/NEWLOAD2/LOAD2.EXE "$I"/
+cp "$HT"/NEWLOAD2/LOAD2.EXE "$I"/
 # The 1994 T.E. was packed by an older LOAD2 that gives every image as many bits per pixel
 # as its palette needs; the 1995 LOAD2 in the repository uses the minimum. Without this the
 # code (which expects e.g. 6-bit name plates) draws noise. Pass 1: LOAD2 with the palette in
@@ -127,16 +142,17 @@ cp "$I/O_PAL/imgpal.asm" "$B/IMGPALP.ASM"; cp "$I/O_PAL/imgtbl.glo" "$B/IMGTBLP.
     STAND.TBL BALL.TBL IMGTBL.ASM 2>/dev/null )
 ( cd "$B" && $GSPASM . BB.CMD "$B/te" )
 cmp "$B/te.lo" "$TE/ROMKIT/REV47M.0" && cmp "$B/te.hi" "$TE/ROMKIT/REV47M.1" && echo "   T.E. program identical to REV47M"
+program nbajamte "$B/te.lo" "$B/te.hi"
+if [ -z "$PO" ]; then
 mkdir -p "$OUT/nbajamte/sound"
-interleave "$B/te.lo" "$B/te.hi" "$OUT/nbajamte/program.bin"
 python3 "$TOOLS/irw2gfx.py" "$OUT/nbajamte/gfx.bin" 0x800000 "$I/bb.irw" "$I/bb2.irw" "$I/bb3.irw" "$I/bbmug.irw"
 cp "$OUT"/nbajamse/sound/* "$OUT/nbajamte/sound/"
 python3 "$TOOLS/irw2gfx.py" "$WORK/te_romkit_gfx.bin" 0x800000 "$TE/ROMKIT/BB.IRW" "$TE/ROMKIT/BB2.IRW" "$TE/ROMKIT/BB3.IRW" "$TE/ROMKIT/BBMUG.IRW"
 cmp "$OUT/nbajamte/gfx.bin" "$WORK/te_romkit_gfx.bin" && echo "   T.E. graphics identical to ROMKIT/*.IRW"
+fi
 
 # -----------------------------------------------------------------------------
 echo "== NBA Maximum Hangtime (1.3)"
-HT=$REPOS/nba-hangtime
 I=$WORK/htimg; B=$WORK/ht
 mkdir -p "$I" "$B"
 cp "$HT"/IMG/* "$I"/ 2>/dev/null || true; cp "$HT"/BACKUP/ART110/* "$I"/    # art of version 1.1 (used by 1.3)
@@ -170,10 +186,12 @@ for f in *.tbl *.glo *.asm *.h; do [ -f "$f" ] && cp "$f" "$B/$(echo $f | tr a-z
 cp VDATMP/bbvda.tbl "$B/BBVDA.TBL"
 cd "$B" && $GSPASM . BB.CMD "$B/ht" --irw "$I/bbvda.irw"
 cmp "$B/ht.lo" "$HT/ROMS/7M_13M.U54" && cmp "$B/ht.hi" "$HT/ROMS/7M_13M.U63" && echo "   Max Hangtime 1.3 program identical to the original"
-mkdir -p "$OUT/nbamht" "$OUT/nbahangt"
-interleave "$B/ht.lo" "$B/ht.hi" "$OUT/nbamht/program.bin"
+program nbamht "$B/ht.lo" "$B/ht.hi"
+if [ -z "$PO" ]; then
+mkdir -p "$OUT/nbahangt"
 python3 "$TOOLS/irw2gfx_wolf.py" "$WORK/ht_gfx.bin" "$I"/bb.irw "$I"/bb2.irw "$I"/bb3.irw "$I"/bb4.irw "$I"/bb5.irw "$I"/bb6.irw "$I"/bb7.irw "$I"/bb8.irw "$I"/bbmug.irw "$I"/misc.irw
 head -c 25165824 "$WORK/ht_gfx.bin" > "$OUT/nbamht/gfx.bin"
 cp "$OUT/nbamht/gfx.bin" "$OUT/nbahangt/gfx.bin"
 interleave "$HT/ROMS/7M_13L.U54" "$HT/ROMS/7M_13L.U63" "$OUT/nbahangt/program.bin"   # NBA Hangtime L1.3 (repo)
+fi
 echo "Done: $OUT"

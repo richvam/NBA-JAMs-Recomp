@@ -17,6 +17,8 @@ the program, running its tests, and rebuilding the games from their source code.
 | `tools/headless` | command-line test programs |
 | `tools/gspasm` | assembler/linker compatible with TI GSPA/GSPLNK, written for this project |
 | `tools/build_roms.sh` | rebuilds the games from the source repositories |
+| `tools/build_program_roms.sh <repos> <emu2> <out> [--run]` | only the program ROMs of T.E., SE and Maximum Hangtime, as `<out>/<game>/program.lo` and `.hi`, for testing Lua mods (about 2 minutes). `--run` then runs every mod test on them |
+| `tools/modtests/run_all.sh <out>` | runs each `tools/modtests/<name>.lua` through `modtest` on the games its `<name>.expect` names, and checks the values the `.expect` file asks for. Exit code 1 if any fails |
 | `tools/lod_palbpp.py`, `fix_narrow.py`, `fix_pwrd.py` | make the 1995 LOAD2 output match the 1994 tools (see below) |
 | `tools/irw2gfx*.py`, `imgfile.py` | LOAD2 image file helpers |
 | `tools/emu2-ems.patch` | EMS support for [emu2](https://github.com/dmsc/emu2), needed by LOAD2.EXE |
@@ -75,7 +77,7 @@ With your own ROMs:
 | Program | Use |
 |---|---|
 | `MODS=<dir> [MODS_ON=a.lua,b.lua] [MODOPT=a.lua:id=index] [NOSYNC=1] build/linux/nettest ...` | the Lua mods of an online game (roadmap 1.7): each peer loads the scripts in `<dir>` with its own settings; the host sends its set and the client runs it, or exits with code 3 naming the file that differs. `NOSYNC=1` keeps the client's own set (a control: it desyncs). See `tools/modtests/net_ram.lua` |
-| `build/linux/modtest prog_lo prog_hi mods_dir game_id [frames] [opt=value]` | runs the Lua mods on a program ROM and prints what they patched. `PLAY=1` presses start and shoot to reach a game; `WATCH=<address>` prints a memory value every 500 frames; `LIVE=<frame>:<id>=<value>` changes a live option; `SHOT=<frame>:<file.png>` saves that frame's picture with the mods' overlay (program ROMs only, so the game picture is black). Scripts for it are in `tools/modtests/` |
+| `build/linux/modtest [--expect file] prog_lo prog_hi mods_dir game_id [frames] [opt=value]` | runs the Lua mods on a program ROM and prints what they patched. `--expect` checks lines `expect <frame> <symbol>[:8\|:16\|:32] <op> <value>` (op `==`, `!=`, `<`, `>`, `<=`, `>=`; symbols from `mods/sym/`, or a `0x` bit address) `log <text>` / `once <text>` (in order; `once`: exactly one line) and `nolog <text>` check the mods' log, and a `<game>:` prefix limits a line to one game. Exits with code 4 if one fails. `PLAY=1` presses start and shoot to reach a game; `WATCH=<address>` prints a memory value every 500 frames; `LIVE=<frame>:<id>=<value>` changes a live option; `SHOT=<frame>:<file.png>` saves that frame's picture with the mods' overlay (program ROMs only, so the game picture is black). Scripts for it are in `tools/modtests/` |
 | `build/linux/nattest` | connecting through routers, without ROMs or a network: connection codes, STUN messages, UPnP port mapping against a test router run inside it, and hole punching between simulated routers (every pair of full cone, restricted, port restricted and symmetric). Linux only (uses 127.0.1.x). `nattest --stun <host:port>` asks a real STUN server and prints the code |
 | `build/linux/nettest <base> <game> host <port> <frames> <delay>` and `... client <ip> <port> <frames>` | one side of an online game with scripted inputs; prints state hashes to compare. `MODS=<dir>` switches on the mods in a folder; `MENU=<frame>` has that side send nothing pressed for 600 frames from that frame, as the pause menu does online |
 
@@ -103,6 +105,17 @@ tools/build_roms.sh repos /path/to/emu2 <program folder>/data
 The script assembles and links every game with `gspasm`, runs Midway's `LOAD2.EXE` to
 pack the art, compares the results with the original ROMs and writes `data/<game>/`. The
 program uses `data/<game>/` when it does not find that game's ROMs in `roms/`.
+
+To test Lua mods, only the program ROMs are needed. With the same clones (a downloaded ZIP's
+`-main` folder names work too):
+
+```sh
+make BUILD=build/linux build/linux/modtest
+tools/build_program_roms.sh repos /path/to/emu2 ~/progroms --run
+```
+
+This still needs emu2: the T.E. and Maximum Hangtime sources include image tables that
+`LOAD2.EXE` writes from the art. Keep the output folder outside the repository.
 
 ### What it took to get identical ROMs
 

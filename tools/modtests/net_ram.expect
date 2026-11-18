@@ -1,0 +1,6 @@
+# net_ram.lua: with step 2 it writes frame * 2 into the game clock on every 7th frame.
+game nbajamte nbajamse nbamht
+frames 800
+opt step=2
+expect 700 game_time == 1400
+expect 707 game_time == 1414

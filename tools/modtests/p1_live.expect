@@ -1,0 +1,9 @@
+# Phase 1 review, 1.4: LIVE turns "poke" on at frame 600; the script writes 0x1234 to scores.
+game nbajamte nbajamse nbamht
+frames 1001
+env LIVE=600:poke=1
+expect 599 scores != 0x1234
+expect 600 scores == 0x1234
+expect 1000 scores == 0x1234
+once on_option poke true
+nolog on_option slow
