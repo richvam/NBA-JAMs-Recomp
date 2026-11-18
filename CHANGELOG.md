@@ -46,6 +46,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - Online games over the internet usually need no router settings any more: the host's router is asked to open the port, and players join with a short code; if that is not enough, the host lets a player in by the player's own code.
 - Lua mods can be set from the pause menu during an offline game. Options a mod marks as live change the game at once; the others apply next game.
 - A player on the host's own home network can join with the host's code too: the game finds the host on that network by itself.
+- Lua mods can react to the game: `lib/jam.lua` calls `on_matchup`, `on_game_start`, `on_quarter(n)` and `on_game_end` on NBA Jam T.E. 4.0, T.E. Special Edition 5.02 and Maximum Hangtime 1.3.
 
 ### Changed
 - The CRT mask is as coarse at 4K as at 1080p (it was twice as fine at 4K), and it lines up
