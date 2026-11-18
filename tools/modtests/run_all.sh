@@ -10,6 +10,7 @@
 #      frames 3000                      how many frames to run
 #      env PLAY=1                       environment for modtest (may repeat)
 #      opt step=2                       an option value (may repeat)
+#      each code=1 2 3                  one run per value, with code=<value> added
 #      expect <frame> <symbol>[:8|:16|:32] <op> <value>   checked by modtest
 #  The script runs from a fresh folder holding it, mods/lib and mods/sym.
 #  Exit code 1 when any expectation fails.
@@ -28,17 +29,21 @@ for ex in "$HERE"/*.expect; do
   frames=$(sed -n 's/\r$//; s/^frames[[:space:]]\+//p' "$ex" | tail -1)
   envs=$(sed -n 's/\r$//; s/^env[[:space:]]\+//p' "$ex")
   opts=$(sed -n 's/\r$//; s/^opt[[:space:]]\+//p' "$ex")
-  for g in $games; do
+  each=$(sed -n 's/\r$//; s/^each[[:space:]]\+//p' "$ex" | head -1)
+  eid=${each%%=*}; evals=${each#*=}; [ -n "$each" ] || evals=-
+  for g in $games; do for ev in $evals; do
+    runopts=$opts; label=$g
+    if [ "$ev" != - ]; then runopts="$opts $eid=$ev"; label="$g $eid=$ev"; fi
     rm -rf "$TMP/m"; mkdir -p "$TMP/m"
     cp -r "$TOP/dist/NBAJamRecomp/mods/lib" "$TOP/dist/NBAJamRecomp/mods/sym" "$TMP/m/"; cp "$lua" "$TMP/m/"
-    echo "== $name on $g"
-    if [ ! -f "$ROMS/$g/program.lo" ]; then echo "FAIL: no $ROMS/$g/program.lo"; fail=$((fail + 1)); failed+=("$name/$g"); continue; fi
+    echo "== $name on $label"
+    if [ ! -f "$ROMS/$g/program.lo" ]; then echo "FAIL: no $ROMS/$g/program.lo"; fail=$((fail + 1)); failed+=("$name/$label"); continue; fi
     # shellcheck disable=SC2086
-    out=$(env $envs "$MODTEST" --expect "$ex" "$ROMS/$g/program.lo" "$ROMS/$g/program.hi" "$TMP/m" "$g" "${frames:-1000}" $opts 2>&1)
+    out=$(env $envs "$MODTEST" --expect "$ex" "$ROMS/$g/program.lo" "$ROMS/$g/program.hi" "$TMP/m" "$g" "${frames:-1000}" $runopts 2>&1)
     rc=$?
     echo "$out" | grep -a "^PASS\|^FAIL\|expectations passed\|ERROR" | sed "s|$HERE/||"
-    if [ $rc -eq 0 ]; then pass=$((pass + 1)); else fail=$((fail + 1)); failed+=("$name/$g"); [ $rc -ne 4 ] && echo "modtest exit $rc"; fi
-  done
+    if [ $rc -eq 0 ]; then pass=$((pass + 1)); else fail=$((fail + 1)); failed+=("$name/${label// /:}"); [ $rc -ne 4 ] && echo "modtest exit $rc"; fi
+  done; done
 done
 echo "mod tests: $pass passed, $fail failed${failed:+ (${failed[*]})}"
 [ $fail -eq 0 ] && exit 0 || exit 1
