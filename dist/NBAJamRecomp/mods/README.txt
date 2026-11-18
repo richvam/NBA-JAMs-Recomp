@@ -141,6 +141,22 @@ without a symbol file (see Symbols): today T.E. 4.0, T.E. Special Edition 5.02, 
 Hangtime 1.3 and 1.03, NBA Hangtime L1.3 and L1.1, and NBA JAM 1993 rev 3.01 have events.
 The library only reads RAM.
 
+Cabinet codes
+-------------
+lib/codes_<game>.lua lists each game's cabinet codes (what each sets, how it is entered, when
+the game clears it); lib/codes.lua turns them into switches:
+  local codes = nba.include("lib/codes.lua")
+  local T = codes.table("nbajamte")                   -- lib/codes_nbajamte.lua
+  mod = { name = "...", options = codes.options(T, { "tournament", "big_head" }) }
+  local drive
+  function on_load() drive = codes.driver(codes.table(nba.game)) end
+  function on_frame() drive.update() end
+codes.options makes a toggle of a code the game keeps as one flag and a players option (a tick
+per player) of one it keeps per player. The driver writes each switched-on code's value on
+every frame from the start of the matchup screen until a second after tip-off, so the game
+finds it whenever it looks, then stops. A switch that is off is never written: with all of
+them off the game runs exactly as without the mod. codes_te.lua is the example.
+
 Each instruction of the original source assembles to fixed words (e.g. "movi X,a0" is
 09E0 followed by X, low word first), so a mod can find the code it wants by pattern
 and works on every revision that shares that code. See quarter_length.lua and

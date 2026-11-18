@@ -1,0 +1,33 @@
+# roadmap 3.1: dist/NBAJamRecomp/mods/codes_te.lua (lib/codes.lua) forces tournament mode, big
+# head and maximum power. Each variable holds the forced value at tip-off and after; the big
+# head is the real one: player 1's head image pointer is the one the cabinet code gives
+# (FF824BD0, see codes_te.lua code 7), the others keep theirs. With every switch off the RAM
+# hash at 2650, 2700 and 2900 equals an unmodded run's (measured with an empty mods folder).
+script dist/NBAJamRecomp/mods/codes_te.lua
+extra head_probe.lua
+game nbajamte nbajamse
+frames 3000
+env PLAY=1
+env HASH=2650,2700,2900
+run tournament=0 big_head=0 max_power=0
+run tournament=1 big_head=1 max_power=1
+tournament=0: nolog forcing
+nbajamte: tournament=0: once heads: p1 FF825A50
+nbajamte: tournament=0: once hash 2650 a65bbbae
+nbajamte: tournament=0: once hash 2700 0aaa4047
+nbajamte: tournament=0: once hash 2900 23c4cdf1
+nbajamse: tournament=0: once heads: p1 FF825A50
+nbajamse: tournament=0: once hash 2650 a66b4357
+nbajamse: tournament=0: once hash 2700 6cc8e427
+nbajamse: tournament=0: once hash 2900 48718a4b
+tournament=1: once forcing tournament (plyr_tourn = 1)
+tournament=1: once forcing max_power (plyr_maxpower = 1)
+tournament=1: once forcing big_head (plyrbighead = 1)
+tournament=1: expect 2650 plyr_tourn == 1
+tournament=1: expect 2650 plyrbighead == 1
+tournament=1: expect 2650 plyr_maxpower == 1
+tournament=1: expect 2900 plyr_tourn == 1
+tournament=1: expect 2900 plyrbighead == 1
+tournament=1: expect 2900 plyr_maxpower == 1
+tournament=1: expect 2900 GAMSTATE == 3
+tournament=1: once heads: p1 FF824BD0 p2 FF812E50

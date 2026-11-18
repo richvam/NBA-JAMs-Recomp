@@ -470,6 +470,8 @@ and breaks the both-sides rule in Hangtime.
 | 3.5 | Sonnet | NBA JAM 1993. | Same, on the user's ROMs |
 | 3.6 | Haiku | "Codes active" line on the overlay at tip-off; README section. | Screenshot |
 
+**Status:** 3.1 is done: `mods/lib/codes.lua` makes menu options of a Phase 2 table (`codes.options`: a flag code is a toggle, a per-player code a players option) and forces the codes that are on (`codes.driver`): it writes each value on every frame from the start of the matchup screen until 60 frames after tip-off, then stops, so the game reads it whenever it looks (the T.E. head size is chosen when the players are created at tip-off, after `plyr_start` has reset `plyrbighead`). `mods/codes_te.lua` (T.E., SE) has tournament mode, big head and maximum power. Check (`tools/modtests/codes_force_te.expect`, `modtest` with `PLAY=1` on the owner's T.E. 4.0 and SE 5.02): each variable holds the forced value at frame 2650 (just after tip-off) and 2900; the big head is the real one: player 1's head image pointer (`ODATA_p` of the head object, read by `head_probe.lua`) is FF824BD0, the one the cabinet code gives, against FF825A50 without; with every switch off the RAM hash at 2650, 2700 and 2900 equals an unmodded run (empty mods folder) on both games. Not checked: the menu in the program with a controller; the effect of tournament mode and maximum power during play.
+
 **Gate:** advisor plays through the check output for one game per family and confirms
 tournament mode suppresses what it should.
 

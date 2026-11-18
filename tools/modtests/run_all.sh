@@ -15,6 +15,9 @@
 #      each code=1 2 3                  one run per value, with code=<value> added
 #      run code=1 two=1                 one more run with those values (may repeat)
 #      expect <frame> <symbol>[:8|:16|:32] <op> <value>   checked by modtest
+#      script <path>                    test that script (relative to the repository, e.g. a
+#                                       dist/NBAJamRecomp/mods/ one) instead of <name>.lua
+#      extra <file>                     also load tools/modtests/<file> (a probe), may repeat
 #  The script runs from a fresh folder holding it, mods/lib and mods/sym.
 #  Exit code 1 when any expectation fails.
 # =============================================================================
@@ -27,6 +30,8 @@ TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 pass=0; fail=0; failed=()
 for ex in "$HERE"/*.expect; do
   name=$(basename "$ex" .expect); lua="$HERE/$name.lua"
+  sc=$(sed -n 's/\r$//; s/^script[[:space:]]\+//p' "$ex" | head -1); [ -n "$sc" ] && lua="$TOP/$sc"
+  extras=$(sed -n 's/\r$//; s/^extra[[:space:]]\+//p' "$ex")
   [ -f "$lua" ] || { echo "== $name: no $name.lua"; fail=$((fail + 1)); failed+=("$name"); continue; }
   games=$(sed -n 's/\r$//; s/^game[[:space:]]\+//p' "$ex")
   frames=$(sed -n 's/\r$//; s/^frames[[:space:]]\+//p' "$ex" | tail -1)
@@ -49,6 +54,7 @@ for ex in "$HERE"/*.expect; do
     fi
     rm -rf "$TMP/m"; mkdir -p "$TMP/m"
     cp -r "$TOP/dist/NBAJamRecomp/mods/lib" "$TOP/dist/NBAJamRecomp/mods/sym" "$TMP/m/"; cp "$lua" "$TMP/m/"
+    for x in $extras; do cp "$HERE/$x" "$TMP/m/"; done
     echo "== $name on $label"
     if [ ! -f "$ROMS/$d/program.lo" ]; then echo "FAIL: no $ROMS/$d/program.lo"; fail=$((fail + 1)); failed+=("$name/$label"); continue; fi
     # shellcheck disable=SC2086
