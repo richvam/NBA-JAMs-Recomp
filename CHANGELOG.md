@@ -75,6 +75,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
   off.
 - New Lua mod fire_rules.lua (T.E., SE): baskets needed to catch fire, always or never on fire
   for each team.
+- New Lua mod turbo_rules.lua (T.E., SE): infinite turbo per player, turbo drain and refill.
 
 ### Changed
 - The CRT mask is as coarse at 4K as at 1080p (it was twice as fine at 4K), and it lines up
