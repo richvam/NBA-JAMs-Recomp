@@ -485,6 +485,8 @@ and breaks the both-sides rule in Hangtime.
 **Gate:** advisor plays through the check output for one game per family and confirms
 tournament mode suppresses what it should.
 
+**Gate status:** deferred: the owner merged 3.2 to 3.6 (#47 to #51) on 2026-11-19 and will play the gate checks later with a controller (owed, with R2.2, R2.4, W1 and U1).
+
 ## Phase 4: unlock all hidden players
 
 `unlock_players.lua`, with one implementation per family.
@@ -494,7 +496,9 @@ tournament mode suppresses what it should.
 | 4.1 | Opus | Trace how each game admits secret characters: T.E. and SE through `special_heads` and the initials and birthday table; Hangtime through its secret-name and PIN table and the create-a-player `privileges` bits; NBA JAM 1993 by disassembly. Pick the mechanism per game. | Written note in the pull request |
 | 4.2 | Sonnet | **Picker mode:** a menu option per player slot, "Normal" or any hidden character by name, applied at team select. No initials needed. | Chosen head and stats are in memory at tip-off |
 | 4.3 | Sonnet | **Expanded rosters on** for T.E. and SE (the roster power-up), and **all create-a-player privileges on** for Hangtime and Maximum Hangtime. | Extra roster entries selectable in a scripted run |
-| 4.4 | Opus | Make sure nothing here writes NVRAM records: a forced hidden player must not create or alter a saved player record. | NVRAM hash before and after a scripted game is unchanged apart from audits |
+| 4.4 | Opus | Make sure nothing here writes NVRAM records: a forced hidden player must not create or alter a saved player record. | NVRAM hash before and after a scripted game is unchanged apart from audits |
+
+**Status:** 4.1 is done (note in the pull request). **T.E. 4.0 / SE 5.02:** SELECT2.ASM compares the initials and birth date entered with `#team_inits` (61 / 68 rows) and stores the row number in `special_heads[player]`; PLYRAT2.ASM then takes that player's attributes from `spechds_t` + number × 0x170 and his head; -1 is a normal player; tournament mode (adjustment or code) resets them. 3.2 already forces it (`secret_p1` to `secret_p4`). **Hangtime / Maximum Hangtime:** the same `special_heads` / `spechds_t`, filled by SELECT2.ASM from `#team_data`, 61 rows of name and PIN (`JAPPLE 7771`, ...), not for a record that is a created player, and not in tournament mode. **NBA JAM 1993:** no source, but the same code (byte for byte around it): the initials table is at FF963740 with 13 rows, 11 of them T.E.'s first rows in the same places and two of its own (row 10 `HOW` 07/15 and row 12 `TON` 07/03, where T.E. has Lasko and Mednick); `special_heads` is 010F8BA0 and `spechds_t` FF89FBB0 with 0x140 per row (not in `nbajam_13680337.lua` yet). Checked in modtest: writing 0, 3, 10 or 12 there from the matchup screen gives player 1 the table entry FF89FBB0 + n × 0x140 and another head. **Mechanism chosen for 4.2:** write `special_heads[player]` from the matchup screen to just after tip-off, as `lib/codes.lua` does, on every game; names from the tables (T.E./SE comments; Hangtime's table comments; the two NBA JAM 1993 rows only by their initials, since nothing names them). **Hangtime privileges (4.3):** not a global switch: `PR_PRIVILEGES` (7 bits, two may be ticked) is a field of the player's record, read in play from the in-RAM record of `player_data[player]` and only when the record is a created player (value > 0). Bits: 0 no tag arrow, 1 stealth turbo, 2 big head, 3 "HA" (not traced yet), 4 big head for the drone teammate, 5 super auto-rebound, 6 smarter drone. Forcing them means writing the in-RAM record, which the game saves to NVRAM at the end of a game, so 4.3 must restore it before that (4.4).
 
 ## Phase 5: handicap
 
