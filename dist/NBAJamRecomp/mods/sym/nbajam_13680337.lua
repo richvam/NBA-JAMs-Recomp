@@ -1,4 +1,4 @@
--- nbajam, program ROM CRC-32 13680337: 918 of the 4143 names of nbajamte_70646d2c.lua and nbajamse_03f015c6.lua (only names both give the same address),
+-- nbajam, program ROM CRC-32 13680337: 920 of the 4143 names of nbajamte_70646d2c.lua and nbajamse_03f015c6.lua (only names both give the same address),
 -- carried by tools/sym_carry.py (no source for this revision). Each entry holds the words
 -- of the program that prove it; the program uses the name only when they match.
 return {
@@ -764,6 +764,8 @@ return {
   sorted_teams = { addr = 0x010F8F80, at = 0xFF96B5B0, pattern = { 2859, -1, -1, 34656, 33794, 2532, -1, -1, 2533, -1, -1, 34473, 38560, 18441 } },
   sound_watchdog = { addr = 0xFF916B30, at = 0xFF916B30, pattern = { 6176, 3423, -1, -1, 1440, 4144, 472, -1, -1, 0, 1411, 4144, 464, 6400, 3423, -1, -1, 2019, 4144, 472, 1411, -1, -1, 2496 } },
   SOUNDSUP = { addr = 0x010F16F0, at = 0xFF827EE0, pattern = { -1, -1, 3391, 1603, 22016, 1408, -1, -1, 1408, -1, -1, 3391, 1561, 3423 } },
+  spechds_t = { addr = 0xFF89FBB0, at = 0xFF8A2AC0, pattern = { 2849, 64432, 65417 } },
+  special_heads = { addr = 0x010F8BA0, at = 0xFF9633C0, pattern = { 2858, 35744, 271 } },
   ST1 = { addr = 0xFFA1C840, at = 0xFFA1C840, pattern = { 255, 0, 8419, 9378, 8320, 10400, 11328, 9216, 6176, 2080, 13472, 13376, 10534, 7232, 14464, 11296, 7398, 3170, 5284, 14797, 12680, 10496, 11456, 10539 } },
   ST2 = { addr = 0xFFA1B860, at = 0xFFA1B860, pattern = { 253, 0, 14625, 17830, 22089, 10432, 10498, 20010, 22093, 23246, 18990, 23217, 19026, 18893, 21094, 18982, 17865, 14761, 15781, 13638, 27210, 21926, 26314, 17794 } },
   ST3 = { addr = 0xFFA1A870, at = 0xFFA1A870, pattern = { 254, 0, 4096, 2080, 1057, 9410, 12514, 12547, 7264, 17830, 2113, 1089, 4192, 2146, 1058, 1090, 3201, 8290, 2148, 3203, 5251, 10537, 8488, 3107 } },
