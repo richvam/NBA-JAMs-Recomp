@@ -71,6 +71,8 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
   counted in the players' saved records.
 - New Lua mod operator_settings.lua (T.E., SE): the service menu's game settings as options,
   without changing the saved settings; on SE also expanded rosters.
+- New Lua mod cpu_difficulty.lua (T.E., SE): the computer players' skill, and the catch-up help
+  off.
 
 ### Changed
 - The CRT mask is as coarse at 4K as at 1080p (it was twice as fine at 4K), and it lines up
