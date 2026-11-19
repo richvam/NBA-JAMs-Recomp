@@ -14,6 +14,7 @@
 #include "wunit.h"
 #include <memory>
 #include "mods.h"
+#include "games.h"
 #include "mod_draw.h"
 #include "miniz.h"
 #include <cstdio>
@@ -96,7 +97,17 @@ int main(int argc, char **argv)
 	// Wolf-unit games (nbahangt / nbamht) get a Wolf-unit board; PIC=<n> as in headless_w
 	std::string gid = argv[4];
 	std::unique_ptr<arcade_machine> mp;
-	if (gid == "nbahangt" || gid == "nbamht")
+	// APP=<program folder>: the whole game from that folder's roms/ (graphics and sound too),
+	// as the program loads it, so SHOT pictures show the game (roadmap 3.6); prog_lo/hi unused
+	if (const char *app = getenv("APP"))
+	{
+		game_catalog cat(app);
+		std::string err;
+		for (const game_info &g : game_list())
+			if (gid == g.id) mp = cat.create(g, err);
+		if (!mp) { fprintf(stderr, "APP=%s: cannot load %s: %s\n", app, gid.c_str(), err.c_str()); return 1; }
+	}
+	else if (gid == "nbahangt" || gid == "nbamht")
 	{
 		wunit_roms r;
 		r.program = prog;

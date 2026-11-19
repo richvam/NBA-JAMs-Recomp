@@ -274,6 +274,8 @@ Included:
 | `codes_mht.lua` | NBA Hangtime (L1.3, L1.1) and Maximum Hangtime (1.3, 1.03): every number code and stick code as a switch, without entering it (per-player codes for each player you tick). Not included: the number code lock and the special combo, whose parts each have their own switch. While tournament mode is on, the codes it clears are greyed. |
 | `codes_jam.lua` | NBA JAM (1993, rev 3.01): its five cabinet codes as switches, without entering them: big head, quick hands, goaltending, shot percentage, computer assistance off (per-player codes for each player you tick). |
 
+The cabinet code mods show "CODES ACTIVE:" and the codes that are switched on at the top of the picture for four seconds from tip-off, so everyone playing can see what is forced.
+
 The first two were checked on T.E. rev 4.0, T.E. Special Edition rev 5.02, Hangtime and
 Maximum Hangtime; `codes_te.lua` on T.E. rev 4.0 and Special Edition rev 5.02. If a mod cannot find what it needs in a game, it says so on screen and changes
 nothing. To write your own, see [`mods/README.txt`](dist/NBAJamRecomp/mods/README.txt).

@@ -480,6 +480,8 @@ and breaks the both-sides rule in Hangtime.
 
 **Status:** 3.5 is done: `mods/codes_jam.lua` (NBA JAM 1993 rev 3.01) has its five codes: big head, quick hands, goaltending (taps 8), shot percentage, computer assistance off. The game clears `assistance_off` at its own check about 335 frames after tip-off, so `codes.driver` takes a per-code hold (`holds`) and this one is written for 600 frames. Check (`codes_force_jam.expect`, `codes_probe_jam.lua`, owner's rev 3.01): all five hold 4 s and 20 s into the game; player 1's head image is FF8143D0, the cabinet code's, against FF814DD0 without; with every switch off the RAM hash at 2650 and 2900 equals an unmodded run (T-unit, repeatable: two unmodded runs agree). Not checked: the menu with a controller; the effects during play.
 
+**Status:** 3.6 is done: `lib/codes.lua` draws "CODES ACTIVE:" and the English labels of the forced codes (secret players as "P<n> <name>") at the top of the picture for 240 frames from tip-off, wrapped at 46 characters, over a dark box; nothing when no switch is on. `modtest` gained `APP=<program folder>`: the whole game from that folder's ROMs, as the program loads it, so a `SHOT` picture shows the game behind the overlay. Check: `codes_line.expect` (draw counts at frame 2310 with 0, 2 and 6 codes); screenshots on T.E., Maximum Hangtime and NBA JAM from the owner's ROMs with `APP=`, given to the owner (not in the repository or the pull request: they are pictures of the game). Not checked: the running program on Windows. **Phase 3 is done; its gate is next.**
+
 **Gate:** advisor plays through the check output for one game per family and confirms
 tournament mode suppresses what it should.
 

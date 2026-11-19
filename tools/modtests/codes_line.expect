@@ -1,0 +1,16 @@
+# roadmap 3.6: lib/codes.lua shows "CODES ACTIVE: ..." over the game for 240 frames from
+# tip-off (frame 2188 on T.E. with PLAY=1): a dark box and one text line per 46 characters.
+# Frame 2310: two draws (box, one line) with two codes on; none with every switch off; none
+# again at 2500, after the 240 frames. Pictures with the real game behind it are made with
+# modtest APP=<program folder> (not here: the ROMs stay out of the repository).
+script dist/NBAJamRecomp/mods/codes_te.lua
+game nbajamte
+frames 2510
+env PLAY=1
+env SHOT=2310:/dev/null
+run big_head=0
+run big_head=1 max_power=1
+run big_head=1 baby=1 shot_percent=1 assist_off=1 quick_hands=1 secret_p1=1
+big_head=0: once picture with 0 draws
+max_power=1: once picture with 2 draws
+quick_hands=1: once picture with 4 draws
