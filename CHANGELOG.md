@@ -73,6 +73,8 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
   without changing the saved settings; on SE also expanded rosters.
 - New Lua mod cpu_difficulty.lua (T.E., SE): the computer players' skill, and the catch-up help
   off.
+- New Lua mod fire_rules.lua (T.E., SE): baskets needed to catch fire, always or never on fire
+  for each team.
 
 ### Changed
 - The CRT mask is as coarse at 4K as at 1080p (it was twice as fine at 4K), and it lines up
