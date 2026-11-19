@@ -14,18 +14,24 @@ mod = {
   name = "Cabinet codes (T.E.)",
   description = "Turns on T.E. cabinet codes without entering them.",
   games = { "nbajamte", "nbajamse" },
-  options = codes.options(T, { "tournament", "big_head", "huge_head", "max_power", "quick_hands",
+  options = (function() local o = codes.options(T, { "tournament", "big_head", "huge_head", "max_power", "quick_hands",
       "goaltend", "shot_percent", "assist_off", "baby", "big_roster", "team_switch", "secret_players" },
     { goaltend = { "tournament", "huge_head" }, huge_head = BLOCKED, quick_hands = BLOCKED,
-      big_roster = BLOCKED, team_switch = BLOCKED, secret_players = BLOCKED, secret_list = SECRET }),
+      big_roster = BLOCKED, team_switch = BLOCKED, secret_players = BLOCKED, secret_list = SECRET }); o[#o + 1] = nba.include("lib/records.lua").OPTION; return o end)(),
 }
 
-local drive
+local drive, guard
 function on_load()
+  guard = nba.include("lib/records.lua").guard()
   drive = codes.driver(codes.table(nba.game), SECRET)
   for _, e in ipairs(drive.on) do
     if e.player then nba.log(string.format("forcing secret_p%d %s (special_heads = %d)", e.player, e.c.id, e.value))
     else nba.log(string.format("forcing %s (%s = %d)", e.c.id, e.c.sym, e.value)) end
   end
 end
-function on_frame() drive.update() end
+function on_frame()
+  drive.update()
+  -- a game with a code forced does not count for the records
+  if #drive.on > 0 then guard.mark() end
+  guard.update()
+end

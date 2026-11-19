@@ -20,7 +20,7 @@ mod = {
   name = "Cabinet codes (Hangtime)",
   description = "Turns on NBA Hangtime and Maximum Hangtime cabinet codes without entering them.",
   games = { "nbamht", "nbahangt" },
-  options = codes.options(T, IDS, extra),
+  options = (function() local o = codes.options(T, IDS, extra); o[#o + 1] = nba.include("lib/records.lua").OPTION; return o end)(),
 }
 
 -- the game's player numbers: on a four-player cabinet start 1-4 are players 0-3; on a
@@ -31,9 +31,15 @@ local function slots(mask)
   return ((mask & 1) ~= 0 and 2 or 0) | ((mask & 2) ~= 0 and 4 or 0)
 end
 
-local drive
+local drive, guard
 function on_load()
+  guard = nba.include("lib/records.lua").guard()
   drive = codes.driver(codes.table(nba.game), nil, slots)
   for _, e in ipairs(drive.on) do nba.log(string.format("forcing %s (%s)", e.c.id, e.c.sym)) end
 end
-function on_frame() drive.update() end
+function on_frame()
+  drive.update()
+  -- a game with a code forced does not count for the records
+  if #drive.on > 0 then guard.mark() end
+  guard.update()
+end

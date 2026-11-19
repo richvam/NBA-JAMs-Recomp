@@ -18,6 +18,7 @@ end
 -- (29) and only opens the rosters cleanly when that is 0; with it on, the power-up path pops
 -- a register twice and never reaches the extra players. Set the adjustment in the service
 -- menu instead; this script does not write NVRAM.
+options[6] = nba.include("lib/records.lua").OPTION
 options[5] = { id = "expanded_rosters", label = "Expanded rosters (T.E.)", type = "toggle", default = false }
 
 mod = {
@@ -28,11 +29,13 @@ mod = {
 }
 
 local HOLD = 60
+local guard
 local writes, sh, inm, gs = {}, nil, nil, nil
 local roster   -- { sel, { bigroster1, team1 }, { bigroster2, team2 } } when expanded_rosters is on
 local phase, t = "wait", 0
 
 function on_load()
+  guard = nba.include("lib/records.lua").guard()
   sh, inm, gs = nba.sym("special_heads"), nba.sym("inmatchup"), nba.sym("GAMSTATE")
   if nba.option("expanded_rosters") and nba.game == "nbajamse" then
     nba.log("expanded rosters: not on SE (use the operator adjustment Expanded roster)")
@@ -61,6 +64,7 @@ function on_load()
 end
 
 function on_frame()
+  if guard then guard.update() end
   -- on team select: bigroster<n> = team<n> once that side has a team
   if roster and roster[1] and nba.read16(roster[1]) ~= 0 then
     for n = 2, 3 do
@@ -69,7 +73,7 @@ function on_frame()
     end
   end
   if #writes == 0 then return end
-  if phase ~= "write" and nba.read16(inm) ~= 0 then phase = "write"; t = 0 end
+  if phase ~= "write" and nba.read16(inm) ~= 0 then phase = "write"; t = 0; guard.mark() end
   if phase == "write" then
     for _, w in ipairs(writes) do nba.write16(w.addr, w.value) end
     if nba.read16(gs) == 3 and nba.read16(inm) == 0 then

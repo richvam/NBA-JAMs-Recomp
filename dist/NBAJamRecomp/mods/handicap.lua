@@ -24,10 +24,12 @@ mod = {
     { id = "team1", label = "Team 1 head start", type = "range", min = 0, max = 50, step = 1, default = 0 },
     { id = "team2", label = "Team 2 head start", type = "range", min = 0, max = 50, step = 1, default = 0 },
     { id = "cpu_only", label = "Only against the CPU", type = "toggle", default = true },
+    nba.include("lib/records.lua").OPTION,
   },
 }
 
 local AFTER = 60
+local guard
 local scores, gs, inm, ps, h1, h2, cpu_only, imgs, led
 
 -- the scoreboard digit objects and the digit image table, from prt_top_scores
@@ -53,6 +55,7 @@ local t, given = 0, false
 
 function on_load()
   scores, gs, inm = nba.sym("scores"), nba.sym("GAMSTATE"), nba.sym("inmatchup")
+  guard = nba.include("lib/records.lua").guard()
   ps = nba.sym("PSTATUS")
   h1, h2, cpu_only = nba.option("team1"), nba.option("team2"), nba.option("cpu_only")
   if scores then imgs, led = find_scoreboard() end
@@ -61,6 +64,7 @@ function on_load()
 end
 
 function on_frame()
+  if guard then guard.update() end
   if (h1 == 0 and h2 == 0) or not scores then return end
   local ingame = nba.read16(gs) == 3 and nba.read16(inm) == 0
   if not ingame then t = 0; given = false; return end
@@ -75,6 +79,7 @@ function on_frame()
         if st & 0xC ~= 0 then a = 0 end   -- people on team 2: no head start for team 1
         if st & 0x3 ~= 0 then b = 0 end   -- people on team 1: none for team 2
       end
+      if a > 0 or b > 0 then guard.mark() end
       nba.write16(scores, a)
       nba.write16(scores + 16, b)
       if imgs then
