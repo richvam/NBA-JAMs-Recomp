@@ -61,6 +61,8 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - The cabinet code mods show "CODES ACTIVE:" and the forced codes at tip-off.
 - New Lua mod unlock_players.lua: pick any hidden player for each player slot, on every game,
   without entering initials or a PIN.
+- unlock_players.lua: expanded rosters on T.E. (turbo on team select steps through all of a
+  team's players).
 
 ### Changed
 - The CRT mask is as coarse at 4K as at 1080p (it was twice as fine at 4K), and it lines up

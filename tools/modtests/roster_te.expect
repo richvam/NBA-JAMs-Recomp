@@ -1,0 +1,21 @@
+# roadmap 4.3: unlock_players.lua expanded_rosters on T.E. roster_probe.lua presses turbo on
+# team select for six cursor positions (teams 20, 21, 24, 22, 22, 22). Off: every team wraps
+# after pair 5. On: teams 21 and 24 reach pair 11 and team 22 pair 19; team 20 has no more
+# players and stays at 5. On SE the switch only logs that it is not available there (its ROM
+# needs the operator adjustment ADJROSTER = 0, see unlock_players.lua).
+script dist/NBAJamRecomp/mods/unlock_players.lua
+extra roster_probe.lua
+game nbajamte nbajamse
+frames 5000
+run expanded_rosters=0
+run expanded_rosters=1
+expanded_rosters=0: nolog pairs up to 11
+expanded_rosters=0: nolog pairs up to 19
+expanded_rosters=0: once roster: team 21 pairs up to 5
+nbajamte: expanded_rosters=1: once expanded rosters on
+nbajamte: expanded_rosters=1: once roster: team 20 pairs up to 5
+nbajamte: expanded_rosters=1: once roster: team 21 pairs up to 11
+nbajamte: expanded_rosters=1: once roster: team 24 pairs up to 11
+nbajamte: expanded_rosters=1: log roster: team 22 pairs up to 19
+nbajamse: expanded_rosters=1: once expanded rosters: not on SE
+nbajamse: expanded_rosters=1: nolog pairs up to 11
