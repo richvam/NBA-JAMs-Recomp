@@ -1,0 +1,18 @@
+# roadmap 5.3: lib/records.lua through handicap.lua (team 1 gets 50 points). record_win_probe.lua
+# plays two whole games as player 1 with initials BBB and reads, on the next team select, the
+# record the game loaded for BBB. With "Protect records" off the game counts both games
+# (count 1 lost 1, then count 2 lost 2: BBB loses both despite the head start); with it on
+# (the default) BBB has no record after either game: the game skipped the save. Nothing is
+# written to NVRAM by the script (the guard sets PR_INIT1 to -1 in RAM before the save).
+script dist/NBAJamRecomp/mods/handicap.lua
+extra record_win_probe.lua
+game nbajamte nbajamse
+frames 92001
+run team1=50 protect_records=0
+run team1=50 protect_records=1
+protect_records=0: nolog protect records
+protect_records=0: once record game 2: count 1 won 0 lost 1 streak 0
+protect_records=0: once record game 3: count 2 won 0 lost 2 streak 0
+protect_records=1: log protect records: this game is not saved
+protect_records=1: once record game 2: count 0 won 0 lost 0 streak 0
+protect_records=1: once record game 3: count 0 won 0 lost 0 streak 0

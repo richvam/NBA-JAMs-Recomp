@@ -276,6 +276,8 @@ Included:
 | `unlock_players.lua` | Every game: play as any hidden player without entering initials or a PIN. One choice per player slot: Normal, or a hidden player by name (119 names across the games; a name the running game does not have is skipped). On T.E., also expanded rosters: turbo on team select steps through all of a team's players. (SE 5.02 opens its rosters only through the operator adjustment "expanded roster".) |
 | `handicap.lua` | Every game: a head start of 0 to 50 points for either team, given at tip-off. "Only against the CPU" (on by default) gives a team its head start only when nobody plays on the other team, so games between people stay even. The points are real: the scoreboard shows them, they count in the first quarter, and no player is credited with them. |
 
+The scripts that change a game (`handicap.lua`, `unlock_players.lua`, the cabinet code mods) have "Protect records", on by default: such a game is not counted in the players' saved records (games, wins, losses, win streaks) on T.E., SE, Hangtime and Maximum Hangtime.
+
 The cabinet code mods show "CODES ACTIVE:" and the codes that are switched on at the top of the picture for four seconds from tip-off, so everyone playing can see what is forced.
 
 The first two were checked on T.E. rev 4.0, T.E. Special Edition rev 5.02, Hangtime and

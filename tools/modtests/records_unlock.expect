@@ -1,0 +1,18 @@
+# roadmap 5.3: lib/records.lua through unlock_players.lua (player 1 is forced to Divita, roadmap 4.4). record_win_probe.lua
+# plays two whole games as player 1 with initials BBB and reads, on the next team select, the
+# record the game loaded for BBB. With "Protect records" off the game counts both games
+#; with it on
+# (the default) BBB has no record after either game: the game skipped the save. Nothing is
+# written to NVRAM by the script (the guard sets PR_INIT1 to -1 in RAM before the save).
+script dist/NBAJamRecomp/mods/unlock_players.lua
+extra record_win_probe.lua
+game nbajamte nbajamse
+frames 92001
+run player1=23 protect_records=0
+run player1=23 protect_records=1
+protect_records=0: nolog protect records
+protect_records=1: log protect records: this game is not saved
+protect_records=1: once record game 2: count 0 won 0 lost 0 streak 0
+protect_records=1: once record game 3: count 0 won 0 lost 0 streak 0
+protect_records=0: once record game 2: count 1
+protect_records=0: once record game 3: count 2

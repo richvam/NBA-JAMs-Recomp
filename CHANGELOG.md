@@ -67,6 +67,8 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
   nba.write8/16/32 stop the script with an error there.
 - New Lua mod handicap.lua (every game): a head start of up to 50 points for either team, with
   "Only against the CPU" on by default.
+- "Protect records" (on by default) in the scripts that change a game: such a game is not
+  counted in the players' saved records.
 
 ### Changed
 - The CRT mask is as coarse at 4K as at 1080p (it was twice as fine at 4K), and it lines up
