@@ -355,7 +355,14 @@ public:
 		return 1;
 	}
 	static int read16(lua_State *L) { lua_pushinteger(L, mach(L).peek16(u32(luaL_checkinteger(L, 1)))); return 1; }
-	static int write16(lua_State *L) { mach(L).poke16(u32(luaL_checkinteger(L, 1)), u16(luaL_checkinteger(L, 2))); return 0; }
+	// NVRAM (and its write-enable latch) is off limits to scripts: 0x01400000-0x014FFFFF on
+	// both boards. Saved player records, audits and adjustments live there (roadmap 4.4).
+	static u32 ram_addr(lua_State *L, u32 a)
+	{
+		if (a >= 0x01400000u && a <= 0x014fffffu) luaL_error(L, "nba.write: 0x%08X is NVRAM, which scripts may not write", (unsigned)a);
+		return a;
+	}
+	static int write16(lua_State *L) { mach(L).poke16(ram_addr(L, u32(luaL_checkinteger(L, 1))), u16(luaL_checkinteger(L, 2))); return 0; }
 	static int read32(lua_State *L)
 	{
 		u32 a = u32(luaL_checkinteger(L, 1));
@@ -365,7 +372,8 @@ public:
 	}
 	static int write32(lua_State *L)
 	{
-		u32 a = u32(luaL_checkinteger(L, 1)), v = u32(luaL_checkinteger(L, 2));
+		u32 a = ram_addr(L, u32(luaL_checkinteger(L, 1))), v = u32(luaL_checkinteger(L, 2));
+		ram_addr(L, a + 16);
 		arcade_machine &m = mach(L);
 		m.poke16(a, u16(v));
 		m.poke16(a + 16, u16(v >> 16));
@@ -379,7 +387,7 @@ public:
 	}
 	static int write8(lua_State *L)
 	{
-		u32 a = u32(luaL_checkinteger(L, 1));
+		u32 a = ram_addr(L, u32(luaL_checkinteger(L, 1)));
 		u16 v = u16(luaL_checkinteger(L, 2) & 0xff);
 		arcade_machine &m = mach(L);
 		u16 w = m.peek16(a & ~15u);

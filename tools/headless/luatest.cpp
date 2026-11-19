@@ -180,6 +180,20 @@ function on_frame(n) if n == 2 then error("boom") end end
 	CHECK(has("online false"), "offline: nba.netplay is false");
 	g.stop();
 	{
+		// NVRAM is off limits (roadmap 4.4): a write there is an error, RAM next to it is fine
+		write_file(dir / "nv.lua", "mod = { name = 'Nv' }\nfunction on_load() local a = pcall(nba.write16, 0x01400000, 1); local b = pcall(nba.write32, 0x013FFFF0, 1); local c = pcall(nba.write8, 0x014FFFF8, 1); local d = pcall(nba.write16, 0x013FFFF0, 1); nba.log('nv ' .. tostring(a) .. ' ' .. tostring(b) .. ' ' .. tostring(c) .. ' ' .. tostring(d)) end\n");
+		mod_manager nvm;
+		nvm.scan(d, "");
+		for (auto &s : nvm.mods()) s.enabled = s.file == "nv.lua";
+		auto nm = make_machine(100, pattern, 4);
+		std::vector<u8> nv0 = nm->nvram();
+		nvm.start("nbajamte", *nm);
+		log = nvm.take_log();
+		CHECK(has("nv false false false true") && nm->nvram() == nv0, "nba.write8/16/32 refuse NVRAM (0x01400000-0x014FFFFF) and leave it unchanged");
+		nvm.stop();
+		std::filesystem::remove(dir / "nv.lua");
+	}
+	{
 		// the host's set, applied on a player whose own settings differ, then given back
 		mod_manager hostm, pl;
 		hostm.scan(d, ""); pl.scan(d, "");

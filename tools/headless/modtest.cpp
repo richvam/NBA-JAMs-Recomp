@@ -157,6 +157,7 @@ int main(int argc, char **argv)
 	const char *live = getenv("LIVE");
 	int live_at = live ? atoi(live) : -1;
 	int failed = 0;
+	std::vector<u8> nv0;   // NVRAM at frame 1 (NVHASH)
 	for (int f = 0; f < frames; f++)
 	{
 		cabinet_inputs in{};
@@ -227,6 +228,39 @@ int main(int argc, char **argv)
 				}
 				const char *c = strchr(p, ','); if (!c) break; p = c + 1;
 			}
+		// NVHASH=<frame>[,...]: a hash of the NVRAM after that frame ("nvram <f> <h>"), and the
+		// byte ranges that changed since the first of those frames ("nvram <f> changed a-b ..." or "... changed none"),
+		// and "nvram <f> last <byte> where <hash of the set of changed bytes>"
+		// (roadmap 4.4: a mod must not write NVRAM records)
+		if (const char *ns = getenv("NVHASH"))
+		{
+			if (nv0.empty() && atoi(ns) == f) nv0 = m.nvram();   // the first NVHASH frame is the reference (boot fills a blank NVRAM)
+			for (const char *p = ns; *p; )
+			{
+				if (atoi(p) == f)
+				{
+					std::vector<u8> nv = m.nvram();
+					u32 h = 2166136261u;
+					for (u8 x : nv) h = (h ^ x) * 16777619u;
+					char b[64]; snprintf(b, sizeof b, "nvram %d %08x", f, h);
+					printf("  %s\n", b); log.push_back(b);
+					std::string ch = "nvram " + std::to_string(f) + " changed";
+					size_t n = std::min(nv.size(), nv0.size()), i = 0; bool any = false;
+					while (i < n)
+					{
+						if (nv[i] == nv0[i]) { i++; continue; }
+						size_t j = i; while (j < n && (nv[j] != nv0[j] || (j + 8 < n && nv[j + 8] != nv0[j + 8]))) j++;
+						char r[48]; snprintf(r, sizeof r, " %zx-%zx", i, j - 1); ch += r; any = true; i = j;
+					}
+					if (!any) ch += " none";
+					size_t last = 0; for (size_t q = 0; q < n; q++) if (nv[q] != nv0[q]) last = q;
+					u32 wh = 2166136261u; for (size_t q = 0; q < n; q++) if (nv[q] != nv0[q]) wh = (wh ^ u32(q)) * 16777619u;
+					if (any) { char lb[64]; snprintf(lb, sizeof lb, "nvram %d last %zx where %08x", f, last, wh); printf("  %s\n", lb); log.push_back(lb); }
+					printf("  %s\n", ch.c_str()); log.push_back(ch);
+				}
+				const char *c = strchr(p, ','); if (!c) break; p = c + 1;
+			}
+		}
 		if (watch && f % 500 == 0)
 		{
 			u32 a = u32(strtoul(watch, nullptr, 0));
