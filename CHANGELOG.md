@@ -65,6 +65,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
   team's players).
 - Lua mods can no longer write NVRAM (saved player records, audits, operator settings):
   nba.write8/16/32 stop the script with an error there.
+- New Lua mod handicap.lua (T.E., SE): a head start of up to 50 points for either team.
 
 ### Changed
 - The CRT mask is as coarse at 4K as at 1080p (it was twice as fine at 4K), and it lines up
