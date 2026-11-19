@@ -2,13 +2,26 @@
 -- score and the quarter table kp_qscrs whenever GAMSTATE or the quarter changes ("f=<frame>
 -- gs=<state> q=<quarter> score a-b quarters q1 q2 q3 q4"), and 100 frames after tip-off which
 -- number each scoreboard digit object shows ("scoreboard a-b"): its image (OSAG) looked up in
--- the game's LED_0 table, both addresses read from prt_top_scores as handicap.lua does.
+-- the game's LED_0 table, both addresses found from prt_top_scores as handicap.lua does.
+-- NBA JAM 1993 has no kp_qscrs symbol: no quarters there.
 mod = { name = "Score probe" }
 local s, gs, q, k, lg, lq, t3, imgs, led
 function on_load()
   s = nba.sym("scores"); gs = nba.sym("GAMSTATE"); q = nba.sym("gmqrtr"); k = nba.sym("kp_qscrs")
   local p = nba.sym("prt_top_scores")
-  if p and nba.read32(p + 0x60) == s then imgs, led = nba.read32(p + 0x30), nba.read32(p + 0xA0) end
+  if not p then
+    local hits = nba.rom_find({ 0x098F, 0x3F80, 0x07A8, -1, -1, 0x05A0, s & 0xFFFF, s >> 16 })
+    p = hits and hits[1]
+  end
+  if not p then return end
+  for o = 0, 0x200, 16 do
+    if nba.read32(p + o) == s and not imgs then
+      for j = o + 0x20, o + 0x200, 16 do
+        local v = nba.read32(p + j)
+        if (nba.read16(p + j - 16) & 0xFFF0) == 0x0B20 and v >= 0xFF800000 then imgs, led = nba.read32(p + o - 0x30), v; break end
+      end
+    end
+  end
 end
 local function shown(team)
   local o = nba.read32(imgs + 32 * team)
@@ -21,7 +34,7 @@ function on_frame(f)
   local g, qq = nba.read16(gs), nba.read16(q)
   if g ~= lg or qq ~= lq then
     local t = {}
-    for i = 0, 3 do t[#t + 1] = nba.read16(k + 32 * i) .. "-" .. nba.read16(k + 32 * i + 16) end
+    if k then for i = 0, 3 do t[#t + 1] = nba.read16(k + 32 * i) .. "-" .. nba.read16(k + 32 * i + 16) end end
     nba.log(string.format("f=%d gs=%d q=%d score %d-%d quarters %s", f, g, qq, nba.read16(s), nba.read16(s + 16), table.concat(t, " ")))
     lg, lq = g, qq
   end
