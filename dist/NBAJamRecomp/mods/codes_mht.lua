@@ -1,5 +1,7 @@
--- codes_mht.lua - the cabinet codes of NBA Maximum Hangtime 1.3 as switches (roadmap 3.3).
--- Each switch forces what the code would set; the table is lib/codes_nbamht.lua.
+-- codes_mht.lua - the cabinet codes of NBA Maximum Hangtime (1.3, 1.03) and NBA Hangtime (L1.3,
+-- L1.1) as switches (roadmap 3.3, 3.4). Each switch forces what the code would set; the tables are
+-- lib/codes_nbamht.lua and lib/codes_nbahangt.lua (the same codes). On Maximum Hangtime 1.03
+-- the ABA ball code also sets the outdoor court when entered; the switches set one each.
 -- Not here: the number code lock (pup_lockcombo only keeps the icons still while you enter a
 -- number) and the special combo (it sets ABA ball, outdoor court, shot percentage and big head,
 -- each of which has its own switch).
@@ -15,9 +17,9 @@ local extra = {}
 for _, c in ipairs(T) do if c.tournament == "cleared" then extra[c.id] = BLOCKED end end
 
 mod = {
-  name = "Cabinet codes (Maximum Hangtime)",
-  description = "Turns on Maximum Hangtime cabinet codes without entering them.",
-  games = { "nbamht" },
+  name = "Cabinet codes (Hangtime)",
+  description = "Turns on NBA Hangtime and Maximum Hangtime cabinet codes without entering them.",
+  games = { "nbamht", "nbahangt" },
   options = codes.options(T, IDS, extra),
 }
 
@@ -31,7 +33,7 @@ end
 
 local drive
 function on_load()
-  drive = codes.driver(T, nil, slots)
+  drive = codes.driver(codes.table(nba.game), nil, slots)
   for _, e in ipairs(drive.on) do nba.log(string.format("forcing %s (%s)", e.c.id, e.c.sym)) end
 end
 function on_frame() drive.update() end

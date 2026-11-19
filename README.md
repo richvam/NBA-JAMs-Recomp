@@ -271,7 +271,7 @@ Included:
 | `quarter_length.lua` | Quarter and overtime length from 0:30 to 12:00 (the original is 3:00). The scoreboard has one minutes digit, so above 9:00 it shows 9 until nine minutes are left. |
 | `no_select_timer.lua` | Removes the countdown on the team select screen, and optionally on initials entry. |
 | `codes_te.lua` | T.E. and T.E. Special Edition: every cabinet code as a switch, without entering it: tournament mode, big head, huge head, maximum power, quick hands, goaltending, shot percentage, computer assistance off, baby-size players, expanded roster, switch teams at halftime, and a secret player for each player. Per-player codes apply to each player you tick. While tournament mode is on, the codes it blocks in the game are greyed. |
-| `codes_mht.lua` | Maximum Hangtime 1.3: every number code and stick code as a switch, without entering it (per-player codes for each player you tick). Not included: the number code lock and the special combo, whose parts each have their own switch. While tournament mode is on, the codes it clears are greyed. |
+| `codes_mht.lua` | NBA Hangtime (L1.3, L1.1) and Maximum Hangtime (1.3, 1.03): every number code and stick code as a switch, without entering it (per-player codes for each player you tick). Not included: the number code lock and the special combo, whose parts each have their own switch. While tournament mode is on, the codes it clears are greyed. |
 
 The first two were checked on T.E. rev 4.0, T.E. Special Edition rev 5.02, Hangtime and
 Maximum Hangtime; `codes_te.lua` on T.E. rev 4.0 and Special Edition rev 5.02. If a mod cannot find what it needs in a game, it says so on screen and changes
