@@ -159,8 +159,9 @@ switch is greyed while one of those is on. The driver writes each switched-on co
 every frame of its window, so the game finds it whenever it looks, and nothing outside it: from
 the start of the matchup screen until a second after tip-off for most codes, team select for
 the expanded roster, the halftime team select for the team switch. A switch that is off is
-never written: with all of them off the game runs exactly as without the mod. codes_te.lua is
-the example.
+never written: with all of them off the game runs exactly as without the mod. For four
+seconds from tip-off the driver shows "CODES ACTIVE:" and the codes that are on, at the top
+of the picture (codes.SHOW frames; 0 hides it). codes_te.lua is the example.
 
 Each instruction of the original source assembles to fixed words (e.g. "movi X,a0" is
 09E0 followed by X, low word first), so a mod can find the code it wants by pattern

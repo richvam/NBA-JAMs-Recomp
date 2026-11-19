@@ -78,8 +78,8 @@ $(BUILD)/nettest: tools/headless/nettest.cpp src/app/games.cpp src/app/romload.c
 $(BUILD)/sndlog: tools/headless/sndlog.cpp src/app/games.cpp src/app/romload.cpp src/app/menu_sound.cpp $(BUILD)/libcore.a $(BUILD)/miniz.o
 	$(CXX) $(CXXFLAGS) $(INC) $(APP_INC) $< src/app/games.cpp src/app/romload.cpp src/app/menu_sound.cpp $(BUILD)/miniz.o $(BUILD)/libcore.a -lpthread -o $@
 
-$(BUILD)/modtest: tools/headless/modtest.cpp src/app/mods.cpp src/app/romload.cpp $(UI_SRC) $(BUILD)/libcore.a $(BUILD)/liblua.a $(BUILD)/miniz.o
-	$(CXX) $(CXXFLAGS) $(INC) $(APP_INC) $< src/app/mods.cpp src/app/romload.cpp $(UI_SRC) $(BUILD)/miniz.o $(BUILD)/libcore.a $(BUILD)/liblua.a -o $@
+$(BUILD)/modtest: tools/headless/modtest.cpp src/app/mods.cpp src/app/games.cpp src/app/romload.cpp $(UI_SRC) $(BUILD)/libcore.a $(BUILD)/liblua.a $(BUILD)/miniz.o
+	$(CXX) $(CXXFLAGS) $(INC) $(APP_INC) $< src/app/mods.cpp src/app/games.cpp src/app/romload.cpp $(UI_SRC) $(BUILD)/miniz.o $(BUILD)/libcore.a $(BUILD)/liblua.a -lpthread -o $@
 
 # ---------------- application (Windows, llvm-mingw cross) ----------------
 SDL2W ?= /home/claude/deps/SDL2-2.30.9/x86_64-w64-mingw32

@@ -88,6 +88,8 @@ end
 
 -- frames after tip-off during which the "game" window is still written
 codes.HOLD = 60
+-- frames after tip-off during which the "CODES ACTIVE" line is shown (0: never)
+codes.SHOW = 240
 
 -- The team select variables are local to SELECT.ASM, so the symbol files do not have them.
 -- They follow special_heads in that file's .bss (SELECT.ASM: special_heads 4 words, then
@@ -172,9 +174,26 @@ function codes.driver(T, list, slots, holds)
     end
   end
   d.on = on
+  -- the line shown at tip-off: CODES ACTIVE: and the switched-on codes, wrapped to the picture
+  local names = {}
+  for _, e in ipairs(on) do
+    names[#names + 1] = (e.player and ("P" .. e.player .. " ") or "") .. e.c.label.en:upper()
+  end
+  local lines, cur = {}, "CODES ACTIVE:"
+  for _, n in ipairs(names) do
+    local add = (cur == "CODES ACTIVE:" and " " or ", ") .. n
+    if #cur + #add > 46 then lines[#lines + 1] = cur .. ","; cur = n else cur = cur .. add end
+  end
+  lines[#lines + 1] = cur
+  d.lines = lines
+  local function show()
+    local h = #lines * 10 + 4
+    nba.rect(4, 4, 392, h, 0xA0000000, true)
+    for k, l in ipairs(lines) do nba.text(8, 6 + (k - 1) * 10, l, 0xffff00) end
+  end
   local inm, gs, sel, qtr, INGAME = nba.sym("inmatchup"), nba.sym("GAMSTATE"),
     nba.sym("in_team_select"), nba.sym("gmqrtr"), 3
-  local phase, t = "wait", 0
+  local phase, t, shown = "wait", 0, 0
   local longest = codes.HOLD
   for _, e in ipairs(on) do for _, w in ipairs(e.w) do if w.hold and w.hold > longest then longest = w.hold end end end
   local function put(win, t)
@@ -197,7 +216,11 @@ function codes.driver(T, list, slots, holds)
     end
     -- the game window: matchup screen to a little after tip-off
     if phase == "wait" or phase == "done" then
-      if nba.read16(inm) ~= 0 then phase = "write"; t = 0 end
+      if nba.read16(inm) ~= 0 then phase = "write"; t = 0; shown = 0 end
+    end
+    -- the line, from tip-off for codes.SHOW frames
+    if phase ~= "wait" and nba.read16(gs) == INGAME and nba.read16(inm) == 0 and shown < codes.SHOW then
+      shown = shown + 1; show()
     end
     if phase == "write" then
       put("game", t)
