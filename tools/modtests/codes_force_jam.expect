@@ -1,0 +1,24 @@
+# roadmap 3.5: dist/NBAJamRecomp/mods/codes_jam.lua forces the NBA JAM 1993 codes; read by
+# codes_probe_jam.lua 4 s and 20 s into the game:
+# - shot percentage, quick hands, big head and goaltending (player 2's taps = 8) hold;
+# - computer assistance off holds too: the game clears it at its own check about 335 frames
+#   after tip-off, so the mod writes it for 600 frames;
+# - big head is the real one: player 1's head image is the one the cabinet code gives
+#   (FF8143D0, codes_te.lua code 7), against FF814DD0 without;
+# - with every switch off the RAM hash at 2650 and 2900 equals an unmodded run's.
+script dist/NBAJamRecomp/mods/codes_jam.lua
+extra codes_probe_jam.lua
+game nbajam
+frames 3600
+env PLAY=1
+env HASH=2650,2900
+run big_head=0
+run big_head=1 quick_hands=1 goaltend=2 shot_percent=1 assist_off=1
+big_head=0: nolog forcing
+big_head=0: once heads: p1 FF814DD0
+big_head=0: once hash 2650 9f955eed
+big_head=0: once hash 2900 00756dbe
+big_head=1: once forcing big_head (plyrbighead = 1)
+big_head=1: once heads: p1 FF8143D0
+big_head=1: once late 240: p1taps=4 p2taps=8 show_shot=1 assistance_off=1 stlpower=1 plyrbighead=1
+big_head=1: once late 1200: p1taps=4 p2taps=8 show_shot=1 assistance_off=1 stlpower=1 plyrbighead=1

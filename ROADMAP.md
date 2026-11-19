@@ -478,6 +478,8 @@ and breaks the both-sides rule in Hangtime.
 
 **Status:** 3.4 is done: `codes_mht.lua` also runs on Hangtime L1.3 and L1.1 and Maximum Hangtime 1.03, with the game's own table (`codes_nbahangt.lua`, the same codes and labels) and symbols. On 1.03 the switches set ABA ball and outdoor court one each (entering the ABA code there sets both, and the court code does nothing; the forced court holds). Check: `codes_force_mht.expect` runs on all four revisions with the same results as 1.3, and with every switch off nothing is forced. Found on the way: headless runs of the Wolf-unit games are not repeatable (two unmodded runs of the same revision can end with different RAM at frame 4000), so the RAM hash check of 3.3 is dropped for this family; the T.E. one (T-unit) stays. Not checked: as for 3.3.
 
+**Status:** 3.5 is done: `mods/codes_jam.lua` (NBA JAM 1993 rev 3.01) has its five codes: big head, quick hands, goaltending (taps 8), shot percentage, computer assistance off. The game clears `assistance_off` at its own check about 335 frames after tip-off, so `codes.driver` takes a per-code hold (`holds`) and this one is written for 600 frames. Check (`codes_force_jam.expect`, `codes_probe_jam.lua`, owner's rev 3.01): all five hold 4 s and 20 s into the game; player 1's head image is FF8143D0, the cabinet code's, against FF814DD0 without; with every switch off the RAM hash at 2650 and 2900 equals an unmodded run (T-unit, repeatable: two unmodded runs agree). Not checked: the menu with a controller; the effects during play.
+
 **Gate:** advisor plays through the check output for one game per family and confirms
 tournament mode suppresses what it should.
 

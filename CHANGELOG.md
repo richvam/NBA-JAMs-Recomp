@@ -57,6 +57,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
   switch teams at halftime, and the secret players (chosen by name for each player).
 - New Lua mod codes_mht.lua: the number and stick codes of NBA Hangtime (L1.3, L1.1) and
   Maximum Hangtime (1.3, 1.03) as switches.
+- New Lua mod codes_jam.lua: the NBA JAM (1993) cabinet codes as switches.
 
 ### Changed
 - The CRT mask is as coarse at 4K as at 1080p (it was twice as fine at 4K), and it lines up
