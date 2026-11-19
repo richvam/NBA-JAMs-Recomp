@@ -74,6 +74,8 @@ The program ROM is at nba.ROM_BASE (0xFF800000); a word is 16 bits = 0x10 apart.
                                list of addresses where the word pattern occurs;
                                -1 matches any word
   nba.read8/16/32(a), nba.write8/16/32(a, v)
+                               (a write to NVRAM, 0x01400000-0x014FFFFF, stops the script with an
+                               error: saved records, audits and adjustments are not for scripts)
                                live memory (RAM, I/O) as the main CPU sees it
 
 Buttons and drawing

@@ -1,0 +1,16 @@
+# roadmap 4.4: a whole scripted game (PLAY=1, 59000 frames) with unlock_players.lua forcing
+# hidden players leaves the NVRAM after the audit area (the packed player records and the
+# tables after them, records_probe.lua) exactly as the same game with nothing chosen. The
+# audits before it differ, as the games differ. Scripts cannot write NVRAM at all
+# (nba.write* refuse 0x01400000-0x014FFFFF; luatest). T-unit games only: the Wolf-unit
+# headless runs are not repeatable (3.4), so two runs cannot be compared byte for byte there.
+script dist/NBAJamRecomp/mods/unlock_players.lua
+extra records_probe.lua
+game nbajamte nbajamse nbajam
+frames 59001
+env PLAY=1
+run player1=0
+run player1=23 player2=55
+nbajamte: once records area 66604823
+nbajamse: once records area 33952dee
+nbajam: once records area 48509b73

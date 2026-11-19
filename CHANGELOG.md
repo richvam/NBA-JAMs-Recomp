@@ -63,6 +63,8 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
   without entering initials or a PIN.
 - unlock_players.lua: expanded rosters on T.E. (turbo on team select steps through all of a
   team's players).
+- Lua mods can no longer write NVRAM (saved player records, audits, operator settings):
+  nba.write8/16/32 stop the script with an error there.
 
 ### Changed
 - The CRT mask is as coarse at 4K as at 1080p (it was twice as fine at 4K), and it lines up
