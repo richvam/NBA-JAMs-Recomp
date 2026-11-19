@@ -1,0 +1,45 @@
+# roadmap 4.2: dist/NBAJamRecomp/mods/unlock_players.lua puts the chosen hidden player in
+# special_heads[player]; 2 s into the game hidden_probe.lua reads it back with the player's
+# attribute table: row n of the game's secret player table spechds_t (0x170 bytes a row on
+# T.E./SE, 0x140 on NBA JAM 1993, 0x1F0 on Hangtime). Option values: 23 Divita, 55 Kemp,
+# 40 HOW (07/15), 111 TON (07/03), 119 Zirin (lib/hidden.lua, sorted names).
+# - Divita is row 3 on T.E., SE and NBA JAM 1993, row 1 on the Hangtime games; Kemp row 59 on
+#   T.E., 66 on SE, 57 on Hangtime and Maximum Hangtime 1.3, 60 on 1.03; not in NBA JAM 1993;
+# - NBA JAM 1993's own rows 10 and 12; Zirin is only in Maximum Hangtime 1.03 (row 36);
+# - with Normal everywhere, nothing is written (special_heads stays -1).
+# Maximum Hangtime 1.03 has no spechds_t symbol: its rows are 0x200 apart (seen here).
+script dist/NBAJamRecomp/mods/unlock_players.lua
+extra hidden_probe.lua
+game nbajamte nbajamse nbajam nbamht nbahangt nbahangt:nbahangt13 nbamht:nbamht103
+frames 5000
+env PLAY=1
+run player1=0
+run player1=23 player2=55
+run player1=40 player2=111
+run player1=119
+player1=0: nolog player 1:
+player1=0: once hidden: p1 sh=65535
+player2=55: once player 1: Divita (special_heads =
+rom=nbajamte: player2=55: once player 2: Kemp (special_heads = 59)
+rom=nbajamte: player2=55: once p2 sh=59
+rom=nbajamte: player2=55: once p1 row 3
+rom=nbajamse: player2=55: once player 2: Kemp (special_heads = 66)
+rom=nbajamse: player2=55: once p1 row 3
+rom=nbajam: player2=55: once player 2: Kemp is not in this game
+rom=nbajam: player2=55: once hidden: p1 sh=3
+rom=nbajam: player2=55: once p1 row 3
+rom=nbamht: player2=55: once hidden: p1 sh=1 FF952370/
+rom=nbamht: player2=55: once p2 sh=57 FF958FF0/
+rom=nbahangt: player2=55: once hidden: p1 sh=1 FF952260/
+rom=nbahangt: player2=55: once p2 sh=57 FF958EE0/
+rom=nbahangt13: player2=55: once hidden: p1 sh=1 FF952370/
+rom=nbahangt13: player2=55: once p2 sh=57 FF958FF0/
+rom=nbamht103: player2=55: once hidden: p1 sh=1 FF94EE40/
+rom=nbamht103: player2=55: once p2 sh=60 FF956440/
+rom=nbajam: player2=111: once hidden: p1 sh=10
+rom=nbajam: player2=111: once p2 sh=12
+rom=nbajam: player2=111: once p1 row 10
+rom=nbajamte: player2=111: once player 1: HOW (07/15) is not in this game
+rom=nbamht103: player1=119: once player 1: Zirin (special_heads = 36)
+rom=nbamht103: player1=119: once hidden: p1 sh=36 FF953440/
+rom=nbamht: player1=119: once player 1: Zirin is not in this game

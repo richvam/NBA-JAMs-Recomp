@@ -273,6 +273,7 @@ Included:
 | `codes_te.lua` | T.E. and T.E. Special Edition: every cabinet code as a switch, without entering it: tournament mode, big head, huge head, maximum power, quick hands, goaltending, shot percentage, computer assistance off, baby-size players, expanded roster, switch teams at halftime, and a secret player for each player. Per-player codes apply to each player you tick. While tournament mode is on, the codes it blocks in the game are greyed. |
 | `codes_mht.lua` | NBA Hangtime (L1.3, L1.1) and Maximum Hangtime (1.3, 1.03): every number code and stick code as a switch, without entering it (per-player codes for each player you tick). Not included: the number code lock and the special combo, whose parts each have their own switch. While tournament mode is on, the codes it clears are greyed. |
 | `codes_jam.lua` | NBA JAM (1993, rev 3.01): its five cabinet codes as switches, without entering them: big head, quick hands, goaltending, shot percentage, computer assistance off (per-player codes for each player you tick). |
+| `unlock_players.lua` | Every game: play as any hidden player without entering initials or a PIN. One choice per player slot: Normal, or a hidden player by name (119 names across the games; a name the running game does not have is skipped). |
 
 The cabinet code mods show "CODES ACTIVE:" and the codes that are switched on at the top of the picture for four seconds from tip-off, so everyone playing can see what is forced.
 

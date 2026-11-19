@@ -59,6 +59,8 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
   Maximum Hangtime (1.3, 1.03) as switches.
 - New Lua mod codes_jam.lua: the NBA JAM (1993) cabinet codes as switches.
 - The cabinet code mods show "CODES ACTIVE:" and the forced codes at tip-off.
+- New Lua mod unlock_players.lua: pick any hidden player for each player slot, on every game,
+  without entering initials or a PIN.
 
 ### Changed
 - The CRT mask is as coarse at 4K as at 1080p (it was twice as fine at 4K), and it lines up
