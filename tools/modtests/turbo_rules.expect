@@ -1,0 +1,36 @@
+# roadmap Phase 6: dist/NBAJamRecomp/mods/turbo_rules.lua. turbo_probe.lua has player 1 hold
+# turbo and up from 120 to 720 frames after tip-off and logs his meter (47 = full) at 120,
+# 300, 720 and 900. The meter only drains while he actually runs, so single runs vary; pinned
+# as measured:
+# - game: T.E. 41 at 720, SE 0 at 720 and 38 at 900;
+# - infinite turbo (player 1): 47 throughout;
+# - drain every 32 frames instead of 8: T.E. 47, SE 46 at 720; every 2: T.E. 10 at 720;
+# - refill fast or instant: SE back to 47 at 900 (game 38).
+script dist/NBAJamRecomp/mods/turbo_rules.lua
+extra turbo_probe.lua
+game nbajamte nbajamse
+frames 3500
+env PLAY=1
+run drain=0 refill=0
+run drain=2
+run drain=32
+run infinite=1
+run refill=1
+run refill=2
+refill=0: nolog turbo drain
+nbajamte: refill=0: once turbo 720: 41
+nbajamse: refill=0: once turbo 720: 0
+nbajamse: refill=0: once turbo 900: 38
+drain=2: once turbo drain: a unit every 2 frames (game 8)
+nbajamte: drain=2: once turbo 720: 10
+drain=32: once turbo drain: a unit every 32 frames (game 8)
+nbajamte: drain=32: once turbo 720: 47
+nbajamse: drain=32: once turbo 720: 46
+infinite=1: once infinite turbo: players 1
+infinite=1: once turbo 300: 47
+infinite=1: once turbo 720: 47
+infinite=1: once turbo 900: 47
+refill=1: once turbo refill: fast
+nbajamse: refill=1: once turbo 900: 47
+refill=2: once turbo refill: instant
+nbajamse: refill=2: once turbo 900: 47
