@@ -1,0 +1,21 @@
+# roadmap Phase 6 (and 4.3 for SE): operator_settings.lua "Expanded rosters (SE)" answers
+# adjustment 29 (ADJROSTER) with 0, which SE 5.02's team select takes as "every team's extra
+# players open". roster_probe.lua presses turbo on team select for six cursor positions:
+# without the setting every team stops at pair 5; with it teams 21 and 24 reach pair 11 and
+# team 22 pair 19 (team 20 has no more players). The patched GET_ADJ leaves A14 alone: SE's
+# team select keeps the pair number there across the call (a first version that used A14
+# broke exactly this). On T.E. the option does nothing.
+script dist/NBAJamRecomp/mods/operator_settings.lua
+extra roster_probe.lua
+game nbajamse nbajamte
+frames 5000
+run se_rosters=-1
+run se_rosters=0
+se_rosters=-1: nolog pairs up to 11
+se_rosters=-1: nolog adjustment
+nbajamse: se_rosters=0: once se_rosters: 0 (adjustment 29)
+nbajamse: se_rosters=0: once roster: team 21 pairs up to 11
+nbajamse: se_rosters=0: once roster: team 24 pairs up to 11
+nbajamse: se_rosters=0: log roster: team 22 pairs up to 19
+nbajamte: se_rosters=0: nolog adjustment
+nbajamte: se_rosters=0: nolog pairs up to 11

@@ -69,6 +69,8 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
   "Only against the CPU" on by default.
 - "Protect records" (on by default) in the scripts that change a game: such a game is not
   counted in the players' saved records.
+- New Lua mod operator_settings.lua (T.E., SE): the service menu's game settings as options,
+  without changing the saved settings; on SE also expanded rosters.
 
 ### Changed
 - The CRT mask is as coarse at 4K as at 1080p (it was twice as fine at 4K), and it lines up

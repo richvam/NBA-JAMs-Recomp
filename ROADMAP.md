@@ -582,6 +582,8 @@ The draft happens inside the game session, and it has three ways to play:
 Each script gets the same treatment as Phase 3: symbols from the table, a headless
 expectation, both languages, the README list updated by Haiku.
 
+**Status:** `operator_settings.lua` is done (T.E., SE). The game reads every adjustment through `GET_ADJ`, which reads NVRAM with `CALLA RC_LONG`; when an option is set, the script points that call at a 13-word routine of its own in the FFFF fill after the program (FFFE0000, patched in memory at load with `nba.rom_write16`, never in a file) with a 64-word table: the value + 1, or 0 for "read NVRAM as before". It touches only A0 and A1 (saved by `GET_ADJ`); a first version that used A14 broke SE's team select, which keeps the pair number there across the call. Options: the nine game adjustments of T.E.'s service menu, with the menu's values and names (computer assistance and tournament mode store 0 for "enabled"), and on SE adjustment 29, which in SE 5.02's ROM (not its released source) opens every team's extra players when 0: the SE case 4.3 left out. Check (`operator_settings.expect`, `op_probe.lua`, `operator_rosters.expect`, owner's ROMs): nothing patched and the RAM hash equal to an unmodded run with nothing set; head size 2 gives every player the big head; the game timer runs slower at speed 1 and faster at speed 5 than with the game's setting on T.E. (on SE speed 5 equals the game's setting, probably the test NVRAM's value); SE expanded rosters reach pairs 11 and 19. Not checked: what difficulty, tournament mode, credits, win bonus, attract sound and free play change in play; the menu with a controller.
+
 ## Phase 7: release
 
 | ID | Model | Task |

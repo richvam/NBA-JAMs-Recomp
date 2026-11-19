@@ -1,0 +1,34 @@
+# roadmap Phase 6: dist/NBAJamRecomp/mods/operator_settings.lua answers GET_ADJ from its own
+# table (a routine in unused program ROM, patched in memory) for the options that are set.
+# op_probe.lua logs the clock and head sizes 60 and 660 frames after tip-off.
+# - nothing set: nothing patched, and the RAM hash at 2650 equals an unmodded run's
+#   (codes_force_te.expect: T.E. a65bbbae, SE a66b4357);
+# - head size 2 (large): every player has the big head (plyrbighead F);
+# - game timer speed: after 600 frames of play T.E.'s clock shows 2:05.09 at speed 1, 2:05.07
+#   with the game's setting and 2:05.05 at speed 5; SE 2:05.00 at speed 1 against 2:04.06 with
+#   the game's setting (speed 5 gives the same as the game's setting there, so the test
+#   NVRAM's setting is probably 5; not checked);
+# - SE "Expanded rosters": operator_rosters.expect.
+# Not seen here: what difficulty, tournament mode, credits, win bonus, attract sound and free
+# play change in play.
+script dist/NBAJamRecomp/mods/operator_settings.lua
+extra op_probe.lua
+game nbajamte nbajamse
+frames 5000
+env PLAY=1
+env HASH=2650
+run difficulty=-1
+run head_size=2
+run timer_speed=1
+run timer_speed=5
+difficulty=-1: nolog adjustment
+nbajamte: difficulty=-1: once hash 2650 a65bbbae
+nbajamse: difficulty=-1: once hash 2650 a66b4357
+head_size=2: once head_size: 2 (adjustment 25)
+head_size=2: once op 60: clock 03000000 bighead F
+head_size=2: once op 660: clock
+nbajamte: timer_speed=1: once op 660: clock 02050409
+nbajamte: difficulty=-1: once op 660: clock 02050207
+nbajamte: timer_speed=5: once op 660: clock 02050005
+nbajamse: timer_speed=1: once op 660: clock 02050005
+nbajamse: difficulty=-1: once op 660: clock 02040605
