@@ -142,7 +142,9 @@ end
 -- list: the secret player list the options were made with (codes.secret_list)
 -- slots: function(mask) -> mask, from the option's cabinet players to the game's player bits,
 --        read when written (Maximum Hangtime: they depend on the cabinet's player count)
-function codes.driver(T, list, slots)
+-- holds: { id = frames } for a code the game checks later than codes.HOLD frames after
+--        tip-off (NBA JAM 1993 clears assistance_off at its own check, 335 frames in)
+function codes.driver(T, list, slots, holds)
   local d, on = {}, {}
   for _, c in ipairs(T) do
     if c.kind ~= "initials" then
@@ -151,6 +153,8 @@ function codes.driver(T, list, slots)
       if v ~= 0 then
         local w = {}
         writes(c, v, w, slots)
+        local h = holds and holds[c.id]
+        if h then for _, x in ipairs(w) do x.hold = h end end
         if #w > 0 then on[#on + 1] = { c = c, value = v, w = w } end
       end
     end
@@ -171,10 +175,12 @@ function codes.driver(T, list, slots)
   local inm, gs, sel, qtr, INGAME = nba.sym("inmatchup"), nba.sym("GAMSTATE"),
     nba.sym("in_team_select"), nba.sym("gmqrtr"), 3
   local phase, t = "wait", 0
-  local function put(win)
+  local longest = codes.HOLD
+  for _, e in ipairs(on) do for _, w in ipairs(e.w) do if w.hold and w.hold > longest then longest = w.hold end end end
+  local function put(win, t)
     for _, e in ipairs(on) do
       for _, w in ipairs(e.w) do
-        if w.win == win then
+        if w.win == win and (not t or t <= (w.hold or codes.HOLD)) then
           local v = w.value
           if type(v) == "function" then v = v() end
           if v then nba.write16(w.addr, v) end
@@ -194,10 +200,10 @@ function codes.driver(T, list, slots)
       if nba.read16(inm) ~= 0 then phase = "write"; t = 0 end
     end
     if phase == "write" then
-      put("game")
+      put("game", t)
       if nba.read16(gs) == INGAME and nba.read16(inm) == 0 then
         t = t + 1
-        if t > codes.HOLD then phase = "done" end
+        if t > longest then phase = "done" end
       end
     end
   end
