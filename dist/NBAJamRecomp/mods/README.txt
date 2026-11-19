@@ -151,11 +151,16 @@ the game clears it); lib/codes.lua turns them into switches:
   local drive
   function on_load() drive = codes.driver(codes.table(nba.game)) end
   function on_frame() drive.update() end
-codes.options makes a toggle of a code the game keeps as one flag and a players option (a tick
-per player) of one it keeps per player. The driver writes each switched-on code's value on
-every frame from the start of the matchup screen until a second after tip-off, so the game
-finds it whenever it looks, then stops. A switch that is off is never written: with all of
-them off the game runs exactly as without the mod. codes_te.lua is the example.
+codes.options makes a toggle of a code the game keeps as one flag (or for both teams) and a
+players option (a tick per player) of one it keeps per player or counts in a player's taps.
+"secret_players" in the list gives four list options, secret_p1 to secret_p4: none or a secret
+player, by name. codes.options(T, ids, extra) also takes more conflicts, { id = { ids } }: a
+switch is greyed while one of those is on. The driver writes each switched-on code's value on
+every frame of its window, so the game finds it whenever it looks, and nothing outside it: from
+the start of the matchup screen until a second after tip-off for most codes, team select for
+the expanded roster, the halftime team select for the team switch. A switch that is off is
+never written: with all of them off the game runs exactly as without the mod. codes_te.lua is
+the example.
 
 Each instruction of the original source assembles to fixed words (e.g. "movi X,a0" is
 09E0 followed by X, low word first), so a mod can find the code it wants by pattern

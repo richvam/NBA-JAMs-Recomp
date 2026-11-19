@@ -1,0 +1,47 @@
+# roadmap 3.2: the rest of the T.E./SE codes forced by dist/NBAJamRecomp/mods/codes_te.lua,
+# read by codes_probe.lua 4 s and 20 s into the game:
+# - shot percentage, assistance off, baby mode, quick hands (stlpower; SE too, where the
+#   entered code does not set it, see codes_te.expect), huge head (plyrbighead and the
+#   player's taps = 6), goaltending (taps = 24) all hold;
+# - huge head is the real one: player 1's head image is the one the cabinet code gives
+#   (FF824FD0, codes_te.lua code 8);
+# - secret players: option value 1 is Barker, 3 Beran (by name, so the same on both games
+#   although their numbers differ, 29/33 on T.E., 30/36 on SE); each player's attribute table is
+#   spechds_t + number * 0x170, the game's own secret player table, and the head changes;
+# - expanded roster: on team select bigroster1 is the team player 1 is on (20);
+# - with tournament mode on, goaltending is greyed: the taps are not forced.
+script dist/NBAJamRecomp/mods/codes_te.lua
+extra codes_probe.lua
+game nbajamte nbajamse
+frames 3600
+env PLAY=1
+run shot_percent=1 assist_off=1 baby=1 quick_hands=1 huge_head=1 big_roster=1 secret_p1=1 secret_p2=3
+run huge_head=1 baby=0
+run goaltend=3 tournament=0
+run goaltend=3 tournament=1
+secret_p1=1: once forcing shot_percent (show_shot = 1)
+secret_p1=1: once forcing assist_off (assistance_off = 1)
+secret_p1=1: once forcing quick_hands (stlpower = 1)
+secret_p1=1: once forcing huge_head (plyrbighead = 1)
+secret_p1=1: once forcing baby (baby_flag = 1)
+secret_p1=1: once forcing big_roster (bigroster1 = 1)
+nbajamte: secret_p1=1: once forcing secret_p1 player_barker (special_heads = 29)
+nbajamte: secret_p1=1: once forcing secret_p2 player_beran (special_heads = 33)
+nbajamse: secret_p1=1: once forcing secret_p1 player_barker (special_heads = 30)
+nbajamse: secret_p1=1: once forcing secret_p2 player_beran (special_heads = 36)
+secret_p1=1: once select: gmqrtr=0 team1=20 team2=65535 bigroster1=20
+nbajamte: secret_p1=1: once attrib: spechds_t FF8D05C0 p1 FF8D2F70/FF80B350 p2 FF8D3530/FF8234D0
+nbajamse: secret_p1=1: once attrib: spechds_t FF8E4B60 p1 FF8E7680/FF80B350 p2 FF8E7F20/FF8234D0
+secret_p1=1: once late 240: p1taps=6 p2taps=0 show_shot=1 assistance_off=1 stlpower=1 plyrbighead=1 baby_flag=1
+secret_p1=1: once late 1200: p1taps=6 p2taps=0 show_shot=1 assistance_off=1 stlpower=1 plyrbighead=1 baby_flag=1
+baby=0: nolog forcing goaltend
+baby=0: once attrib: spechds_t
+baby=0: once /FF824FD0 p2
+baby=0: once late 1200: p1taps=6
+tournament=0: nolog forcing tournament
+tournament=0: once forcing goaltend (p1taps = 3)
+tournament=0: once late 240: p1taps=24 p2taps=24
+tournament=0: once late 1200: p1taps=24 p2taps=24
+tournament=1: nolog forcing goaltend
+tournament=1: once forcing tournament (plyr_tourn = 1)
+tournament=1: once late 1200: p1taps=0 p2taps=0

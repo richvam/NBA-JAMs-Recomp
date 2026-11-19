@@ -52,6 +52,9 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - Lua mods can use game addresses and game events on NBA Hangtime (L1.3 and L1.1), Maximum Hangtime 1.03 and NBA JAM 1993 too.
 - The README lists the cabinet codes of every game, and docs/CODES.md the secret players of T.E. and SE.
 - New Lua mod codes_te.lua: tournament mode, big head and maximum power for T.E. and T.E. Special Edition as switches, without entering the cabinet codes.
+- codes_te.lua now has every T.E. and Special Edition cabinet code: huge head, quick hands,
+  goaltending, shot percentage, computer assistance off, baby-size players, expanded roster,
+  switch teams at halftime, and the secret players (chosen by name for each player).
 
 ### Changed
 - The CRT mask is as coarse at 4K as at 1080p (it was twice as fine at 4K), and it lines up

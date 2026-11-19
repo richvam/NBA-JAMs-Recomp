@@ -1,0 +1,13 @@
+# roadmap 3.2: team switch (codes_te.lua team_switch). On the first team select it is not
+# written (team1_switch and team2_switch 0); at halftime (gmqrtr 2) both are 120, what holding
+# pass and right for 2 s leaves there. Switching teams with pass is not checked (no input).
+script dist/NBAJamRecomp/mods/codes_te.lua
+extra codes_probe.lua
+game nbajamte nbajamse
+frames 40000
+env PLAY=1
+opt team_switch=1
+once forcing team_switch (team1_switch = 1)
+once select: gmqrtr=0 team1=20 team2=65535 bigroster1=65535 bigroster2=65535 team1_switch=0 team2_switch=0
+once select: gmqrtr=2
+once team1_switch=120 team2_switch=120
