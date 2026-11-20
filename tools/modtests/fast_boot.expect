@@ -1,0 +1,17 @@
+# roadmap Phase 6: dist/NBAJamRecomp/mods/fast_boot.lua with a valid NVRAM (NVPREP=600 boots
+# the unmodded game once first, as a game that has been run before). boot_probe.lua logs the
+# frame on which the first process (attract mode) starts. Without the script (measured with
+# boot_probe.lua alone): frame 60 on the T-unit games, 375 on the Wolf-unit games. With it:
+# 5 and 210. (With the full ROM sets, sound included, the Wolf-unit games go from 217 to 52.)
+script dist/NBAJamRecomp/mods/fast_boot.lua
+extra boot_probe.lua
+game nbajamte nbajamse nbajam nbamht nbahangt
+frames 1000
+env NVPREP=600
+once fast boot: power-on wait shortened
+nolog fast boot: error prompt
+nbajamte: once attract at 5
+nbajamse: once attract at 5
+nbajam: once attract at 5
+nbamht: once attract at 210
+nbahangt: once attract at 210
