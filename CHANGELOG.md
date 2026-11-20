@@ -79,6 +79,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - New Lua mod rules.lua (T.E., SE): shot clock off or another length, injuries off, goaltending
   not called.
 - New Lua mod full_game.lua (every game): a started game is paid through all four quarters.
+- New Lua mod target_score.lua (every game): first to N points wins, and a mercy rule.
 
 ### Changed
 - The CRT mask is as coarse at 4K as at 1080p (it was twice as fine at 4K), and it lines up

@@ -1,0 +1,24 @@
+# roadmap Phase 6: dist/NBAJamRecomp/mods/target_score.lua over whole games (PLAY=1);
+# score_probe.lua logs the score at each change of GAMSTATE or quarter.
+# - "first to 11" and "mercy rule 10 points ahead" end the game at the score where the rule
+#   triggered: the game reaches its end-of-game screen (GAMSTATE 8) in quarter 4 with that
+#   score, on all five games (T-unit scores pinned; Wolf-unit runs vary);
+# - the clock is set to a tenth of a second, not 0: Hangtime ends a quarter only when its own
+#   clock ticks down to 0 (set to 0 it never ended), and the quarter is never put back once
+#   the game has moved it on.
+script dist/NBAJamRecomp/mods/target_score.lua
+extra score_probe.lua
+game nbajamte nbajamse nbajam nbamht nbahangt
+frames 30001
+env PLAY=1
+run target=11 mercy=0
+run target=0 mercy=10
+mercy=0: once game ended by the target rule
+target=0: once game ended by the mercy rule
+nbajamte: mercy=0: once game ended by the target rule at 5-12
+log gs=8 q=4
+nbajamte: mercy=0: once gs=8 q=4 score 5-12
+nbajamte: target=0: once gs=8 q=4 score 5-16
+nbajamse: mercy=0: once gs=8 q=4 score 2-13
+nbajam: mercy=0: once gs=8 q=4 score 3-11
+nbajam: target=0: once gs=8 q=4 score 3-13
