@@ -1,0 +1,31 @@
+# roadmap Phase 6: dist/NBAJamRecomp/mods/rules.lua over whole games (PLAY=1); rules_probe.lua
+# logs at the end-of-game screen the lowest and highest shot clock seen during play and every
+# player's injury stat.
+# - game: the shot clock runs out (low 0, high 10: 14 hidden seconds, then 10 shown);
+# - off: it stays at 10 and never runs out;
+# - 35 seconds: each new clock starts at 21 (35 - 14);
+# - injuries off: every injury stat stays 0 (the game's own: up to 39 on T.E., 47 on SE);
+# - goaltending off: the patch is applied ("goaltending off" is only logged when the expected
+#   instructions are found and changed); its effect is not seen in these games.
+script dist/NBAJamRecomp/mods/rules.lua
+extra rules_probe.lua
+game nbajamte nbajamse
+frames 40001
+env PLAY=1
+run shot_clock=0 injuries=1
+run shot_clock=-1
+run shot_clock=35
+run goaltending=0
+run injuries=0
+injuries=1: nolog shot clock off
+injuries=1: nolog seconds
+injuries=1: once rules: shot clock low 0 high 10
+nbajamte: injuries=1: once injuries 3 4 27 39
+nbajamse: injuries=1: once injuries 2 3 22 47
+shot_clock=-1: once shot clock off
+shot_clock=-1: once rules: shot clock low 10 high 10
+shot_clock=35: once shot clock 35 seconds
+shot_clock=35: once high 21
+goaltending=0: once goaltending off
+injuries=0: once injuries off
+injuries=0: once injuries 0 0 0 0
