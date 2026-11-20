@@ -279,6 +279,7 @@ Included:
 | `cpu_difficulty.lua` | T.E. and T.E. Special Edition: the computer players' skill held at a level from -15 to +15 (the game otherwise changes it in play with the score), and the catch-up help off for everyone, people and computer. |
 | `fire_rules.lua` | T.E. and T.E. Special Edition: the baskets in a row needed to catch fire (1 to 8; the game uses 3), and for each team "always on fire" or "never on fire". |
 | `turbo_rules.lua` | T.E. and T.E. Special Edition: infinite turbo for the players you tick, how fast turbo drains while held (from very fast to very slow; the game uses one unit every 8 frames), and a faster or instant refill. |
+| `rules.lua` | T.E. and T.E. Special Edition: shot clock off or 20, 30 or 35 seconds, injuries off, and goaltending not called. |
 
 The scripts that change a game (`handicap.lua`, `unlock_players.lua`, the cabinet code mods) have "Protect records", on by default: such a game is not counted in the players' saved records (games, wins, losses, win streaks) on T.E., SE, Hangtime and Maximum Hangtime.
 
