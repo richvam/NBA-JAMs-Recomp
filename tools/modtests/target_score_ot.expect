@@ -1,0 +1,27 @@
+# roadmap Phase 6: target_score.lua in overtime. ot_probe.lua holds the score at 73-73 for the
+# last five seconds of the fourth quarter, so regulation ends tied, and presses start once on
+# the screen before overtime (in free play overtime is bought like a quarter; repeated presses
+# restart its countdown). Overtime is period 5 (gmqrtr 4) with a new clock.
+# - without a target, overtime is played to its end (T.E. 77-83 at frame 43296, NBA JAM 1993
+#   76-81 at 44016);
+# - "first to 75" ends the game in overtime as soon as a team reaches 75, through the game's
+#   own end-of-game screen (T.E. 75-73 at 36636, NBA JAM 1993 73-75 at 37596; Maximum
+#   Hangtime and Hangtime reached overtime and ended there too in the trial runs, but their
+#   runs vary, sometimes with a basket at the buzzer, so only the trigger is checked there).
+# Not SE: in every run there a basket counts at the buzzer, so regulation never ends tied.
+script dist/NBAJamRecomp/mods/target_score.lua
+extra ot_probe.lua
+game nbajamte nbajam nbamht nbahangt
+frames 60001
+env PLAY=1
+run target=0
+run target=75
+once tied 73-73
+target=0: nolog game ended by
+target=75: once game ended by the target rule
+nbajamte: target=75: log in period 5
+nbajam: target=75: log in period 5
+nbajamte: target=0: once final 77-83 in period 5 at 43296
+nbajamte: target=75: once final 75-73 in period 5 at 36636
+nbajam: target=0: once final 76-81 in period 5 at 44016
+nbajam: target=75: once final 73-75 in period 5 at 37596
