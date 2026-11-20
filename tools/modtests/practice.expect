@@ -1,0 +1,17 @@
+# roadmap Phase 6: dist/NBAJamRecomp/mods/practice.lua over a played game (PLAY=1, 16000
+# frames). practice_probe.lua logs game_time, the quarter and the score every 2000 frames in
+# play, and "shot clock ran out" if shotimer reaches 0,0 while a shot clock runs. Without the
+# script (measured with the probe alone) the clock runs, the first quarter ends and the shot
+# clock runs out by frame 3594 (NBA JAM 1993) to 7224 (SE). With it the clock stays at 3:00.0
+# (03000000) in the first quarter on every game and the shot clock never runs out, while
+# play goes on (the score still changes).
+script dist/NBAJamRecomp/mods/practice.lua
+extra practice_probe.lua
+game nbajamte nbajamse nbajam nbamht nbahangt
+frames 16001
+env PLAY=1
+once practice: game clock frozen
+once practice: no shot clock
+log clock 03000000 quarter 0
+nolog quarter 1
+nolog shot clock ran out
