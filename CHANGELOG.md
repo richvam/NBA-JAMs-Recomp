@@ -78,6 +78,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - New Lua mod turbo_rules.lua (T.E., SE): infinite turbo per player, turbo drain and refill.
 - New Lua mod rules.lua (T.E., SE): shot clock off or another length, injuries off, goaltending
   not called.
+- New Lua mod full_game.lua (every game): a started game is paid through all four quarters.
 
 ### Changed
 - The CRT mask is as coarse at 4K as at 1080p (it was twice as fine at 4K), and it lines up
