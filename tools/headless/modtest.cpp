@@ -124,6 +124,17 @@ int main(int argc, char **argv)
 		mp = std::make_unique<tunit_machine>(std::move(r), gid == "nbajam" ? tunit_protection::nbajam : tunit_protection::nbajamte);
 	}
 	arcade_machine &m = *mp;
+	// NVPREP=<frames>: first boot the unmodded game from a blank NVRAM for that many frames (it
+	// restores factory settings and writes a valid NVRAM), then start the test from that NVRAM,
+	// as a game that has been run before boots (roadmap Phase 6: fast_boot.lua)
+	std::vector<u8> nvprep;
+	if (const char *np = getenv("NVPREP"))
+	{
+		m.set_dips(dip_settings{});
+		m.reset();
+		for (int f = 0, n = atoi(np); f < n; f++) { m.set_inputs(cabinet_inputs{}); m.run_frame(); }
+		nvprep = m.nvram();
+	}
 	mod_manager mods;
 	mods.scan(argv[3], "");
 	int frames = argc > 5 ? atoi(argv[5]) : 0;
@@ -148,6 +159,7 @@ int main(int argc, char **argv)
 			printf("  patched %08X: %04X -> %04X\n", 0xff800000u + u32(w << 4), orig[w * 2] | orig[w * 2 + 1] << 8, now[w * 2] | now[w * 2 + 1] << 8);
 	m.set_dips(dip_settings{});
 	m.reset();
+	if (!nvprep.empty()) { m.set_nvram(nvprep); m.reset(); printf("  NVRAM from a %s-frame first boot\n", getenv("NVPREP")); }
 	// optional: WATCH=<bit address> prints that long every 500 frames; PLAY=1 presses
 	// start then shoot/pass periodically to get through the menus into a game
 	const char *watch = getenv("WATCH");

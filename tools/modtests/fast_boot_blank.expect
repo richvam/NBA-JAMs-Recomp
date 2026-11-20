@@ -1,0 +1,18 @@
+# roadmap Phase 6: dist/NBAJamRecomp/mods/fast_boot.lua from a blank NVRAM (the first start).
+# The game restores factory settings and waits for a button ("errors detected -- any button to
+# continue"); the shortened wait does not change that, so no attract mode within 1000 frames.
+# With "Error prompt: Continue" the game goes on by itself: attract mode starts at frame 12 on
+# T.E. and SE, 11 on NBA JAM 1993, about 215 on the Wolf-unit games.
+script dist/NBAJamRecomp/mods/fast_boot.lua
+extra boot_probe.lua
+game nbajamte nbajamse nbajam nbamht nbahangt
+frames 1000
+run errors=0
+run errors=1
+once fast boot: power-on wait shortened
+errors=0: nolog attract at
+errors=1: once fast boot: error prompt skipped
+errors=1: once attract at
+nbajamte: errors=1: once attract at 12
+nbajamse: errors=1: once attract at 12
+nbajam: errors=1: once attract at 11
