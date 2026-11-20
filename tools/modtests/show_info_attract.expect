@@ -1,0 +1,7 @@
+# roadmap Phase 6: dist/NBAJamRecomp/mods/show_info.lua draws nothing outside play (attract
+# mode at frame 300).
+script dist/NBAJamRecomp/mods/show_info.lua
+game nbajamte nbajamse
+frames 301
+env SHOT=300:/dev/null
+once picture with 0 draws
