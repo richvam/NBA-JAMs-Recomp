@@ -1,0 +1,14 @@
+# roadmap Phase 6: dist/NBAJamRecomp/mods/full_game.lua. fullgame_probe.lua joins as player 1
+# with two start presses, which buy one quarter, and plays on. Without the script every game
+# ends after the first quarter (measured on all five games: "game over in quarter 1"); with it
+# the game runs all four quarters with no buy-in screen. It writes qtr_purchased = 4 for each
+# joined player, and the game's own monitor_fullgame then treats the game as bought.
+script dist/NBAJamRecomp/mods/full_game.lua
+extra fullgame_probe.lua
+game nbajamte nbajamse nbajam nbamht nbahangt
+frames 45001
+once quarter 2 starts
+once quarter 3 starts
+once quarter 4 starts
+once game over in quarter 4
+nolog game over in quarter 1
