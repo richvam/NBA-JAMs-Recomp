@@ -122,6 +122,9 @@ Saving files
                                64 MB for a file that is appended to. Returns true, or nil and
                                the reason if the file could not be written. Scripts cannot
                                read files.
+  nba.load(name)               the text of stats/<name> (a file nba.save wrote; the same
+                               name rules, at most 1 MB), or nil and the reason; nil in an
+                               online game, where files differ between computers.
   nba.date()                   the local date and time, "2026-11-20 19:40:38"; nil in an
                                online game.
 

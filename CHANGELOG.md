@@ -86,6 +86,8 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - New Lua mod practice.lua (every game): the game clock stands still and there is no shot clock.
 - New Lua mod show_info.lua (T.E., SE): shooting, turbo and on-fire counters for each player on the overlay during play.
 - New Lua mod stats_export.lua (T.E., SE): saves the box score of each finished game to stats/ as CSV and JSON Lines.
+- fantasy_draft.lua options: draft order (fixed, random, loser of the last game first), the pool (team rosters, all players, everyone with the hidden players), the same player on both sides, and replaying the last saved draft. Every draft is saved to stats/.
+- Lua scripts can read back the files they saved in stats/ (`nba.load`); not in an online game.
 - New Lua mod fantasy_draft.lua (T.E., SE, offline): the players who joined draft players from every team on team select, in snake order with a pick timer, and play with them on the team they then choose.
 - Lua scripts can read a player's buttons (`nba.input`) and keep them from the game for a while (`nba.hold`).
 - New Lua mod sound_options.lua (T.E., SE): turns the music during play, or the announcer, off. The referee's whistle and the team select, halftime and end-of-game tunes stay.
