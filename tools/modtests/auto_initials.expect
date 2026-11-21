@@ -1,0 +1,16 @@
+# auto_initials.lua: initials_auto_probe.lua starts a game for player 1 and answers YES;
+# the script then moves the cursor and enters the initials and birthday. CAT, March 5 is
+# 2 0 19 2 4 in the record fields; BBB, January 1 (the defaults) is 1 1 1 0 0. With only
+# player 2 chosen nothing is entered for player 1.
+script dist/NBAJamRecomp/mods/auto_initials.lua
+extra initials_auto_probe.lua
+game nbajamte nbajamse
+frames 2801
+run p1_i1=2 p1_i2=0 p1_i3=19 p1_month=2 p1_day=4
+run p1_i1=1
+run players=2
+p1_i1=2: once auto initials: player 1 entered CAT March 5
+p1_i1=2: once fields 2 0 19 2 4
+p1_i1=1: once auto initials: player 1 entered BBB January 1
+p1_i1=1: once fields 1 1 1 0 0
+players=2: nolog auto initials: player 1
