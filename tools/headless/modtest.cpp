@@ -157,6 +157,15 @@ int main(int argc, char **argv)
 					for (size_t i = 0; i < o.values.size(); i++) if (o.values[i] == atof(kv.c_str() + eq + 1)) s.opt[o.id] = int(i);
 		}
 	}
+	// SOUND=1: each sound code the game sends its sound board, as a log line "sound 168"
+	// (T-unit: an extended code is 7A then its low byte, logged as 1xx)
+	bool ext = false;
+	if (getenv("SOUND"))
+		m.on_sound_command = [&](u8 b) {
+			if (b == 0x7a && !ext) { ext = true; return; }
+			char t[16]; snprintf(t, sizeof t, "sound %03x", (ext ? 0x100 : 0) | b); ext = false;
+			log.push_back(t);
+		};
 	mods.start(argv[4], m);
 	for (auto &l : mods.take_log()) log.push_back(l);
 	const std::vector<u8> &now = *m.program_rom();
