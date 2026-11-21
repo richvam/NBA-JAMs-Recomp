@@ -1,0 +1,22 @@
+# sound_options.lua: a game into play (PLAY=1) with modtest's SOUND=1, which logs every sound
+# code the game sends its sound board. With both on, the first quarter's tune (002) and
+# "Here's the tip" (18D) are sent. Music off: the tune is not sent and the music off code
+# is. Announcer off: the tip call is not sent, the silent code 17F is, and the referee's
+# whistle (148) is kept.
+script dist/NBAJamRecomp/mods/sound_options.lua
+game nbajamte nbajamse
+frames 6401
+env PLAY=1
+env SOUND=1
+run music=1 announcer=1
+run music=0 announcer=1
+run music=1 announcer=0
+nolog error
+music=0: once sound options: music off
+announcer=0: once sound options: announcer off
+music=1: log sound 002
+announcer=1: log sound 18d
+music=0: nolog sound 002
+announcer=0: nolog sound 18d
+announcer=0: log sound 17f
+announcer=0: log sound 148

@@ -86,6 +86,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - New Lua mod practice.lua (every game): the game clock stands still and there is no shot clock.
 - New Lua mod show_info.lua (T.E., SE): shooting, turbo and on-fire counters for each player on the overlay during play.
 - New Lua mod stats_export.lua (T.E., SE): saves the box score of each finished game to stats/ as CSV and JSON Lines.
+- New Lua mod sound_options.lua (T.E., SE): turns the music during play, or the announcer, off. The referee's whistle and the team select, halftime and end-of-game tunes stay.
 - New Lua mod random_matchup.lua (T.E., SE): random teams and player pairs on team select, for the players, the computer or both, with any teams left out.
 - New Lua mod auto_initials.lua (T.E., SE): enters each chosen player's initials and birthday on the record screen with that player's own controls, so the saved record loads without typing.
 - New Lua mod hitboxes.lua (T.E., SE): body boxes, ball reach, push reach, the ball and the rims on the overlay during play.

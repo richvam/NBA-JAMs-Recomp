@@ -9,7 +9,7 @@
 //       the check of U6.1 and U6.2 through the menus' own player (menu_sound): the tune
 //       plays, each of the cursor, confirm and back sounds plays with the music off, and
 //       nothing at all comes out with both off. Exit status 0 when all of that holds.
-//   sndlog <data_dir> <game_id> play <frames> <byte> [byte...]
+//   sndlog <data_dir> <game_id> play <frames> <byte> [byte...]   (w<n>: wait n frames)
 //       the sound board on its own (main CPU held), the bytes sent after it has started, and
 //       the loudness of what it plays, a tenth of a second at a time.
 //
@@ -96,8 +96,10 @@ int main(int argc, char **argv)
 		std::vector<float> all;
 		for (int i = 5; i < argc; i++)
 		{
-			m->sound_command(u8(strtol(argv[i], nullptr, 16)));
-			m->run_frame(); m->take_audio(a); all.insert(all.end(), a.begin(), a.end()); a.clear();
+			// "w<n>": n frames with nothing sent
+			const int n = argv[i][0] == 'w' ? atoi(argv[i] + 1) : 1;
+			if (argv[i][0] != 'w') m->sound_command(u8(strtol(argv[i], nullptr, 16)));
+			for (int k = 0; k < n; k++) { m->run_frame(); m->take_audio(a); all.insert(all.end(), a.begin(), a.end()); a.clear(); }
 		}
 		for (int f = 0; f < frames; f++) { m->run_frame(); m->take_audio(a); all.insert(all.end(), a.begin(), a.end()); a.clear(); }
 		const size_t step = size_t(m->audio_rate() / 10);
