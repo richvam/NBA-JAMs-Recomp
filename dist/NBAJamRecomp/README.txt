@@ -153,12 +153,28 @@ ONLINE PLAY
     the game again.
 
 
+LUA MODS
+--------
+  Scripts in the mods folder change or add to the games: house rules, codes,
+  hidden players, a fantasy draft, on-screen info, a box score saved to stats.
+  Choose "Lua mods" in the main menu (or the pause menu) to turn them on and set
+  their options. mods\README.txt lists the scripts that come with the program and
+  explains how to write one.
+  * Online, the host's mods run for everybody, with the host's options; every
+    player needs the same script files. A few scripts (the fantasy draft, CPU vs
+    CPU, random matchups, auto initials) do nothing in an online game.
+  * Scripts that change a game keep it out of the players' saved records
+    ("Protect records", on by default).
+
+
 FOLDERS
 -------
   roms\         your ROMs / ZIPs (see above)
   overlays\     borders shown around the picture (F8)
   saves\        each game's NVRAM
   screenshots\  screenshots (F12)
+  mods\         Lua mods (see LUA MODS)
+  stats\        files Lua mods save (box scores, drafts, ladders)
   data\         (optional) games you built with tools/build_roms.sh
 
 

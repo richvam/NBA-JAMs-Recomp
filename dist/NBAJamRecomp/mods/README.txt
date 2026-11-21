@@ -10,6 +10,38 @@ During an offline game the same page opens from the pause menu (Esc, Guide, or S
 held). There, options marked live change the game at once; the others, and turning a mod on
 or off, apply next game, and the page says so. Online the page is not offered.
 
+Included scripts
+----------------
+Each file's first lines say how it works and what it changes. "Not online": the script does
+nothing in an online game (it says so in the log); all the others run online too.
+
+  auto_initials.lua  T.E., SE                initials and birthday on the record screen. Not online.
+  codes_jam.lua      NBA JAM 1993            the cabinet codes, as options.
+  codes_mht.lua      Hangtime, Max. Hangtime the cabinet codes, as options.
+  codes_te.lua       T.E., SE                the cabinet codes, as options.
+  cpu_difficulty.lua T.E., SE                the computer players' skill and catch-up.
+  cpu_vs_cpu.lua     all five                whole games between computer teams. Not online.
+  fantasy_draft.lua  T.E., SE                a draft from every team; ladder, slots. Not online.
+  fast_boot.lua      all five                skips the power-on tests.
+  fire_rules.lua     T.E., SE                baskets needed to catch fire; always or never on fire.
+  full_game.lua      all five                a started game is paid through all four quarters.
+  handicap.lua       all five                a head start in points for a side.
+  hitboxes.lua       T.E., SE                the game's collision boxes on the overlay.
+  no_select_timer.lua all five                no countdown on team select (and initials).
+  operator_settings.lua T.E., SE                the service menu adjustments, as options.
+  practice.lua       all five                the game clock and shot clock stand still.
+  quarter_length.lua all five                the length of a quarter.
+  random_matchup.lua T.E., SE                random teams and player pairs. Not online.
+  rules.lua          T.E., SE                shot clock, goaltending and injuries.
+  show_info.lua      T.E., SE                shooting, turbo and fire on the overlay.
+  sound_options.lua  T.E., SE                music during play, or the announcer, off.
+  stats_export.lua   T.E., SE                the box score of each game saved to stats/.
+  target_score.lua   all five                first to N points wins; a mercy rule.
+  turbo_rules.lua    T.E., SE                infinite turbo, drain and refill.
+  unlock_players.lua all five                hidden players by name, and expanded rosters.
+Libraries in lib/ (records, codes, hidden players, the draft's player list, ...) are used by
+the scripts and are not listed as mods; sym/ holds each game revision's symbol table.
+
 Writing a mod
 -------------
 Lua 5.4 with the base, string, table, math and utf8 libraries (no io/os/require/load).

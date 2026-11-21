@@ -634,6 +634,8 @@ expectation, both languages, the README list updated by Haiku.
 | 7.2 | Haiku | `README.md`, `dist/NBAJamRecomp/README.txt`, `mods/README.txt`: script list, API reference, netplay behaviour |
 | 7.3 | Opus | Final netplay soak: each script on, two and four peers, 30 000 frames, hashes equal |
 
+**Status:** 7.1 and 7.2 are done. **7.1:** `tools/ci/package.sh` (used by `release.yml` for the Windows and Linux packages) already copied the whole of `dist/NBAJamRecomp/mods`; it now refuses to build a package whose `mods/` differs from it, or has no `lib/` or `sym/`. The latest Windows and Linux builds of main hold all 41 Lua files. **7.2:** `mods/README.txt` lists the 24 scripts that come with the program, the games each runs on and the four that stay off online (auto initials, CPU vs CPU, fantasy draft, random matchup); its API reference has every call (with `nba.input`, `nba.hold`, `nba.load`) and its Online play section the netplay behaviour. `dist/NBAJamRecomp/README.txt` has a LUA MODS section and the `mods` and `stats` folders. `README.md` already had the script table (kept up to date with each script).
+
 **Gate:** advisor sign-off, then tag the release.
 
 ## Known risks
