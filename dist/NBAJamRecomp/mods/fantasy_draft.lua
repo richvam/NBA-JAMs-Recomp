@@ -24,6 +24,19 @@
 --   Draft       New draft, or Replay the last: the picks saved after the last draft
 --               (stats/<game>_draft_last.txt) are used again without drafting.
 -- Every draft is added to stats/<game>_drafts.jsonl.
+-- Ladder (6.F5): the drafted pair takes on the computer's teams one game after another, as a
+-- player with initials does in the stock game. The game keeps that run in the player's record:
+-- PR_TEAMSDEF, one bit for each team beaten (RECORD.ASM), and picks the computer's opponent as
+-- the first team of team_orders (SELECT2.ASM, from the weakest) not beaten yet (select_teams,
+-- get_opponent_team, run just after team select); with all 27 beaten it gives a random team
+-- with a hidden "superstar". Here the run belongs to the drafted pair, not to initials: the
+-- script keeps the pair and its teams beaten in stats/<game>_ladder.txt, and between team
+-- select and the matchup screen writes that mask into the side's records (and initials 0 for
+-- a player who has none, which select_teams needs), so the game itself picks the opponent. A
+-- win adds the opponent's bit. The record is never saved ("Protect records" is forced on: the
+-- guard clears the initials before the game saves). "Computer drafts too": the computer's
+-- side takes the two best players left (sum of the six ratings) for each game. A new ladder
+-- starts with a draft when there is no saved one; delete the file to start again.
 local records = nba.include("lib/records.lua")
 local hidden = nba.include("lib/hidden.lua")
 local PLAYERS = nba.include("lib/draft_pool.lua")
@@ -38,6 +51,8 @@ mod = {
     { id = "pool", label = "Pool", values = { 0, 1, 2 }, labels = { "Team rosters", "All players", "Everyone" }, default = 1 },
     { id = "twice", label = "Same player on both sides", type = "toggle", default = false },
     { id = "draft", label = "Draft", values = { 0, 1 }, labels = { "New draft", "Replay the last" }, default = 0 },
+    { id = "mode", label = "Mode", values = { 0, 1 }, labels = { "One game", "Ladder" }, default = 0 },
+    { id = "cpu_draft", label = "Computer drafts too", type = "toggle", default = false },
     records.OPTION,
   },
 }
@@ -56,23 +71,43 @@ local wait, drafters, owner, order, turn, picks, taken, cursor, timer, prev, rep
 local patched = { {}, {} }   -- per side: ROM address -> original value
 local held_team = {}
 local after_tip, played = 0, false
+local TEAMS = { "Atlanta", "Boston", "Charlotte", "Chicago", "Cleveland", "Dallas", "Denver",
+  "Detroit", "Golden State", "Houston", "Indiana", "L.A. Clippers", "L.A. Lakers", "Miami",
+  "Milwaukee", "Minnesota", "New Jersey", "New York", "Orlando", "Philadelphia", "Phoenix",
+  "Portland", "Sacramento", "San Antonio", "Seattle", "Utah", "Washington" }
+local pdata, orders           -- player<n>_data; team_orders (27 words) in the ROM
+local ladder                  -- { side = 1 or 2, mask = teams beaten, games = n } in ladder mode
+local opp_logged = false
+local ALL = 0x7FFFFFF
+local PR_INIT1, PR_TEAMSDEF = 0x40, 0x160
 
--- the team select countdown (no_select_timer.lua): its CREATE call is pointed at SUCIDE
-local function countdown_off()
+-- the team select countdown (no_select_timer.lua): its CREATE call is pointed at SUCIDE, so
+-- the countdown ends as it starts. Halftime starts the same 30-second countdown (SELECT.ASM
+-- subs_in), so the change is made only until the draft is over: set in attract mode and up to
+-- the draft's end, put back after it (the team select already on stays without a clock).
+local countdowns          -- { { addr, original, sucide } } of the longest select countdowns
+local function find_countdowns()
   local W = 16
-  local best, ticks
+  local found, ticks = {}, 0
   for _, a in ipairs(nba.rom_find({ 0x09CA, -1, 0x09C1, -1, 0x09E7, -1, -1, 0x0D5F })) do
     local t = nba.rom_read16(a + W)
-    if t >= 20 * 53 and (not ticks or t > ticks) then best, ticks = a, t end
+    local entry = nba.rom_read32(a + 5 * W)
+    if t >= 20 * 53 and nba.rom_read16(entry) == 0x5600 then
+      local fs = nba.rom_read32(entry + 2 * W)
+      local tail = nba.rom_find({ 0x1820, 0x0580, fs & 0xffff, fs >> 16, 0x0D5F, -1, -1, 0xC080 }, entry, 1)
+      if #tail > 0 then
+        if t > ticks then found, ticks = {}, t end
+        if t == ticks then found[#found + 1] = { a + 5 * W, entry, nba.rom_read32(tail[1] + 8 * W) } end
+      end
+    end
   end
-  if not best then return false end
-  local entry = nba.rom_read32(best + 5 * W)
-  if nba.rom_read16(entry) ~= 0x5600 then return false end
-  local fs = nba.rom_read32(entry + 2 * W)
-  local tail = nba.rom_find({ 0x1820, 0x0580, fs & 0xffff, fs >> 16, 0x0D5F, -1, -1, 0xC080 }, entry, 1)
-  if #tail == 0 then return false end
-  nba.rom_write32(best + 5 * W, nba.rom_read32(tail[1] + 8 * W))
-  return true
+  if #found > 0 then countdowns = found end
+end
+local countdown_is_off = false
+local function countdown(off)
+  if not countdowns or countdown_is_off == off then return end
+  for _, c in ipairs(countdowns) do nba.rom_write32(c[1], off and c[3] or c[2]) end
+  countdown_is_off = off
 end
 
 local function entry(t, slot) return names + (t * 20) * 64 + slot * 32 end
@@ -121,8 +156,17 @@ function on_load()
   end
   if not gs then nba.log("fantasy draft: the player list does not match this game"); return end
   make_pool()
+  pdata = {}
+  for k = 1, 4 do pdata[k] = nba.sym("player" .. k .. "_data") end
+  local o = nba.rom_find({ 5, 7, 14, 26, 22, 15 })
+  if #o > 0 then
+    orders = {}
+    for i = 0, 26 do orders[i + 1] = nba.rom_read16(o[1] + 16 * i) end
+  end
   nba.log(string.format("fantasy draft: %d players in the pool", #POOL))
-  if not countdown_off() then nba.log("fantasy draft: team select countdown not found; it is kept") end
+  find_countdowns()
+  if not countdowns then nba.log("fantasy draft: team select countdown not found; it is kept") end
+  countdown(true)
 end
 
 local function s16(v) return v >= 0x8000 and v - 0x10000 or v end
@@ -169,6 +213,30 @@ local function picks_names()
   return table.concat(s, ", ")
 end
 
+local function cpu_draft()
+  if not nba.option("cpu_draft") then return end
+  local has = { false, false }
+  for k = 1, 4 do if picks[k] then has[side(k)] = true end end
+  local used = {}
+  for k = 1, 4 do if picks[k] then used[picks[k]] = true end end
+  for s = 1, 2 do
+    if not has[s] then
+      for _, k in ipairs({ 2 * s - 1, 2 * s }) do
+        local best, bv
+        for i, e in ipairs(POOL) do
+          if not used[i - 1] then
+            local v = 0
+            for _, a in ipairs(ATTR) do v = v + rating(e, a[2]) // (a[3] or 1) end
+            if not bv or v > bv then best, bv = i - 1, v end
+          end
+        end
+        picks[k], used[best] = best, true
+        nba.log(string.format("fantasy draft: the computer takes %s for P%d", POOL[best + 1].name, k))
+      end
+    end
+  end
+end
+
 local function finish()
   state = "done"
   nba.log("fantasy draft: done, " .. picks_names())
@@ -176,11 +244,23 @@ local function finish()
   nba.save(nba.game .. "_draft_last.txt", text .. "\n")
   nba.save(nba.game .. "_drafts.jsonl", string.format('{"date":"%s","picks":"%s","players":"%s"}\n',
     nba.date() or "", text, picks_names()), { append = true })
+  if nba.option("mode") == 1 then
+    local sides = {}
+    for k = 1, 4 do if picks[k] then sides[side(k)] = true end end
+    if sides[1] and sides[2] then
+      nba.log("fantasy draft: a ladder is for one side against the computer; this is one game")
+    else
+      ladder = { side = sides[1] and 1 or 2, mask = 0, games = 0, picks = text }
+      nba.save(nba.game .. "_ladder.txt", string.format("picks %s\nside %d\nmask %d\ngames 0\n", text, ladder.side, 0))
+      nba.log("fantasy draft: a new ladder for team " .. ladder.side)
+    end
+  end
+  cpu_draft()
 end
 
 -- Replay the last: the saved picks, if every one is in this pool
-local function replay()
-  local text = nba.load(nba.game .. "_draft_last.txt")
+local function replay(text)
+  text = text or nba.load(nba.game .. "_draft_last.txt")
   if not text then nba.log("fantasy draft: no saved draft to replay; drafting"); return false end
   local find = {}
   for i, e in ipairs(POOL) do find[e.kind .. e.id] = i - 1 end
@@ -197,9 +277,33 @@ local function replay()
   return true
 end
 
+-- Ladder: the saved pair and its teams beaten
+local function ladder_load()
+  local t = nba.load(nba.game .. "_ladder.txt")
+  if not t then return false end
+  local p, sd = t:match("picks ([^\n]+)"), tonumber(t:match("side (%d)"))
+  local m, g = tonumber(t:match("mask (%d+)")), tonumber(t:match("games (%d+)"))
+  if not (p and sd and m) then nba.log("fantasy draft: the saved ladder cannot be read; drafting a new one"); return false end
+  if not replay(p) then return false end
+  ladder = { side = sd, mask = m, games = g or 0, picks = p }
+  local n = 0
+  for i = 0, 26 do if (m >> i) & 1 == 1 then n = n + 1 end end
+  nba.log(string.format("fantasy draft: ladder game %d for team %d, %d of 27 teams beaten", ladder.games + 1, sd, n))
+  cpu_draft()
+  return true
+end
+
+local function ladder_save()
+  nba.save(nba.game .. "_ladder.txt", string.format("picks %s\nside %d\nmask %d\ngames %d\n", ladder.picks, ladder.side, ladder.mask, ladder.games))
+end
+
 -- the players in the game make the draft order and own the places on court
 local function begin()
-  if nba.option("draft") == 1 and replay() then return end
+  if nba.option("mode") == 1 and ladder_load() then return end
+  if nba.option("draft") == 1 and nba.option("mode") == 0 and replay() then
+    cpu_draft()
+    return
+  end
   local p = nba.read16(pst)
   drafters, owner = {}, {}
   for k = 0, 3 do if (p >> k) & 1 == 1 then drafters[#drafters + 1] = k + 1 end end
@@ -306,7 +410,8 @@ local function hold_pairs()
   for s = 1, 2 do
     local t = nba.read16(team[s])
     local a, b = 2 * s - 1, 2 * s
-    if picks[a] or picks[b] then
+    -- (-1, read as 65535, while the side has no team yet)
+    if t <= 26 and (picks[a] or picks[b]) then
       if held_team[s] ~= t then restore(s) end
       held_team[s] = t
       nba.write16(set[s] + 16 * t, 0)
@@ -336,7 +441,8 @@ function on_frame()
   if not gs then return end
   local g = nba.read16(gs)
   if g == 0 or g == 1 then
-    if state ~= "idle" then restore(2); restore(1); held_team = {}; state = "idle"; after_tip = 0 end
+    countdown(true)
+    if state ~= "idle" then restore(2); restore(1); held_team = {}; state = "idle"; after_tip = 0; ladder = nil; opp_logged = false end
     played = false
     return
   end
@@ -346,6 +452,21 @@ function on_frame()
     played = false
     local a, b = nba.read16(sc), nba.read16(sc + 16)
     nba.save(nba.game .. "_draft_loser.txt", (a < b and "1" or a > b and "2" or "0") .. "\n")
+    if ladder then
+      local mine, theirs = ladder.side == 1 and a or b, ladder.side == 1 and b or a
+      local opp = nba.read16(team[3 - ladder.side])
+      ladder.games = ladder.games + 1
+      if mine > theirs and opp <= 26 then
+        ladder.mask = ladder.mask | (1 << opp)
+        local n = 0
+        for i = 0, 26 do if (ladder.mask >> i) & 1 == 1 then n = n + 1 end end
+        nba.log(string.format("fantasy draft: ladder: beat %s %d-%d, %d of 27 teams beaten%s", TEAMS[opp + 1], mine, theirs, n,
+          ladder.mask == ALL and ", the ladder is won" or ""))
+      else
+        nba.log(string.format("fantasy draft: ladder: lost to %s %d-%d", TEAMS[opp + 1] or "?", mine, theirs))
+      end
+      ladder_save()
+    end
   end
   local selecting = nba.read16(sel) ~= 0 and nba.read16(q) == 0
   if state == "idle" and selecting then state, wait = "wait", 0 end
@@ -365,7 +486,29 @@ function on_frame()
     if state == "draft" then draw() end
   end
   if state == "done" then
+    countdown(false)
     if selecting or g == 2 or g == 3 then hold_pairs() end
     hold_hidden(g)
+    if ladder then
+      guard.mark()
+      if not selecting and nba.read16(q) == 0 and g ~= 3 and nba.read16(inm) == 0 then
+        -- between team select and the matchup screen: the ladder's teams beaten in the records
+        local p = nba.read16(pst)
+        for _, k in ipairs({ 2 * ladder.side - 1, 2 * ladder.side }) do
+          if (p >> (k - 1)) & 1 == 1 and pdata[k] then
+            if s16(nba.read16(pdata[k] + PR_INIT1)) < 0 then nba.write16(pdata[k] + PR_INIT1, 0) end
+            nba.write32(pdata[k] + PR_TEAMSDEF, ladder.mask)
+          end
+        end
+      end
+      if nba.read16(inm) ~= 0 and not opp_logged then
+        opp_logged = true
+        local opp = nba.read16(team[3 - ladder.side])
+        local stock
+        if orders then for _, t in ipairs(orders) do if (ladder.mask >> t) & 1 == 0 then stock = t; break end end end
+        nba.log(string.format("fantasy draft: ladder opponent %s, the stock game's next: %s", TEAMS[opp + 1] or "?",
+          stock and TEAMS[stock + 1] or "(all beaten)"))
+      end
+    end
   end
 end

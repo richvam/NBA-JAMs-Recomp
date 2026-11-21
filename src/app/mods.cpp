@@ -159,7 +159,11 @@ struct mod_api
 		u32 addr = u32(a);
 		std::vector<u8> &r = rom(L);
 		if (addr < kRomBase || (addr & 15) || (size_t(addr - kRomBase) >> 4) >= r.size() / 2)
-			luaL_error(L, "ROM address 0x%08x out of range (bit addresses 0xff800000.., word aligned)", addr);
+		{
+			// luaL_error has no field widths (%08x): format the number first
+			char b[16]; snprintf(b, sizeof b, "0x%08x", unsigned(addr));
+			luaL_error(L, "ROM address %s out of range (bit addresses 0xff800000.., word aligned)", b);
+		}
 		return size_t(addr - kRomBase) >> 4;
 	}
 	static u16 rw(std::vector<u8> &r, size_t w) { return u16(r[w * 2] | (r[w * 2 + 1] << 8)); }
@@ -383,7 +387,7 @@ public:
 		if (ec) { lua_pushnil(L); lua_pushstring(L, ("no stats/" + name).c_str()); return 2; }
 		if (n > (1u << 20)) { lua_pushnil(L); lua_pushstring(L, ("stats/" + name + " is over 1 MB").c_str()); return 2; }
 		std::ifstream f(from, std::ios::binary);
-		std::string t(size_t(n), ' ');
+		std::string t(size_t(n), '\0');
 		f.read(t.data(), std::streamsize(n));
 		if (!f) { lua_pushnil(L); lua_pushstring(L, ("cannot read stats/" + name).c_str()); return 2; }
 		lua_pushlstring(L, t.data(), t.size());
@@ -481,7 +485,11 @@ public:
 	// both boards. Saved player records, audits and adjustments live there (roadmap 4.4).
 	static u32 ram_addr(lua_State *L, u32 a)
 	{
-		if (a >= 0x01400000u && a <= 0x014fffffu) luaL_error(L, "nba.write: 0x%08X is NVRAM, which scripts may not write", (unsigned)a);
+		if (a >= 0x01400000u && a <= 0x014fffffu)
+		{
+			char b[16]; snprintf(b, sizeof b, "0x%08X", unsigned(a));
+			luaL_error(L, "nba.write: %s is NVRAM, which scripts may not write", b);
+		}
 		return a;
 	}
 	static int write16(lua_State *L) { mach(L).poke16(ram_addr(L, u32(luaL_checkinteger(L, 1))), u16(luaL_checkinteger(L, 2))); return 0; }
