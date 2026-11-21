@@ -600,6 +600,8 @@ expectation, both languages, the README list updated by Haiku.
 
 **Status:** `practice.lua` is done (every game) for the game clock and the shot clock. The script keeps `game_time` at its value from the first frame of play in each quarter, so the quarter never ends, and holds `shotimer` at 1,0 while a shot clock runs (as `rules.lua`). Measured over 16000 played frames on all five games: the clock stays at 3:00.0 in the first quarter and the shot clock never runs out; without the script the shot clock runs out by frame 3594 to 7224. Not done: idle opponents and a ball reset on a button. The script API has no way to read a button, and stopping the computer players needs the drone code traced.
 
+**Status:** `show_info.lua` is done for T.E. and SE: field goals with percentage (from `player_stats`; dunks are counted as 2-point shots, checked against the score), threes, the turbo meter (`ply_turbo`) as a bar, and the baskets in a row (`ballnumscored`) or ON FIRE (`plyrnumonfire`). Drawn on the overlay only, during play only (checked: 5 draws in play, 0 in attract). Not done: the input display, since the script API has no way to read a button; and the other three games, whose fire and stat symbols are not mapped.
+
 ## Phase 7: release
 
 | ID | Model | Task |

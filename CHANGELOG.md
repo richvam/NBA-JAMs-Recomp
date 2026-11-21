@@ -84,6 +84,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
   "any button to continue" prompt after a blank NVRAM.
 - modtest: NVPREP=<frames> boots the game once first, so a test starts from a valid NVRAM.
 - New Lua mod practice.lua (every game): the game clock stands still and there is no shot clock.
+- New Lua mod show_info.lua (T.E., SE): shooting, turbo and on-fire counters for each player on the overlay during play.
 
 ### Changed
 - The CRT mask is as coarse at 4K as at 1080p (it was twice as fine at 4K), and it lines up

@@ -284,6 +284,7 @@ Included:
 | `target_score.lua` | Every game: first to 11, 15, 21, 30, 50, 75 or 100 points wins, and a mercy rule that ends the game when a team leads by 10 to 30 points. The game ends through its own end-of-game screens. |
 | `fast_boot.lua` | Every game: no wait on the power-on screen, so attract mode starts after about a tenth of a second instead of 1 second (T.E., SE, NBA JAM 1993), or about 0.9 seconds instead of 3.6 (Maximum Hangtime, Hangtime). Optionally the game also goes on by itself after a blank NVRAM instead of waiting for a button. It acts at power-on: after turning it on, reset the game. |
 | `practice.lua` | Every game: a practice game. The game clock stands still, so the quarter never ends, and there is no shot clock. Each can be switched back on. Turn the script off to end the game. |
+| `show_info.lua` | T.E. and SE: during play, one line per player at the bottom (or top) of the screen with field goals and percentage, threes, a turbo bar, and the player's baskets in a row or ON FIRE. |
 
 The scripts that change a game (`handicap.lua`, `unlock_players.lua`, the cabinet code mods) have "Protect records", on by default: such a game is not counted in the players' saved records (games, wins, losses, win streaks) on T.E., SE, Hangtime and Maximum Hangtime.
 

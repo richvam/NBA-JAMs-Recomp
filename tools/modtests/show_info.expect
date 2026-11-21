@@ -1,0 +1,13 @@
+# roadmap Phase 6: dist/NBAJamRecomp/mods/show_info.lua in a played game (PLAY=1). At frame
+# 8000, in play, the overlay has 5 draws: the box and one line per player. In attract mode
+# (frame 300) it draws nothing. The numbers were checked on screenshots with the full ROM
+# sets (T.E. at frame 8000: P3 FG 2/3 67%, P4 2/3 and "FIRE 1"; SE: P4 on fire), and the shot
+# counts against the score (points = 2 x 2-point makes + 3 x 3-point makes).
+script dist/NBAJamRecomp/mods/show_info.lua
+game nbajamte nbajamse
+frames 8001
+env PLAY=1
+env SHOT=8000:/dev/null
+run place=0
+run place=1
+once picture with 5 draws
