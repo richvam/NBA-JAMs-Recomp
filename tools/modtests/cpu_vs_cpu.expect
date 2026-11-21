@@ -3,17 +3,20 @@
 # - the script starts a game from attract mode, the computer plays all four players, the game
 #   runs through four quarters (or overtime) to its end-of-game screen and back to attract
 #   mode with PSTATUS 0, on all five games;
-# - "Play another" starts the next game, "Back to attract" does not.
+# - "Play another" starts the next game, "Back to attract" does not. The "Back to attract" run
+#   takes the team under the cursor: with "Random" each run is another matchup, and an
+#   overtime can run past the last frame (seen once on T.E.). SE with the team under the
+#   cursor goes to overtime and ends at frame 60141, hence 80001 frames.
 script dist/NBAJamRecomp/mods/cpu_vs_cpu.lua
 extra cvc_probe.lua
 game nbajamte nbajamse nbajam nbahangt nbamht
-frames 55001
+frames 80001
 run again=1
-run again=0
+run again=0 team=0
 nolog error
 once cpu vs cpu: game 1 started
 log in play with no player for 1000 frames
-once end of game after period 4 or later
+log end of game after period 4 or later
 log attract, PSTATUS 0
 again=1: once cpu vs cpu: game 2 started
 again=0: nolog cpu vs cpu: game 2 started
