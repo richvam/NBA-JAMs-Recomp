@@ -1,0 +1,20 @@
+# random_matchup.lua: matchup_probe.lua starts a one-player game and takes the team under
+# the cursor. With every team but Chicago (3) excluded and "Team's first pair", player 1
+# plays Chicago with pair 0; the computer's team is left to the game. With Both, every team
+# but Chicago and Boston (1) excluded, the two teams are those two. With
+# Computer, only team 2 (the computer's) is picked; player 1 keeps the team under the cursor.
+script dist/NBAJamRecomp/mods/random_matchup.lua
+extra matchup_probe.lua
+game nbajamte nbajamse
+frames 6001
+run pairs=1 ex0=1 ex1=1 ex2=1 ex4=1 ex5=1 ex6=1 ex7=1 ex8=1 ex9=1 ex10=1 ex11=1 ex12=1 ex13=1 ex14=1 ex15=1 ex16=1 ex17=1 ex18=1 ex19=1 ex20=1 ex21=1 ex22=1 ex23=1 ex24=1 ex25=1 ex26=1
+run sides=2 ex0=1 ex2=1 ex4=1 ex5=1 ex6=1 ex7=1 ex8=1 ex9=1 ex10=1 ex11=1 ex12=1 ex13=1 ex14=1 ex15=1 ex16=1 ex17=1 ex18=1 ex19=1 ex20=1 ex21=1 ex22=1 ex23=1 ex24=1 ex25=1 ex26=1
+run sides=1 ex0=0
+pairs=1: once random matchup: team 1 Chicago, pair 0
+pairs=1: once tipoff 3
+pairs=1: nolog random matchup: team 2
+sides=2: log random matchup: team 1
+sides=2: log random matchup: team 2
+sides=2: once tipoff
+sides=1: nolog random matchup: team 1
+sides=1: once random matchup: team 2
