@@ -1,0 +1,6 @@
+# roadmap Phase 6: hitboxes.lua draws nothing outside play (attract mode).
+script dist/NBAJamRecomp/mods/hitboxes.lua
+game nbajamte nbajamse
+frames 301
+env SHOT=300:/dev/null
+once picture with 0 draws

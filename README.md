@@ -287,6 +287,7 @@ Included:
 | `show_info.lua` | T.E. and SE: during play, one line per player at the bottom (or top) of the screen with field goals and percentage, threes, a turbo bar, and the player's baskets in a row or ON FIRE. |
 | `stats_export.lua` | T.E. and SE: when a game ends, adds its box score to `stats/<game>_box.csv` (one row per player: teams, score, points, shots, threes, dunks, free throws, rebounds, assists, steals, blocks, human or CPU) and `stats/<game>_games.jsonl` (one JSON line per game). |
 | `cpu_vs_cpu.lua` | Every game: starts whole games between two computer teams, for watching. From attract mode it starts a game, picks a random team (not on NBA JAM 1993), and lets the computer play all four players through four quarters; then the next game starts, or attract mode comes back. Turn it off to play yourself. |
+| `hitboxes.lua` | T.E. and SE, during play: draws what the game tests on the overlay. Each player's body box (blue team 1, red team 2) with its depth on the floor, the ball reach used for steals and blocks (filled while a steal or block is on), the push reach while a push is on, the ball and the rims. Each layer can be turned off. |
 
 The scripts that change a game (`handicap.lua`, `unlock_players.lua`, the cabinet code mods) have "Protect records", on by default: such a game is not counted in the players' saved records (games, wins, losses, win streaks) on T.E., SE, Hangtime and Maximum Hangtime.
 
