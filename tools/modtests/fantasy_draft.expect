@@ -1,0 +1,17 @@
+# roadmap 6.F2: fantasy_draft.lua with draft_probe.lua. Four players join; the draft starts on
+# team select with four drafters and four picks in snake order (1 2 3 4: one pick each) and
+# ends with four different players, one for each place. At tip-off the four players on court
+# are the drafted ones (their attribute tables: places 1 0 4 3 in lib/draft_pool.lua).
+script dist/NBAJamRecomp/mods/fantasy_draft.lua
+extra draft_probe.lua
+game nbajamte nbajamse
+frames 12001
+nolog error
+nolog not available
+once fantasy draft: 4 drafters, 4 picks
+once fantasy draft: pick 1, player 1 takes
+once fantasy draft: pick 2, player 2 takes
+once fantasy draft: pick 3, player 3 takes
+once fantasy draft: pick 4, player 4 takes
+once fantasy draft: done, P1 Stacey Augmon, P2 Danny Manning, P3 Xavier McDaniel, P4 Dee Brown
+once tipoff places 1 0 4 3

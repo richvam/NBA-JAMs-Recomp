@@ -85,6 +85,13 @@ Buttons and drawing
                                1), from the next frame on, together with the real ones.
                                buttons: a name or a table of names: up, down, left,
                                right, shoot, pass, turbo, start, coin.
+  nba.input(player)            player 1-4's buttons in the frame just run, as a table
+                               { up = true, shoot = false, ... } (the same names), also
+                               while they are held.
+  nba.hold(player [, frames])  the game does not get player 1-4's buttons (coin excepted)
+                               for the next `frames` frames (default 1); nba.input still
+                               does. Call it every frame to keep the game from seeing them,
+                               for example while a script's own menu is open.
   nba.text(x, y, str [, color [, scale]])
   nba.rect(x, y, w, h [, color [, filled]])
   nba.line(x1, y1, x2, y2 [, color])

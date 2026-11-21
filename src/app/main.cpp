@@ -1986,6 +1986,7 @@ bool app::step_game(bool menu_open)
 			cabinet_inputs local = menu_open ? menu_inputs() : gather_inputs();
 			if (!menu_open) m_mods.apply_presses(local, m_net.local_slot());   // nba.press (1.6), sent like the pad
 			cabinet_inputs in = m_net.frame_inputs(local.p[0]);
+			m_mods.take_inputs(in);                                    // nba.input / nba.hold (6.F2)
 			m_mach->set_inputs(in);
 			m_mach->run_frame();
 			m_mods.frame();
@@ -1997,6 +1998,7 @@ bool app::step_game(bool menu_open)
 	{
 		cabinet_inputs in = gather_inputs();
 		m_mods.apply_presses(in);                                          // nba.press (1.6)
+		m_mods.take_inputs(in);                                            // nba.input / nba.hold (6.F2)
 		m_mach->set_inputs(in);
 		m_mach->run_frame();
 		m_mods.frame();

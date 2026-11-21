@@ -291,6 +291,7 @@ Included:
 | `auto_initials.lua` | T.E. and SE: when a player joins, enters the initials and birthday set in the options with that player's controls, so the saved record loads without typing. Choose the players it enters for. |
 | `random_matchup.lua` | T.E. and SE: on team select, picks a random team and pair of players for the players, the computer or both. Teams can be left out one by one. |
 | `sound_options.lua` | T.E. and SE: turns the music during play, or the announcer, off, from the next game. The referee's whistle and the tunes between quarters stay. |
+| `fantasy_draft.lua` | T.E. and SE, offline: on team select the players who joined draft players from every team, in snake order with a pick timer, with up, down and Shoot. Then each side picks the team it plays as and takes the court with its drafted players. |
 
 The scripts that change a game (`handicap.lua`, `unlock_players.lua`, the cabinet code mods) have "Protect records", on by default: such a game is not counted in the players' saved records (games, wins, losses, win streaks) on T.E., SE, Hangtime and Maximum Hangtime.
 

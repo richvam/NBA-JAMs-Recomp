@@ -200,6 +200,30 @@ public:
 		luaL_error(L, "nba.press: unknown button '%s' (up, down, left, right, shoot, pass, turbo, start, coin)", b);
 		return 0;
 	}
+	// nba.input(player) -> { up=, down=, left=, right=, shoot=, pass=, turbo=, start=, coin= }: the
+	// player's buttons in the frame just run, as the game got them or, while held, as pressed
+	static int input(lua_State *L)
+	{
+		int player = int(luaL_checkinteger(L, 1));
+		if (player < 1 || player > 4) return luaL_error(L, "nba.input: player is 1 to 4");
+		static const char *names[] = { "up", "down", "left", "right", "shoot", "pass", "turbo", "start", "coin" };
+		const u32 b = mgr(L)->m_seen[player - 1];
+		lua_createtable(L, 0, 9);
+		for (int i = 0; i < 9; i++) { lua_pushboolean(L, (b >> i) & 1); lua_setfield(L, -2, names[i]); }
+		return 1;
+	}
+	// nba.hold(player [, frames]): the game does not see the player's buttons (coin excepted) for
+	// the next `frames` frames (default 1); nba.input still gives them
+	static int hold(lua_State *L)
+	{
+		int player = int(luaL_checkinteger(L, 1));
+		if (player < 1 || player > 4) return luaL_error(L, "nba.hold: player is 1 to 4");
+		int frames = int(luaL_optinteger(L, 2, 1));
+		if (frames < 1 || frames > 36000) return luaL_error(L, "nba.hold: frames is 1 to 36000");
+		int &h = mgr(L)->m_hold[player - 1];
+		h = std::max(h, frames);
+		return 0;
+	}
 	// nba.press(player, buttons, frames): player 1-4; buttons a name or a table of names; held
 	// for `frames` frames (default 1), from the next frame on
 	static int press(lua_State *L)
@@ -511,7 +535,7 @@ lua_State *mod_manager::new_state(mod_script *mod, bool with_game)
 		{ "rom_write16", mod_api::rom_write16 }, { "rom_write32", mod_api::rom_write32 }, { "rom_find", mod_api::rom_find },
 		{ "read8", mod_api::read8 }, { "write8", mod_api::write8 }, { "read16", mod_api::read16 }, { "write16", mod_api::write16 },
 		{ "read32", mod_api::read32 }, { "write32", mod_api::write32 },
-		{ "press", mod_api::press }, { "text", mod_api::text }, { "rect", mod_api::rect }, { "line", mod_api::line },
+		{ "press", mod_api::press }, { "input", mod_api::input }, { "hold", mod_api::hold }, { "text", mod_api::text }, { "rect", mod_api::rect }, { "line", mod_api::line },
 		{ nullptr, nullptr },
 	};
 	luaL_newlib(L, api);
@@ -1035,6 +1059,23 @@ void mod_manager::apply_presses(cabinet_inputs &in, int local_slot)
 	}
 }
 
+void mod_manager::take_inputs(cabinet_inputs &in)
+{
+	for (int k = 0; k < 4; k++)
+	{
+		cabinet_inputs::player &q = in.p[k];
+		bool *b[9] = { &q.up, &q.down, &q.left, &q.right, &q.shoot, &q.pass, &q.turbo, &q.start, &q.coin };
+		u32 v = 0;
+		for (int i = 0; i < 9; i++) if (*b[i]) v |= 1u << i;
+		m_seen[k] = v;
+		if (m_hold[k] > 0)
+		{
+			for (int i = 0; i < 8; i++) *b[i] = false;
+			m_hold[k]--;
+		}
+	}
+}
+
 void mod_manager::frame()
 {
 	m_frame++;
@@ -1104,6 +1145,7 @@ void mod_manager::stop()
 	for (auto &r : m_running) lua_close(r.L);
 	m_running.clear();
 	m_press.clear();
+	for (int k = 0; k < 4; k++) { m_hold[k] = 0; m_seen[k] = 0; }
 	m_draw.clear();
 	m_mach = nullptr;
 	m_syms.clear();

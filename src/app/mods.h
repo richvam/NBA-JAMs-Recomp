@@ -114,6 +114,10 @@ public:
 	// local_slot: only presses for that player are applied, into in.p[0], the local player's
 	// input that the game sends to the others.
 	void apply_presses(cabinet_inputs &in, int local_slot = -1);
+	// After apply_presses and, online, after the players' inputs are merged (the same on every
+	// computer), just before set_inputs: keeps each player's buttons for nba.input and clears
+	// those of a player a script holds with nba.hold (roadmap 6.F2), so the game does not see them.
+	void take_inputs(cabinet_inputs &in);
 	const std::vector<mod_draw> &draws() const { return m_draw; }
 	void stop();
 	std::vector<std::string> take_log();                         // messages for the UI
@@ -157,6 +161,8 @@ private:
 	std::vector<std::string> m_log;
 	struct press { int player; u32 buttons; int frames; };
 	std::vector<press> m_press;
+	u32 m_seen[4] = {};      // each player's buttons this frame (nba.input)
+	int m_hold[4] = {};      // frames each player's buttons are still kept from the game (nba.hold)
 	std::vector<mod_draw> m_draw;
 	struct saved { bool enabled, all_games; std::vector<std::string> games; std::map<std::string, int> opt; };
 	std::vector<saved> m_saved;      // a player's own settings during an online game
