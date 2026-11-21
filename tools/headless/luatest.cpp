@@ -665,6 +665,10 @@ function on_frame(f)
     local none, why = nba.load("missing.txt")
     assert(none == nil and why:find("no stats/missing.txt"), "load missing")
     assert(not pcall(nba.load, "../up.csv"), "load bad name accepted")
+    local _, e1 = pcall(nba.rom_read16, 0x10)
+    local _, e2 = pcall(nba.write16, 0x01400000, 1)
+    assert(tostring(e1):find("ROM address 0x00000010 out of range", 1, true), "rom error text: " .. tostring(e1))
+    assert(tostring(e2):find("nba.write: 0x01400000 is NVRAM", 1, true), "nvram error text: " .. tostring(e2))
     nba.log("load ok")
   end
   if f == 700 then nba.log(pcall(nba.save, "later.txt", "x") and "later allowed" or "later refused") end
@@ -696,6 +700,7 @@ end
 		}
 		CHECK(!outside, "save: nothing is written outside stats/");
 		CHECK(all.find("load ok") != std::string::npos, "load: a saved file reads back; a missing file gives nil and why; bad names are errors");
+		CHECK(all.find("load ok") != std::string::npos, "errors: a bad ROM address and an NVRAM write give their messages with the address (no %08x in luaL_error)");
 		smm.stop();
 		fs::remove_all(sd);
 	}

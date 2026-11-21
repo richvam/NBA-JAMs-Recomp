@@ -86,6 +86,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - New Lua mod practice.lua (every game): the game clock stands still and there is no shot clock.
 - New Lua mod show_info.lua (T.E., SE): shooting, turbo and on-fire counters for each player on the overlay during play.
 - New Lua mod stats_export.lua (T.E., SE): saves the box score of each finished game to stats/ as CSV and JSON Lines.
+- fantasy_draft.lua ladder mode: a drafted pair takes on the computer's teams one game after another, in the game's own order, with its teams beaten kept in stats/ (not in the players' records). Option: the computer drafts too, from the players left.
 - fantasy_draft.lua options: draft order (fixed, random, loser of the last game first), the pool (team rosters, all players, everyone with the hidden players), the same player on both sides, and replaying the last saved draft. Every draft is saved to stats/.
 - Lua scripts can read back the files they saved in stats/ (`nba.load`); not in an online game.
 - New Lua mod fantasy_draft.lua (T.E., SE, offline): the players who joined draft players from every team on team select, in snake order with a pick timer, and play with them on the team they then choose.
@@ -125,6 +126,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - The README files describe the menus and the pause menu first; the F-keys are shortcuts.
 
 ### Fixed
+- A Lua script that read a ROM address out of range, or wrote to NVRAM, got a confusing error ("invalid option '%0'") instead of the message with the address.
 - With a controller in use, moving or resizing the window under a still mouse pointer no longer takes the focus away from the controller.
 
 ### Online
