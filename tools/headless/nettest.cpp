@@ -125,7 +125,14 @@ int main(int argc, char **argv)
 		// app then sends nothing pressed (app::menu_inputs) and the game goes on (U5.3).
 		if (const char *mf = getenv("MENU"))
 			if (np.frame() >= u32(atoi(mf)) && np.frame() < u32(atoi(mf)) + 600) local = cabinet_inputs::player{};
+		// as the app does online (app::step_game): nba.press for this peer's own player, sent like
+		// the pad; then nba.input / nba.hold on the merged inputs
+		cabinet_inputs li{};
+		li.p[0] = local;
+		mods.apply_presses(li, np.local_slot());
+		local = li.p[0];
 		cabinet_inputs in = np.frame_inputs(local);
+		mods.take_inputs(in);
 		if (getenv("CHEAT") && np.frame() >= 400 && np.frame() < 460) in.p[0].left = true;
 		m->set_inputs(in);
 		m->run_frame();

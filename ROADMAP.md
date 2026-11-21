@@ -634,6 +634,8 @@ expectation, both languages, the README list updated by Haiku.
 | 7.2 | Haiku | `README.md`, `dist/NBAJamRecomp/README.txt`, `mods/README.txt`: script list, API reference, netplay behaviour |
 | 7.3 | Opus | Final netplay soak: each script on, two and four peers, 30 000 frames, hashes equal |
 
+**Status:** 7.3 is done. `tools/netsoak.sh` runs `nettest` as a host and 1 or 3 clients on one computer with every script that comes with the program on (the host's set, sent with the game start, with default options), 30 000 frames, and compares the state hash all peers print every 300 frames. `nettest` now passes inputs through the mods as the program does online (`apply_presses` for the local player, `take_inputs` on the merged inputs). Result on the owner's ROMs: all five games, two and four peers, 100 hashes equal on every peer, no desync, no script error (22 scripts on T.E. and SE, 10 on NBA JAM 1993, Hangtime and Maximum Hangtime); 10 of 10 runs. Not covered: options other than the defaults, real networks (the peers are on one computer), and the scripts that do nothing online (auto initials, CPU vs CPU, fantasy draft, random matchup).
+
 **Gate:** advisor sign-off, then tag the release.
 
 ## Known risks
