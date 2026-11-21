@@ -13,6 +13,7 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <sstream>
 
 namespace fs = std::filesystem;
 
@@ -588,6 +589,61 @@ end
 		CHECK(on.p[0].shoot && on.p[0].turbo && !on.p[0].start && !on.p[2].shoot, "press online: only the local player's presses, sent as that player's own input");
 		pmm.stop();
 		fs::remove_all(pd);
+	}
+
+	// ---- saving (nba.save, roadmap Phase 6: stats_export.lua) ----
+	{
+		fs::path sd = fs::temp_directory_path() / "nbajam_luatest_save";
+		fs::remove_all(sd);
+		fs::create_directories(sd / "mods");
+		write_file(sd / "mods" / "sv.lua", R"(
+mod = { name = "Save" }
+function on_frame(f)
+  if f == 1 then
+    assert(nba.save("box_1.csv", "team,pts\n1,12\n") == true, "save failed")
+    assert(nba.save("box_1.csv", "team,pts\n1,14\n") == true, "overwrite failed")
+    assert(nba.save("game.json", "{}") == true, "json failed")
+    for _, bad in ipairs({ "../up.csv", "sub/x.csv", "sub\\x.csv", ".hidden.csv", "run.exe", "noext", "", "a b.csv",
+                           string.rep("a", 61) .. ".csv", "C:x.csv" }) do
+      assert(not pcall(nba.save, bad, "x"), "bad name accepted: " .. bad)
+    end
+    assert(not pcall(nba.save, "big.txt", string.rep("x", 1048577)), "too big accepted")
+    assert(nba.save("log.csv", "1\n", { append = true, header = "n\n" }))
+    assert(nba.save("log.csv", "2\n", { append = true, header = "n\n" }))
+    assert(type(nba.date()) == "string" and nba.date():match("^%d%d%d%d%-%d%d%-%d%d %d%d:%d%d:%d%d$"), "date")
+    for i = 1, 11 do assert(nba.save("n" .. i .. ".txt", "x")) end
+    nba.log(pcall(nba.save, "over.txt", "x") and "17th allowed" or "17th refused")
+  end
+  if f == 700 then nba.log(pcall(nba.save, "later.txt", "x") and "later allowed" or "later refused") end
+end
+)");
+		const u16 code[1] = { 0x7171 };
+		auto sm = make_machine(10, code, 1);
+		mod_manager smm;
+		smm.scan((sd / "mods").string(), "");
+		bool loaded = smm.mods().size() == 1 && smm.mods()[0].error.empty();
+		for (auto &s : smm.mods()) { s.enabled = true; if (!s.error.empty()) printf("save script: %s\n", s.error.c_str()); }
+		smm.start("nbajamte", *sm);
+		for (int f = 0; f < 701; f++) { sm->run_frame(); smm.frame(); }
+		std::string all;
+		for (auto &l : smm.take_log()) all += l + "\n";
+		auto rd = [&](const char *n) { std::ifstream f(sd / "stats" / n, std::ios::binary); std::stringstream b; b << f.rdbuf(); return b.str(); };
+		CHECK(loaded && all.find("rror") == std::string::npos && all.find("failed") == std::string::npos, "save: no script errors");
+		CHECK(rd("box_1.csv") == "team,pts\n1,14\n" && rd("game.json") == "{}" && rd("log.csv") == "n\n1\n2\n", "save: files land in stats/ next to mods/, an overwrite replaces the file, append writes the header once");
+		size_t nfiles = 0; bool tmp = false;
+		std::error_code dec;
+		for (auto &e : fs::directory_iterator(sd / "stats", dec)) { nfiles++; tmp = tmp || e.path().extension() == ".tmp"; }
+		CHECK(nfiles == 15 && !tmp, "save: only files within the rules are written (15), no .tmp is left");
+		CHECK(all.find("17th refused") != std::string::npos && all.find("later allowed") != std::string::npos, "save: at most 16 saves in 600 frames, then allowed again");
+		bool outside = false;
+		for (auto &e : fs::recursive_directory_iterator(sd, dec))
+		{
+			std::string r = fs::relative(e.path(), sd).string();
+			if (r.rfind("mods", 0) != 0 && r.rfind("stats", 0) != 0) outside = true;
+		}
+		CHECK(!outside, "save: nothing is written outside stats/");
+		smm.stop();
+		fs::remove_all(sd);
 	}
 
 	fs::remove_all(dir);

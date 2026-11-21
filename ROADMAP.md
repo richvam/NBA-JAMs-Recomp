@@ -602,6 +602,8 @@ expectation, both languages, the README list updated by Haiku.
 
 **Status:** `show_info.lua` is done for T.E. and SE: field goals with percentage (from `player_stats`; dunks are counted as 2-point shots, checked against the score), threes, the turbo meter (`ply_turbo`) as a bar, and the baskets in a row (`ballnumscored`) or ON FIRE (`plyrnumonfire`). Drawn on the overlay only, during play only (checked: 5 draws in play, 0 in attract). Not done: the input display, since the script API has no way to read a button; and the other three games, whose fire and stat symbols are not mapped.
 
+**Status:** `stats_export.lua` is done for T.E. and SE, with the new `nba.save()`: a script can write only into `stats/` next to the program, plain file names ending .csv, .json, .jsonl or .txt, at most 1 MB a call and 16 calls in 600 frames, and cannot read files back; `{ append = true, header = h }` adds to a file (up to 64 MB). `nba.date()` gives the local time for the rows, nil online. At the end-of-game screen (GAMSTATE 8 after play) the script appends one CSV row per player and one JSON line per game: date, game number, periods, team names (from the ROM's team name list in RECORD.ASM, found by its first name), score, and each player's points, shots, threes, dunks, free throws, rebounds, assists, steals, blocks and human or CPU. Checked on whole games on both: the players' points add up to the score, and the teams match the match-up screen. The other three games are not done: their stat and team-name tables are not mapped.
+
 ## Phase 7: release
 
 | ID | Model | Task |

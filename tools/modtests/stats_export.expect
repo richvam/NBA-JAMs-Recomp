@@ -1,0 +1,25 @@
+# roadmap Phase 6: dist/NBAJamRecomp/mods/stats_export.lua over a whole game (PLAY=1), ended
+# early by target_score.lua (first to 11). modtest puts every saved file and its lines in
+# the log (saved <name>, <name>: <line>).
+# - the team names are found in the ROM, the game is saved once at its end-of-game screen,
+#   and the players' points add up to the score;
+# - the CSV has its header once and one row per player; the JSON Lines file one game;
+# - "CSV only" and "JSON only" write only that file.
+script dist/NBAJamRecomp/mods/stats_export.lua
+extra ../../dist/NBAJamRecomp/mods/target_score.lua
+game nbajamte nbajamse
+frames 30001
+env PLAY=1
+opt target=11
+opt mercy=0
+run files=0
+run files=1
+run files=2
+once stats export: team names found
+once stats export: game 1 saved
+once stats export: points add up to the score
+files=0: once _box.csv: date,number,game,periods,team,team_name
+files=0: once _games.jsonl: {"date":
+files=1: nolog _games.jsonl
+files=2: nolog _box.csv
+files=2: once _games.jsonl: {"date":

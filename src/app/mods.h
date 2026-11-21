@@ -24,6 +24,11 @@
 // script and returns what it returns. Files in lib/ are not mods themselves.
 // Symbols (roadmap 1.2): nba.sym("name") is the bit address of a name of the game's source
 // for the running revision, from mods/sym/<game>_<program CRC-32>.lua, or nil.
+// Saving (roadmap Phase 6, stats_export.lua): nba.save("name.csv", text) writes a file into
+// <app>/stats/ and nothing else: a plain name (letters, digits, _ - .) ending .csv, .json,
+// .jsonl or .txt, no folders, at most 1 MB, at most 16 saves per script in 600 frames. Scripts cannot
+// read files back. { append = true, header = h } adds to the end instead (h first when it
+// creates the file), up to 64 MB a file. nba.date() is the local date and time (nil online).
 #pragma once
 #include "machine.h"
 #include <map>
@@ -127,6 +132,10 @@ public:
 	void net_restore();
 	static u32 source_hash(const std::string &path, const std::string &dir);
 	void set_netplay(bool on) { m_netplay = on; }
+	// where nba.save writes: <mods folder>/../stats unless set (headless tests)
+	void set_save_dir(const std::string &d) { m_save_dir = d; }
+	const std::string &save_dir() const { return m_save_dir; }
+	static bool save_name_ok(const std::string &name);
 
 private:
 	struct running
@@ -138,6 +147,7 @@ private:
 	std::vector<mod_script> m_mods;
 	std::vector<running> m_running;
 	std::string m_ini, m_dir;
+	std::string m_save_dir;
 	std::map<std::string, u32> m_syms;
 	bool m_syms_loaded = false;
 	std::string m_game;

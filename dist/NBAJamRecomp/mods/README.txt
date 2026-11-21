@@ -104,6 +104,20 @@ Example:
 Online, a press counts only for this computer's own player, and is sent to the others like
 the pad.
 
+Saving files
+------------
+  nba.save(name, text [, { append = true, header = h }])
+                               writes text to stats/<name> next to the program, replacing
+                               the file; with append it is added at the end, and h is
+                               written first when the file is new. name is a plain file name
+                               (letters, digits, _ - .) ending .csv, .json, .jsonl or .txt:
+                               no folders. At most 1 MB per call, 16 calls in 600 frames, and
+                               64 MB for a file that is appended to. Returns true, or nil and
+                               the reason if the file could not be written. Scripts cannot
+                               read files.
+  nba.date()                   the local date and time, "2026-11-20 19:40:38"; nil in an
+                               online game.
+
 Shared code
 -----------
   nba.include("lib/name.lua")  runs mods/lib/name.lua (sub-folders allowed) and returns

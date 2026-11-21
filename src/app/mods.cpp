@@ -15,6 +15,7 @@ extern "C" {
 #include <cstdio>
 #include <cmath>
 #include <cstring>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -284,6 +285,81 @@ public:
 		lua_setfield(L, cache, rel.c_str());
 		return 1;
 	}
+	// nba.save(name, text [, { append = true, header = "..." }]): write text to
+	// <app>/stats/<name> (see mods.h), replacing the file, or added at its end with append;
+	// header is written first when append creates the file. A bad name or too much text is a
+	// script error; a failed write returns nil and the reason.
+	static int save(lua_State *L)
+	{
+		std::string name = luaL_checkstring(L, 1);
+		size_t len = 0;
+		const char *text = luaL_checklstring(L, 2, &len);
+		bool append = false;
+		std::string header;
+		if (!lua_isnoneornil(L, 3))
+		{
+			luaL_checktype(L, 3, LUA_TTABLE);
+			lua_getfield(L, 3, "append"); append = lua_toboolean(L, -1); lua_pop(L, 1);
+			lua_getfield(L, 3, "header"); if (lua_isstring(L, -1)) header = lua_tostring(L, -1); lua_pop(L, 1);
+		}
+		if (!mod_manager::save_name_ok(name))
+			return luaL_error(L, "nba.save: the name is a plain file name ending .csv, .json, .jsonl or .txt (letters, digits, _ - .), got \"%s\"", name.c_str());
+		if (len > (1u << 20)) return luaL_error(L, "nba.save: at most 1 MB of text");
+		mod_manager *m = mgr(L);
+		// at most 16 saves in 600 frames (10 seconds), so a script cannot fill the disk
+		lua_getfield(L, LUA_REGISTRYINDEX, "nba_save_from");
+		lua_getfield(L, LUA_REGISTRYINDEX, "nba_saves");
+		lua_Integer from = lua_isinteger(L, -2) ? lua_tointeger(L, -2) : -1000000, n = lua_tointeger(L, -1);
+		lua_pop(L, 2);
+		if (lua_Integer(m->m_frame) - from >= 600 || lua_Integer(m->m_frame) < from) { from = m->m_frame; n = 0; }
+		if (n >= 16) return luaL_error(L, "nba.save: at most 16 files in 600 frames");
+		lua_pushinteger(L, from); lua_setfield(L, LUA_REGISTRYINDEX, "nba_save_from");
+		lua_pushinteger(L, n + 1); lua_setfield(L, LUA_REGISTRYINDEX, "nba_saves");
+		std::error_code ec;
+		fs::path dir = P(m->m_save_dir);
+		fs::create_directories(dir, ec);
+		fs::path to = dir / P(name), tmp = dir / P(name + ".tmp");
+		bool ok;
+		if (append)
+		{
+			std::uintmax_t had = fs::exists(to, ec) ? fs::file_size(to, ec) : 0;
+			if (ec) had = 0;
+			if (had + len + header.size() > (64u << 20)) return luaL_error(L, "nba.save: stats/%s would pass 64 MB", name.c_str());
+			std::ofstream f(to, std::ios::binary | std::ios::app);
+			if (had == 0) f.write(header.data(), std::streamsize(header.size()));
+			f.write(text, std::streamsize(len));
+			ok = bool(f);
+			if (!ok) { lua_pushnil(L); lua_pushstring(L, ("cannot write stats/" + name).c_str()); return 2; }
+			lua_pushboolean(L, 1);
+			return 1;
+		}
+		{
+			std::ofstream f(tmp, std::ios::binary | std::ios::trunc);
+			f.write(text, std::streamsize(len));
+			ok = bool(f);
+		}
+		if (ok) { fs::rename(tmp, to, ec); ok = !ec; }
+		if (!ok) { fs::remove(tmp, ec); lua_pushnil(L); lua_pushstring(L, ("cannot write stats/" + name).c_str()); return 2; }
+		lua_pushboolean(L, 1);
+		return 1;
+	}
+	// nba.date(): the local date and time as "YYYY-MM-DD HH:MM:SS", for saved files; nil in an
+	// online game, so no script can make its game depend on the clock
+	static int date(lua_State *L)
+	{
+		if (mgr(L)->m_netplay) { lua_pushnil(L); return 1; }
+		std::time_t t = std::time(nullptr);
+		std::tm tm{};
+#ifdef _WIN32
+		localtime_s(&tm, &t);
+#else
+		localtime_r(&t, &tm);
+#endif
+		char b[32];
+		std::strftime(b, sizeof b, "%Y-%m-%d %H:%M:%S", &tm);
+		lua_pushstring(L, b);
+		return 1;
+	}
 	// nba.sym("name"): the bit address of a symbol of the running revision, or nil
 	static int sym(lua_State *L)
 	{
@@ -430,7 +506,7 @@ lua_State *mod_manager::new_state(mod_script *mod, bool with_game)
 	lua_setfield(L, LUA_REGISTRYINDEX, "nba_mod");
 
 	static const luaL_Reg api[] = {
-		{ "log", mod_api::log }, { "option", mod_api::option }, { "frame", mod_api::frame }, { "include", mod_api::include }, { "sym", mod_api::sym },
+		{ "log", mod_api::log }, { "option", mod_api::option }, { "frame", mod_api::frame }, { "include", mod_api::include }, { "sym", mod_api::sym }, { "save", mod_api::save }, { "date", mod_api::date },
 		{ "rom_size", mod_api::rom_size }, { "rom_read16", mod_api::rom_read16 }, { "rom_read32", mod_api::rom_read32 },
 		{ "rom_write16", mod_api::rom_write16 }, { "rom_write32", mod_api::rom_write32 }, { "rom_find", mod_api::rom_find },
 		{ "read8", mod_api::read8 }, { "write8", mod_api::write8 }, { "read16", mod_api::read16 }, { "write16", mod_api::write16 },
@@ -587,6 +663,19 @@ bool mod_manager::load_meta(mod_script &m)
 	std::vector<std::string> seen;
 	m.writes_ram = source_writes_ram(m.path, m_dir, seen);
 	return true;
+}
+
+bool mod_manager::save_name_ok(const std::string &name)
+{
+	if (name.empty() || name.size() > 64 || name[0] == '.') return false;
+	for (char c : name)
+		if (!(isalnum((unsigned char)c) || c == '_' || c == '-' || c == '.')) return false;
+	for (const char *e : { ".csv", ".json", ".jsonl", ".txt" })
+	{
+		size_t k = strlen(e);
+		if (name.size() > k && name.compare(name.size() - k, k, e) == 0) return true;
+	}
+	return false;
 }
 
 bool mod_manager::lib_path_ok(const std::string &rel)
@@ -785,6 +874,7 @@ void mod_manager::scan(const std::string &dir, const std::string &ini)
 	m_mods.clear();
 	m_ini = ini;
 	m_dir = dir;
+	m_save_dir = u8s(P(dir).parent_path() / "stats");
 	std::error_code ec;
 	std::vector<fs::path> files;
 	for (auto it = fs::directory_iterator(P(dir), ec); !ec && it != fs::directory_iterator(); it.increment(ec))
