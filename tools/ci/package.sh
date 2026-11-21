@@ -19,6 +19,12 @@ case $os in
   windows) cp "$exe" "$pkg/NBAJamRecomp.exe" ;;
   linux)   cp "$exe" "$pkg/NBAJamRecomp"; strip "$pkg/NBAJamRecomp" ;;
 esac
+# every shipped script, library and symbol file must be in the package (roadmap 7.1)
+want=$(cd "$root"/dist/NBAJamRecomp/mods && find . -type f | sort)
+have=$(cd "$pkg"/mods && find . -type f | sort)
+if [ "$want" != "$have" ] || [ -z "$(cd "$pkg"/mods && find lib sym -name '*.lua' | head -1)" ]; then
+  echo "package mods/ differs from dist/NBAJamRecomp/mods, refusing" >&2; exit 1
+fi
 # nothing that looks like game data may end up in a package
 if find "$pkg" -type f \( -iname '*.bin' -o -iname '*.rom' -o -iname '*.irw' -o -iname '*.u[0-9]*' -o -iname '*.zip' \) | grep -q .; then
   echo "package contains ROM-like files, refusing" >&2; exit 1
