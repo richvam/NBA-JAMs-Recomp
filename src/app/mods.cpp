@@ -367,6 +367,28 @@ public:
 		lua_pushboolean(L, 1);
 		return 1;
 	}
+	// nba.load(name) -> text, or nil and the reason: a file in stats/ (where nba.save writes), by
+	// the same plain names, at most 1 MB. nil in an online game: the files differ between
+	// computers, and a script must not make the game depend on them (roadmap 6.F3).
+	static int load(lua_State *L)
+	{
+		std::string name = luaL_checkstring(L, 1);
+		if (!mod_manager::save_name_ok(name))
+			return luaL_error(L, "nba.load: the name is a plain file name ending .csv, .json, .jsonl or .txt (letters, digits, _ - .), got \"%s\"", name.c_str());
+		mod_manager *m = mgr(L);
+		if (m->m_netplay) { lua_pushnil(L); lua_pushstring(L, "not in an online game"); return 2; }
+		std::error_code ec;
+		fs::path from = P(m->m_save_dir) / P(name);
+		std::uintmax_t n = fs::file_size(from, ec);
+		if (ec) { lua_pushnil(L); lua_pushstring(L, ("no stats/" + name).c_str()); return 2; }
+		if (n > (1u << 20)) { lua_pushnil(L); lua_pushstring(L, ("stats/" + name + " is over 1 MB").c_str()); return 2; }
+		std::ifstream f(from, std::ios::binary);
+		std::string t(size_t(n), ' ');
+		f.read(t.data(), std::streamsize(n));
+		if (!f) { lua_pushnil(L); lua_pushstring(L, ("cannot read stats/" + name).c_str()); return 2; }
+		lua_pushlstring(L, t.data(), t.size());
+		return 1;
+	}
 	// nba.date(): the local date and time as "YYYY-MM-DD HH:MM:SS", for saved files; nil in an
 	// online game, so no script can make its game depend on the clock
 	static int date(lua_State *L)
@@ -530,7 +552,7 @@ lua_State *mod_manager::new_state(mod_script *mod, bool with_game)
 	lua_setfield(L, LUA_REGISTRYINDEX, "nba_mod");
 
 	static const luaL_Reg api[] = {
-		{ "log", mod_api::log }, { "option", mod_api::option }, { "frame", mod_api::frame }, { "include", mod_api::include }, { "sym", mod_api::sym }, { "save", mod_api::save }, { "date", mod_api::date },
+		{ "log", mod_api::log }, { "option", mod_api::option }, { "frame", mod_api::frame }, { "include", mod_api::include }, { "sym", mod_api::sym }, { "save", mod_api::save }, { "load", mod_api::load }, { "date", mod_api::date },
 		{ "rom_size", mod_api::rom_size }, { "rom_read16", mod_api::rom_read16 }, { "rom_read32", mod_api::rom_read32 },
 		{ "rom_write16", mod_api::rom_write16 }, { "rom_write32", mod_api::rom_write32 }, { "rom_find", mod_api::rom_find },
 		{ "read8", mod_api::read8 }, { "write8", mod_api::write8 }, { "read16", mod_api::read16 }, { "write16", mod_api::write16 },

@@ -661,6 +661,11 @@ function on_frame(f)
     assert(type(nba.date()) == "string" and nba.date():match("^%d%d%d%d%-%d%d%-%d%d %d%d:%d%d:%d%d$"), "date")
     for i = 1, 11 do assert(nba.save("n" .. i .. ".txt", "x")) end
     nba.log(pcall(nba.save, "over.txt", "x") and "17th allowed" or "17th refused")
+    assert(nba.load("box_1.csv") == "team,pts\n1,14\n", "load back")
+    local none, why = nba.load("missing.txt")
+    assert(none == nil and why:find("no stats/missing.txt"), "load missing")
+    assert(not pcall(nba.load, "../up.csv"), "load bad name accepted")
+    nba.log("load ok")
   end
   if f == 700 then nba.log(pcall(nba.save, "later.txt", "x") and "later allowed" or "later refused") end
 end
@@ -690,6 +695,7 @@ end
 			if (r.rfind("mods", 0) != 0 && r.rfind("stats", 0) != 0) outside = true;
 		}
 		CHECK(!outside, "save: nothing is written outside stats/");
+		CHECK(all.find("load ok") != std::string::npos, "load: a saved file reads back; a missing file gives nil and why; bad names are errors");
 		smm.stop();
 		fs::remove_all(sd);
 	}

@@ -1,17 +1,41 @@
-# roadmap 6.F2: fantasy_draft.lua with draft_probe.lua. Four players join; the draft starts on
-# team select with four drafters and four picks in snake order (1 2 3 4: one pick each) and
-# ends with four different players, one for each place. At tip-off the four players on court
-# are the drafted ones (their attribute tables: places 1 0 4 3 in lib/draft_pool.lua).
+# roadmap 6.F2, 6.F3: fantasy_draft.lua with draft_probe.lua; four players join.
+# setup=0 (fixed order, all players): four picks in order 1 2 3 4, four different players,
+#   and at tip-off the four on court are the drafted ones (places 1 0 4 3 in lib/draft_pool.lua).
+# setup=1 (Replay the last, with a saved "1:r85 2:r86"): no drafting; at tip-off players 1 and
+#   2 are places 85 and 86 (Karl Malone, John Stockton) and 3 and 4 their team's own.
+# setup=2 (Loser first, team 2 saved as the loser): the order is 3 4 1 2.
+# setup=3 (nobody moves the cursor, a 10-second timer, the same player on both sides): player 1
+#   takes the first player; player 2 (same side) cannot and his timer takes the next one;
+#   player 3 (other side) takes the first player too.
+# pool=2 (Everyone) adds the hidden players; pool=0 (team rosters) has fewer than all 92.
 script dist/NBAJamRecomp/mods/fantasy_draft.lua
 extra draft_probe.lua
 game nbajamte nbajamse
 frames 12001
+run setup=0
+run setup=1 draft=1
+run setup=2 order=2
+run setup=3 twice=1 timer=10
+run pool=2
+run pool=0
 nolog error
 nolog not available
-once fantasy draft: 4 drafters, 4 picks
-once fantasy draft: pick 1, player 1 takes
-once fantasy draft: pick 2, player 2 takes
-once fantasy draft: pick 3, player 3 takes
-once fantasy draft: pick 4, player 4 takes
-once fantasy draft: done, P1 Stacey Augmon, P2 Danny Manning, P3 Xavier McDaniel, P4 Dee Brown
-once tipoff places 1 0 4 3
+setup=0: once fantasy draft: 92 players in the pool
+setup=0: once fantasy draft: 4 drafters, 4 picks, order 1 2 3 4
+setup=0: once fantasy draft: pick 1, player 1 takes
+setup=0: once fantasy draft: pick 2, player 2 takes
+setup=0: once fantasy draft: pick 3, player 3 takes
+setup=0: once fantasy draft: pick 4, player 4 takes
+setup=0: once fantasy draft: done, P1 Stacey Augmon, P2 Danny Manning, P3 Xavier McDaniel, P4 Dee Brown
+setup=0: once tipoff places 1 0 4 3
+setup=1: once fantasy draft: replaying the last draft, P1 Karl Malone, P2 John Stockton, P3 team, P4 team
+setup=1: nolog fantasy draft: pick
+setup=1: once tipoff places 85 86
+setup=2: once fantasy draft: team 2 lost the last game and picks first
+setup=2: once fantasy draft: 4 drafters, 4 picks, order 3 4 1 2
+setup=3: once fantasy draft: pick 1, player 1 takes Danny Manning for P1
+setup=3: once fantasy draft: pick 2, player 2 takes Stacey Augmon for P2
+setup=3: once fantasy draft: pick 3, player 3 takes Danny Manning for P3
+pool=2: once fantasy draft: done
+pool=0: nolog fantasy draft: 92 players
+pool=0: once fantasy draft: done
