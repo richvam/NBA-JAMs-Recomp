@@ -3,11 +3,11 @@
 -- twice, YES, right, five shoots; on team select one Shoot for the first draft pick, more
 -- starts for credit after the draft, then Shoot every 60 frames; in play Shoot and Pass by turns). In the fourth
 -- quarter it puts team 1 ten points ahead (scores), so the drafted side wins every game.
--- At each tip-off logs "tipoff <n> places a b c d": the four players' places in the player
+-- 30 frames after each tip-off logs "tipoff <n> places a b c d": the four players' places in the player
 -- list (from their attribute tables).
 mod = { name = "Ladder probe" }
 local gs, sel, scores, q, procs, atl
-local s0, games, selt, lastgs, att, tip = nil, 0, nil, -1, nil, false
+local s0, games, selt, lastgs, att, tip, inplay = nil, 0, nil, -1, nil, false, 0
 function on_load()
   gs, sel, scores, q = nba.sym("GAMSTATE"), nba.sym("in_team_select"), nba.sym("scores"), nba.sym("gmqrtr")
   procs, atl = nba.sym("plyrproc_t"), nba.sym("ATL_t")
@@ -20,14 +20,16 @@ function on_frame(f)
   lastgs = g
   if g == 3 then
     if f % 30 == 0 then nba.press(1, (f // 30) % 2 == 0 and "shoot" or "pass", 3) end
-    if not tip then
+    -- 30 frames in: at the first frame of play the players' processes may not be set up yet
+    inplay = inplay + 1
+    if not tip and inplay == 30 then
       tip = true
       local s = {}
       for k = 0, 3 do s[#s + 1] = tostring((nba.read32(nba.read32(procs + 32 * k) + 0x150) - atl) // 368) end
       nba.log(string.format("tipoff %d places %s", games, table.concat(s, " ")))
     end
     if nba.read16(q) == 3 and f % 60 == 0 then nba.write16(scores, nba.read16(scores + 16) + 10) end
-  elseif idle then tip = false end
+  elseif idle then tip, inplay = false, 0 end
   if not s0 and idle and att and f - att >= (games == 0 and 1199 or 600) then s0 = f; games = games + 1 end
   if s0 then
     local k = f - s0

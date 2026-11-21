@@ -1,0 +1,27 @@
+# roadmap 6.F6: ladder slots. ladder_seed.lua saves two ladders left in the middle (slot 1:
+# Malone and Stockton, nothing beaten; slot 2: Augmon and Manning, Dallas beaten), and
+# ladder_probe.lua plays as player 1 (and wins). Each slot goes on where it was left:
+# slot 2 resumes at its second game against Detroit, the stock game's next pick after Dallas,
+# with its own pair on court, and its win is added to its own teams beaten; slot 1 starts its
+# first game against Dallas with Malone and Stockton. "Start over" drafts a new pair instead.
+script dist/NBAJamRecomp/mods/fantasy_draft.lua
+extra ladder_probe.lua ladder_seed.lua ../../dist/NBAJamRecomp/mods/full_game.lua
+game nbajamte nbajamse
+frames 50001
+run mode=1 timer=10 slot=2
+run mode=1 timer=10 slot=1
+run mode=1 timer=10 slot=3 restart=1
+nolog error
+slot=2: log fantasy draft: replaying the last draft, P1 Stacey Augmon, P2 Danny Manning
+slot=2: once fantasy draft: ladder slot 2, game 2 for team 1, 1 of 27 teams beaten
+slot=2: once fantasy draft: ladder opponent Detroit, the stock game's next: Detroit
+slot=2: once tipoff 1 places 1 0
+slot=2: once fantasy draft: ladder: beat Detroit
+slot=2: once fantasy draft: ladder slot 2, game 3 for team 1, 2 of 27 teams beaten
+slot=1: log fantasy draft: replaying the last draft, P1 Karl Malone, P2 John Stockton
+slot=1: once fantasy draft: ladder slot 1, game 1 for team 1, 0 of 27 teams beaten
+slot=1: once fantasy draft: ladder opponent Dallas, the stock game's next: Dallas
+slot=1: once tipoff 1 places 85 86
+slot=3: log fantasy draft: ladder slot 3 starts over
+slot=3: log fantasy draft: 1 drafters, 2 picks
+slot=3: log fantasy draft: a new ladder in slot 3 for team 1
