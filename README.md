@@ -289,6 +289,7 @@ Included:
 | `cpu_vs_cpu.lua` | Every game: starts whole games between two computer teams, for watching. From attract mode it starts a game, picks a random team (not on NBA JAM 1993), and lets the computer play all four players through four quarters; then the next game starts, or attract mode comes back. Turn it off to play yourself. |
 | `hitboxes.lua` | T.E. and SE, during play: draws what the game tests on the overlay. Each player's body box (blue team 1, red team 2) with its depth on the floor, the ball reach used for steals and blocks (filled while a steal or block is on), the push reach while a push is on, the ball and the rims. Each layer can be turned off. |
 | `auto_initials.lua` | T.E. and SE: when a player joins, enters the initials and birthday set in the options with that player's controls, so the saved record loads without typing. Choose the players it enters for. |
+| `random_matchup.lua` | T.E. and SE: on team select, picks a random team and pair of players for the players, the computer or both. Teams can be left out one by one. |
 
 The scripts that change a game (`handicap.lua`, `unlock_players.lua`, the cabinet code mods) have "Protect records", on by default: such a game is not counted in the players' saved records (games, wins, losses, win streaks) on T.E., SE, Hangtime and Maximum Hangtime.
 
