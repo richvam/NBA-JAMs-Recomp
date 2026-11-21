@@ -1,0 +1,15 @@
+# roadmap 6.F1: mixed_pair_probe.lua makes Chicago's first pair Atlanta's first player and
+# Utah's, by changing the ROM table player_names, and plays the first quarter with it. The
+# players' attribute tables (and with them heads, uniforms and ratings) and the announcer's
+# name calls are the ones of the two named players, at tip-off and at the end of the quarter.
+script tools/modtests/mixed_pair_probe.lua
+game nbajamte nbajamse
+frames 14001
+once mixed pair: places
+once tipoff p1 want
+once tipoff p2 want
+once q1end p1 want
+once q1end p2 want
+once quarter over at
+nolog error
+nolog DIFFER
