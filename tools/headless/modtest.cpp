@@ -17,8 +17,10 @@
 #include "games.h"
 #include "mod_draw.h"
 #include "miniz.h"
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <sstream>
@@ -137,6 +139,10 @@ int main(int argc, char **argv)
 	}
 	mod_manager mods;
 	mods.scan(argv[3], "");
+	// nba.save writes into a folder of the test's own (never the app's stats/), emptied first;
+	// what was saved goes into the log at the end
+	mods.set_save_dir(std::string(argv[3]) + "/.modtest_stats");
+	std::filesystem::remove_all(mods.save_dir());
 	int frames = argc > 5 ? atoi(argv[5]) : 0;
 	for (auto &s : mods.mods())
 	{
@@ -281,6 +287,20 @@ int main(int argc, char **argv)
 	}
 	if (frames) printf("ran %d frames, pc=%08X\n", frames, m.pc());
 	mods.stop();
+	{
+		std::error_code ec;
+		std::vector<std::filesystem::path> saved;
+		for (auto it = std::filesystem::directory_iterator(mods.save_dir(), ec); !ec && it != std::filesystem::directory_iterator(); it.increment(ec)) saved.push_back(it->path());
+		std::sort(saved.begin(), saved.end());
+		for (auto &p : saved)
+		{
+			std::ifstream f(p, std::ios::binary);
+			std::string ln, n = p.filename().string();
+			log.push_back("saved " + n + " " + std::to_string(std::filesystem::file_size(p, ec)) + " bytes");
+			printf("  saved stats/%s\n", n.c_str());
+			while (std::getline(f, ln)) { log.push_back(n + ": " + ln); printf("    %s\n", ln.c_str()); }
+		}
+	}
 	for (auto &e : expects)
 		if (!e.done) { printf("FAIL %s:%d: frame %d was not reached (ran %d frames)\n", expect_file, e.line, e.frame, frames); failed++; }
 	for (auto &l : mods.take_log()) log.push_back(l);

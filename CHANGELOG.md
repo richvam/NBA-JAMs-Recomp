@@ -85,6 +85,8 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - modtest: NVPREP=<frames> boots the game once first, so a test starts from a valid NVRAM.
 - New Lua mod practice.lua (every game): the game clock stands still and there is no shot clock.
 - New Lua mod show_info.lua (T.E., SE): shooting, turbo and on-fire counters for each player on the overlay during play.
+- New Lua mod stats_export.lua (T.E., SE): saves the box score of each finished game to stats/ as CSV and JSON Lines.
+- Lua mods can write files into stats/ with nba.save (plain names, size and rate limits, no reading back) and read the local date with nba.date.
 
 ### Changed
 - The CRT mask is as coarse at 4K as at 1080p (it was twice as fine at 4K), and it lines up

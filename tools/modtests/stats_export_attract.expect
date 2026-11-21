@@ -1,0 +1,6 @@
+# roadmap Phase 6: stats_export.lua saves nothing while the game only runs attract mode.
+script dist/NBAJamRecomp/mods/stats_export.lua
+game nbajamte nbajamse
+frames 6001
+nolog saved 
+nolog stats export: game
