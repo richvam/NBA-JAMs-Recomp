@@ -86,6 +86,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - New Lua mod practice.lua (every game): the game clock stands still and there is no shot clock.
 - New Lua mod show_info.lua (T.E., SE): shooting, turbo and on-fire counters for each player on the overlay during play.
 - New Lua mod stats_export.lua (T.E., SE): saves the box score of each finished game to stats/ as CSV and JSON Lines.
+- New Lua mod hitboxes.lua (T.E., SE): body boxes, ball reach, push reach, the ball and the rims on the overlay during play.
 - Lua mods can write files into stats/ with nba.save (plain names, size and rate limits, no reading back) and read the local date with nba.date.
 
 ### Changed

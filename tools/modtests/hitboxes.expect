@@ -1,0 +1,14 @@
+# roadmap Phase 6: dist/NBAJamRecomp/mods/hitboxes.lua during play (PLAY=1), and with layers
+# turned off. The boxes were checked by eye against the players in screenshots.
+script dist/NBAJamRecomp/mods/hitboxes.lua
+game nbajamte nbajamse
+frames 6401
+env PLAY=1
+env SHOT=6400:/dev/null
+run body=1 reach=1 ball=1
+run body=0 reach=0 ball=0
+nolog error
+nolog not available
+once picture with
+body=1: nolog picture with 0 draws
+body=0: once picture with 0 draws
