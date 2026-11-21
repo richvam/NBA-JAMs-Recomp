@@ -88,6 +88,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - New Lua mod stats_export.lua (T.E., SE): saves the box score of each finished game to stats/ as CSV and JSON Lines.
 - New Lua mod hitboxes.lua (T.E., SE): body boxes, ball reach, push reach, the ball and the rims on the overlay during play.
 - Lua mods can write files into stats/ with nba.save (plain names, size and rate limits, no reading back) and read the local date with nba.date.
+- New Lua mod cpu_vs_cpu.lua (every game): whole games between two computer teams, one after another, for watching.
 
 ### Changed
 - The CRT mask is as coarse at 4K as at 1080p (it was twice as fine at 4K), and it lines up
