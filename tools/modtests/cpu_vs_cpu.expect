@@ -1,0 +1,20 @@
+# roadmap Phase 6: dist/NBAJamRecomp/mods/cpu_vs_cpu.lua from power-on with nobody at the
+# controls. cvc_probe.lua logs the game in play without players and the end of the game.
+# - the script starts a game from attract mode, the computer plays all four players, the game
+#   runs through four quarters (or overtime) to its end-of-game screen and back to attract
+#   mode with PSTATUS 0, on all five games;
+# - "Play another" starts the next game, "Back to attract" does not.
+script dist/NBAJamRecomp/mods/cpu_vs_cpu.lua
+extra cvc_probe.lua
+game nbajamte nbajamse nbajam nbahangt nbamht
+frames 55001
+run again=1
+run again=0
+nolog error
+once cpu vs cpu: game 1 started
+log in play with no player for 1000 frames
+once end of game after period 4 or later
+log attract, PSTATUS 0
+again=1: once cpu vs cpu: game 2 started
+again=0: nolog cpu vs cpu: game 2 started
+nolog end of game in period

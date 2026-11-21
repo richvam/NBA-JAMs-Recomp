@@ -286,6 +286,7 @@ Included:
 | `practice.lua` | Every game: a practice game. The game clock stands still, so the quarter never ends, and there is no shot clock. Each can be switched back on. Turn the script off to end the game. |
 | `show_info.lua` | T.E. and SE: during play, one line per player at the bottom (or top) of the screen with field goals and percentage, threes, a turbo bar, and the player's baskets in a row or ON FIRE. |
 | `stats_export.lua` | T.E. and SE: when a game ends, adds its box score to `stats/<game>_box.csv` (one row per player: teams, score, points, shots, threes, dunks, free throws, rebounds, assists, steals, blocks, human or CPU) and `stats/<game>_games.jsonl` (one JSON line per game). |
+| `cpu_vs_cpu.lua` | Every game: starts whole games between two computer teams, for watching. From attract mode it starts a game, picks a random team (not on NBA JAM 1993), and lets the computer play all four players through four quarters; then the next game starts, or attract mode comes back. Turn it off to play yourself. |
 
 The scripts that change a game (`handicap.lua`, `unlock_players.lua`, the cabinet code mods) have "Protect records", on by default: such a game is not counted in the players' saved records (games, wins, losses, win streaks) on T.E., SE, Hangtime and Maximum Hangtime.
 
