@@ -15,12 +15,12 @@ nolog error
 once fantasy draft: 1 drafters, 2 picks
 once fantasy draft: pick 1, player 1 takes Danny Manning for P1
 once fantasy draft: pick 2, player 1 takes Stacey Augmon for P2
-once fantasy draft: a new ladder for team 1
+once fantasy draft: a new ladder in slot 1 for team 1
 once fantasy draft: ladder opponent Dallas, the stock game's next: Dallas
 once tipoff 1 places 0 1
 once fantasy draft: ladder: beat Dallas
 log fantasy draft: replaying the last draft, P1 Danny Manning, P2 Stacey Augmon
-once fantasy draft: ladder game 2 for team 1, 1 of 27 teams beaten
+once fantasy draft: ladder slot 1, game 2 for team 1, 1 of 27 teams beaten
 once fantasy draft: ladder opponent Detroit, the stock game's next: Detroit
 once tipoff 2 places 0 1
 once fantasy draft: ladder: beat Detroit

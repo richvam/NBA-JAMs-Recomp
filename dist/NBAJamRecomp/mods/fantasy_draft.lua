@@ -30,13 +30,17 @@
 -- the first team of team_orders (SELECT2.ASM, from the weakest) not beaten yet (select_teams,
 -- get_opponent_team, run just after team select); with all 27 beaten it gives a random team
 -- with a hidden "superstar". Here the run belongs to the drafted pair, not to initials: the
--- script keeps the pair and its teams beaten in stats/<game>_ladder.txt, and between team
--- select and the matchup screen writes that mask into the side's records (and initials 0 for
+-- script keeps the pair and its teams beaten in stats/<game>_ladder_<slot>.txt, and from the end
+-- of the draft to the matchup screen writes that mask into the side's records (and initials 0 for
 -- a player who has none, which select_teams needs), so the game itself picks the opponent. A
 -- win adds the opponent's bit. The record is never saved ("Protect records" is forced on: the
 -- guard clears the initials before the game saves). "Computer drafts too": the computer's
 -- side takes the two best players left (sum of the six ratings) for each game. A new ladder
--- starts with a draft when there is no saved one; delete the file to start again.
+-- starts with a draft when the slot has no saved one.
+-- Ladder slots (6.F6): four slots, each its own pair and teams beaten; choose the slot in the
+-- mods menu ("Ladder slot") and the ladder goes on where that slot left off, also after the
+-- program was closed. "Ladder: Start over" drafts a new pair into the slot (its old ladder is
+-- replaced when the draft is done).
 local records = nba.include("lib/records.lua")
 local hidden = nba.include("lib/hidden.lua")
 local PLAYERS = nba.include("lib/draft_pool.lua")
@@ -53,6 +57,8 @@ mod = {
     { id = "draft", label = "Draft", values = { 0, 1 }, labels = { "New draft", "Replay the last" }, default = 0 },
     { id = "mode", label = "Mode", values = { 0, 1 }, labels = { "One game", "Ladder" }, default = 0 },
     { id = "cpu_draft", label = "Computer drafts too", type = "toggle", default = false },
+    { id = "slot", label = "Ladder slot", values = { 1, 2, 3, 4 }, labels = { "Slot 1", "Slot 2", "Slot 3", "Slot 4" }, default = 1 },
+    { id = "restart", label = "Ladder", values = { 0, 1 }, labels = { "Continue", "Start over" }, default = 0 },
     records.OPTION,
   },
 }
@@ -213,6 +219,8 @@ local function picks_names()
   return table.concat(s, ", ")
 end
 
+local function ladder_file() return string.format("%s_ladder_%d.txt", nba.game, nba.option("slot")) end
+
 local function cpu_draft()
   if not nba.option("cpu_draft") then return end
   local has = { false, false }
@@ -251,8 +259,8 @@ local function finish()
       nba.log("fantasy draft: a ladder is for one side against the computer; this is one game")
     else
       ladder = { side = sides[1] and 1 or 2, mask = 0, games = 0, picks = text }
-      nba.save(nba.game .. "_ladder.txt", string.format("picks %s\nside %d\nmask %d\ngames 0\n", text, ladder.side, 0))
-      nba.log("fantasy draft: a new ladder for team " .. ladder.side)
+      nba.save(ladder_file(), string.format("picks %s\nside %d\nmask %d\ngames 0\n", text, ladder.side, 0))
+      nba.log(string.format("fantasy draft: a new ladder in slot %d for team %d", nba.option("slot"), ladder.side))
     end
   end
   cpu_draft()
@@ -279,7 +287,11 @@ end
 
 -- Ladder: the saved pair and its teams beaten
 local function ladder_load()
-  local t = nba.load(nba.game .. "_ladder.txt")
+  if nba.option("restart") == 1 then
+    nba.log(string.format("fantasy draft: ladder slot %d starts over", nba.option("slot")))
+    return false
+  end
+  local t = nba.load(ladder_file())
   if not t then return false end
   local p, sd = t:match("picks ([^\n]+)"), tonumber(t:match("side (%d)"))
   local m, g = tonumber(t:match("mask (%d+)")), tonumber(t:match("games (%d+)"))
@@ -288,13 +300,13 @@ local function ladder_load()
   ladder = { side = sd, mask = m, games = g or 0, picks = p }
   local n = 0
   for i = 0, 26 do if (m >> i) & 1 == 1 then n = n + 1 end end
-  nba.log(string.format("fantasy draft: ladder game %d for team %d, %d of 27 teams beaten", ladder.games + 1, sd, n))
+  nba.log(string.format("fantasy draft: ladder slot %d, game %d for team %d, %d of 27 teams beaten", nba.option("slot"), ladder.games + 1, sd, n))
   cpu_draft()
   return true
 end
 
 local function ladder_save()
-  nba.save(nba.game .. "_ladder.txt", string.format("picks %s\nside %d\nmask %d\ngames %d\n", ladder.picks, ladder.side, ladder.mask, ladder.games))
+  nba.save(ladder_file(), string.format("picks %s\nside %d\nmask %d\ngames %d\n", ladder.picks, ladder.side, ladder.mask, ladder.games))
 end
 
 -- the players in the game make the draft order and own the places on court
@@ -491,8 +503,11 @@ function on_frame()
     hold_hidden(g)
     if ladder then
       guard.mark()
-      if not selecting and nba.read16(q) == 0 and g ~= 3 and nba.read16(inm) == 0 then
-        -- between team select and the matchup screen: the ladder's teams beaten in the records
+      if nba.read16(q) == 0 and g ~= 3 and nba.read16(inm) == 0 then
+        -- from the end of the draft to the matchup screen, every frame: the ladder's teams
+        -- beaten in the records. select_teams reads them while in_team_select is still on, and
+        -- loading a player's record (after his initials) replaces them, so they are written
+        -- again in the next frame.
         local p = nba.read16(pst)
         for _, k in ipairs({ 2 * ladder.side - 1, 2 * ladder.side }) do
           if (p >> (k - 1)) & 1 == 1 and pdata[k] then

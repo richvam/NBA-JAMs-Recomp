@@ -86,6 +86,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - New Lua mod practice.lua (every game): the game clock stands still and there is no shot clock.
 - New Lua mod show_info.lua (T.E., SE): shooting, turbo and on-fire counters for each player on the overlay during play.
 - New Lua mod stats_export.lua (T.E., SE): saves the box score of each finished game to stats/ as CSV and JSON Lines.
+- fantasy_draft.lua ladder slots: four ladders, each with its own pair and teams beaten, chosen in the mods menu and resumed where they were left, also after closing the program; "Start over" drafts a new pair into a slot.
 - fantasy_draft.lua ladder mode: a drafted pair takes on the computer's teams one game after another, in the game's own order, with its teams beaten kept in stats/ (not in the players' records). Option: the computer drafts too, from the players left.
 - fantasy_draft.lua options: draft order (fixed, random, loser of the last game first), the pool (team rosters, all players, everyone with the hidden players), the same player on both sides, and replaying the last saved draft. Every draft is saved to stats/.
 - Lua scripts can read back the files they saved in stats/ (`nba.load`); not in an online game.
