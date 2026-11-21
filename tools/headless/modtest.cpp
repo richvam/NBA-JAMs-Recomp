@@ -195,6 +195,7 @@ int main(int argc, char **argv)
 			in.p[0].shoot = getenv("NOPICK") == nullptr && f >= p0 + 800 && t >= 20 && t < 24;
 		}
 		mods.apply_presses(in);   // nba.press (roadmap 1.6)
+		mods.take_inputs(in);     // nba.input / nba.hold (roadmap 6.F2)
 		m.set_inputs(in);
 		if (f == live_at)
 		{

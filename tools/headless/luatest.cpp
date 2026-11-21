@@ -591,6 +591,54 @@ end
 		fs::remove_all(pd);
 	}
 
+	// ---- reading and holding a player's buttons (nba.input, nba.hold; roadmap 6.F2) ----
+	{
+		fs::path hd = fs::temp_directory_path() / "nbajam_luatest_hold";
+		fs::remove_all(hd);
+		fs::create_directories(hd);
+		write_file(hd / "hd.lua", R"(
+mod = { name = "HD" }
+function on_frame(f)
+  local i = nba.input(2)
+  nba.log(string.format("f%d shoot %s up %s coin %s", f, tostring(i.shoot), tostring(i.up), tostring(i.coin)))
+  if f == 1 then
+    nba.hold(2, 2)
+    assert(not pcall(nba.hold, 0), "player 0")
+    assert(not pcall(nba.hold, 2, 0), "0 frames")
+    assert(not pcall(nba.input, 5), "player 5")
+  end
+end
+)");
+		const u16 code[1] = { 0x7171 };
+		auto hm = make_machine(10, code, 1);
+		mod_manager hmm;
+		hmm.scan(hd.string(), "");
+		for (auto &s : hmm.mods()) s.enabled = true;
+		hmm.start("nbajamte", *hm);
+		bool seen_p2 = true, held = true, others = true, after = false;
+		for (int f = 0; f < 4; f++)
+		{
+			cabinet_inputs in{};
+			in.p[1].shoot = true; in.p[1].up = true; in.p[1].coin = true; in.p[0].shoot = true;
+			hmm.apply_presses(in);
+			hmm.take_inputs(in);
+			// frame() for f == 0 is the first on_frame (f1): it holds player 2 for the next two frames
+			if (f == 1 || f == 2) held = held && !in.p[1].shoot && !in.p[1].up && in.p[1].coin;
+			if (f == 3) after = in.p[1].shoot && in.p[1].up;
+			others = others && in.p[0].shoot;
+			hmm.frame();
+		}
+		auto lg = hmm.take_log();
+		int seen = 0;
+		bool err = false;
+		for (auto &x : lg) { if (x.find("shoot true up true coin true") != std::string::npos) seen++; err = err || x.find("error") != std::string::npos; }
+		seen_p2 = seen == 4;
+		CHECK(seen_p2 && !err, "input: a script reads a player's buttons every frame, also while they are held; bad players and frames are errors");
+		CHECK(held && after && others, "hold: the game does not get the held player's buttons (coin excepted) for the frames asked, then gets them; other players are not touched");
+		hmm.stop();
+		fs::remove_all(hd);
+	}
+
 	// ---- saving (nba.save, roadmap Phase 6: stats_export.lua) ----
 	{
 		fs::path sd = fs::temp_directory_path() / "nbajam_luatest_save";
