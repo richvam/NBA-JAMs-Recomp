@@ -1849,6 +1849,10 @@ std::string app::net_code_note(std::string &code)
 		note = had4 ? note + " The code ends with your IPv6 address: a player with IPv6 tries that first."
 		            : "Your code holds only your IPv6 address: players with IPv6 can join with it.";
 	}
+	// N2.3: a player who cannot reach the host goes through a player already in
+	net_addr relay = host ? m_net.relay_candidate() : net_addr{};
+	if (relay.port && m_code4.ip)
+		note += " A player who still cannot connect can join through a player already in with this code: " + net_code(m_code4) + "-" + net_code(relay) + ".";
 	return note;
 }
 

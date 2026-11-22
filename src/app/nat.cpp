@@ -104,7 +104,7 @@ std::string net_code_pair(const net_addr &v4, const net_addr &v6)
 	return net_code(v4) + "-" + net_code(v6);
 }
 
-bool net_code_parse(const std::string &s, net_addr &out, net_addr *also6)
+bool net_code_parse(const std::string &s, net_addr &out, net_addr *also6, net_addr *relay)
 {
 	std::vector<int> d;
 	for (char c : s)
@@ -139,7 +139,15 @@ bool net_code_parse(const std::string &s, net_addr &out, net_addr *also6)
 		return o.port != 0 && ((v[0] & 0xe0) == 0x20 || memcmp(v, loopback, 16) == 0);   // a public (2000::/3) address
 	};
 	if (also6) *also6 = {};
+	if (relay) *relay = {};
 	if (d.size() == 10) return v4(0, out);
+	if (d.size() == 20)
+	{
+		net_addr r;
+		if (!v4(0, out) || !v4(10, r)) return false;
+		if (relay) *relay = r;
+		return true;
+	}
 	if (d.size() == 29) return v6(0, out);
 	if (d.size() == 39)
 	{

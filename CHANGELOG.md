@@ -139,6 +139,9 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - IPv6: a computer with a public IPv6 address adds it to its code (the code gets longer), and a
   player who has IPv6 too connects over it, with no router in the way. An IPv6 address can be
   typed as the host's address too.
+- A player who cannot reach the host at all (both behind strict routers) can join through a
+  player already in: the host's lobby shows a longer code for that, and the host's player
+  list says who comes through whom.
 - An online game does not start while a Lua mod that writes memory or runs every frame is
   switched on, because the players could not be kept in sync. Mods that only patch the game
   at load still work if every player has the same ones on. "Quarter length" is affected and
