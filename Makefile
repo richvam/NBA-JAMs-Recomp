@@ -69,6 +69,10 @@ ART_SRC = src/app/rom_art.cpp src/app/games.cpp src/app/romload.cpp src/app/ui/a
 $(BUILD)/arttest: tools/headless/arttest.cpp $(ART_SRC) $(BUILD)/libcore.a $(BUILD)/miniz.o
 	$(CXX) $(CXXFLAGS) $(APP_INC) $< $(ART_SRC) $(BUILD)/miniz.o $(BUILD)/libcore.a -o $@
 
+# meettest: the meeting point's messages and request budget (N3.1)
+$(BUILD)/meettest: tools/headless/meettest.cpp src/app/meet_proto.cpp
+	$(CXX) $(CXXFLAGS) $(APP_INC) $^ -o $@
+
 $(BUILD)/nattest: tools/headless/nattest.cpp src/app/netplay.cpp src/app/nat.cpp
 	$(CXX) $(CXXFLAGS) $(INC) $(APP_INC) $< src/app/netplay.cpp src/app/nat.cpp -lpthread -o $@
 
