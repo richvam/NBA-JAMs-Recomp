@@ -147,6 +147,8 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - Games with three or four players react faster when the players are far from the host but
   near each other: every player sends their inputs straight to the others too, and the host
   is only the way round when two players cannot reach each other.
+- For developers: the messages and request budget of the coming room list are written down in
+  `docs/MEETING.md`; the program does not use a room list yet.
 - An online game does not start while a Lua mod that writes memory or runs every frame is
   switched on, because the players could not be kept in sync. Mods that only patch the game
   at load still work if every player has the same ones on. "Quarter length" is affected and

@@ -836,6 +836,17 @@ the owner's test.
 | N3.4 | Sonnet | **Private rooms:** not listed anywhere. Joined by a short room code or a pasted link; the code alone is enough to connect when the host is directly reachable, so private rooms work with no meeting point at all. | Join by code with the service switched off |
 | N3.5 | Sonnet | **Regions and latency:** rooms carry a region; the list shows "near you" from measured ping, not from guessing. | List sorted correctly in the simulator |
 
+**Status:** N3.1 is done: `docs/MEETING.md` and `src/app/meet_proto.h`. Free limits found on
+2026-11-22: Workers 100,000 requests a day; Durable Objects (SQLite only) 100,000 requests and
+13,000 GB-s a day; KV only 1,000 writes a day, so no KV. One Durable Object keeps every room in
+memory and writes nothing. Five messages (publish, wait, remove, list, introduce). The host's
+wait both refreshes the room and receives introductions, held up to 50 s, so a host costs about
+one request a minute. Every field has a limit, and the program checks them both ways; the
+service gets per-address rate limits and says "busy" at 90,000 requests a day. Budget
+(`meettest`, 15 checks, in CI): a four-player room-hour is 95 requests, so about 947 room-hours
+(3,800 player-hours) a day; one object in memory all day is 11,059 GB-s of 13,000. Nothing
+talks to the service yet (N3.2).
+
 ## Phase N4: rooms, tables and queues
 
 Opus designs the room protocol; Sonnet builds the screens on the Part 2 toolkit.

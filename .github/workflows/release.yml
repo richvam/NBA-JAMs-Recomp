@@ -82,6 +82,12 @@ jobs:
           build/linux/nattest | tee nattest.log
           grep -q ", 0 failed" nattest.log
 
+      - name: Meeting point messages and request budget (no network needed)
+        run: |
+          set -o pipefail
+          build/linux/meettest | tee meettest.log
+          grep -q ", 0 failed" meettest.log
+
       - name: Menu toolkit tests (no display needed)
         run: |
           set -o pipefail
