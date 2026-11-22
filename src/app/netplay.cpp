@@ -7,6 +7,10 @@
 #include <cstring>
 
 #ifdef _WIN32
+#if !defined(_WIN32_WINNT) || _WIN32_WINNT < 0x0600
+#undef _WIN32_WINNT
+#define _WIN32_WINNT 0x0600   // inet_pton and inet_ntop (Vista and later)
+#endif
 #define WIN32_LEAN_AND_MEAN
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -54,40 +58,76 @@ void net_unpack_input(u16 v, cabinet_inputs::player &p)
 // ---------------------------------------------------------------------------
 // sockets
 // ---------------------------------------------------------------------------
+bool net_addr::operator==(const net_addr &o) const
+{
+	if (v6 != o.v6 || port != o.port) return false;
+	return v6 ? memcmp(a6, o.a6, 16) == 0 : ip == o.ip;
+}
+
 std::string net_addr_str(const net_addr &a)
 {
-	char b[32];
+	char b[64];
+	if (a.v6)
+	{
+		char t[48] = {};
+		inet_ntop(AF_INET6, (void *)a.a6, t, sizeof(t));
+		snprintf(b, sizeof(b), "[%s]:%u", t, a.port);
+		return b;
+	}
 	snprintf(b, sizeof(b), "%u.%u.%u.%u:%u", a.ip >> 24, a.ip >> 16 & 255, a.ip >> 8 & 255, a.ip & 255, a.port);
 	return b;
+}
+
+typedef decltype(socket(0, 0, 0)) sock_fd;
+
+static long long udp_new(int family)
+{
+#ifdef _WIN32
+	SOCKET s = socket(family, SOCK_DGRAM, IPPROTO_UDP);
+	if (s == INVALID_SOCKET) return -1;
+	u_long nb = 1; ioctlsocket(s, FIONBIO, &nb);
+	return (long long)s;
+#else
+	int s = socket(family, SOCK_DGRAM, 0);
+	if (s < 0) return -1;
+	fcntl(s, F_SETFL, fcntl(s, F_GETFL) | O_NONBLOCK);
+	return s;
+#endif
 }
 
 bool udp_socket::open(u16 port, std::string &err, u32 bind_ip)
 {
 	sock_init();
 	close();
-#ifdef _WIN32
-	SOCKET s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-	if (s == INVALID_SOCKET) { err = "could not create the socket"; return false; }
-	u_long nb = 1; ioctlsocket(s, FIONBIO, &nb);
-	m_fd = (long long)s;
-#else
-	int s = socket(AF_INET, SOCK_DGRAM, 0);
-	if (s < 0) { err = "could not create the socket"; return false; }
-	fcntl(s, F_SETFL, fcntl(s, F_GETFL) | O_NONBLOCK);
-	m_fd = s;
-#endif
+	m_fd = udp_new(AF_INET);
+	if (m_fd < 0) { err = "could not create the socket"; return false; }
 	int one = 1;
-	setsockopt(decltype(socket(0, 0, 0))(m_fd), SOL_SOCKET, SO_REUSEADDR, (const char *)&one, sizeof(one));
-	setsockopt(decltype(socket(0, 0, 0))(m_fd), SOL_SOCKET, SO_BROADCAST, (const char *)&one, sizeof(one));   // the home-network search
+	setsockopt(sock_fd(m_fd), SOL_SOCKET, SO_REUSEADDR, (const char *)&one, sizeof(one));
+	setsockopt(sock_fd(m_fd), SOL_SOCKET, SO_BROADCAST, (const char *)&one, sizeof(one));   // the home-network search
 	sockaddr_in a{};
 	a.sin_family = AF_INET;
 	a.sin_addr.s_addr = htonl(bind_ip ? bind_ip : INADDR_ANY);
 	a.sin_port = htons(port);
-	if (bind(decltype(socket(0, 0, 0))(m_fd), (sockaddr *)&a, sizeof(a)) != 0)
+	if (bind(sock_fd(m_fd), (sockaddr *)&a, sizeof(a)) != 0)
 	{
 		err = "could not open UDP port " + std::to_string(port) + " (in use?)";
 		close();
 		return false;
+	}
+	// IPv6 beside it, on the same port; IPv6 only, so IPv4 keeps its own socket. A computer
+	// without IPv6 simply has no second socket.
+	if (bind_ip == 0)
+	{
+		m_fd6 = udp_new(AF_INET6);
+		if (m_fd6 >= 0)
+		{
+			setsockopt(sock_fd(m_fd6), IPPROTO_IPV6, IPV6_V6ONLY, (const char *)&one, sizeof(one));
+			sockaddr_in6 a6{};
+			a6.sin6_family = AF_INET6;
+			a6.sin6_addr = in6addr_any;
+			a6.sin6_port = htons(local_port());
+			if (bind(sock_fd(m_fd6), (sockaddr *)&a6, sizeof(a6)) != 0) { sock_close(m_fd6); m_fd6 = -1; }
+		}
 	}
 	return true;
 }
@@ -95,7 +135,8 @@ bool udp_socket::open(u16 port, std::string &err, u32 bind_ip)
 void udp_socket::close()
 {
 	if (m_fd >= 0) sock_close(m_fd);
-	m_fd = -1;
+	if (m_fd6 >= 0) sock_close(m_fd6);
+	m_fd = m_fd6 = -1;
 }
 
 void udp_socket::send(const net_addr &to, const void *data, size_t len)
@@ -106,6 +147,16 @@ void udp_socket::send(const net_addr &to, const void *data, size_t len)
 		m_lossrng = m_lossrng * 1103515245u + 12345u;
 		if (double((m_lossrng >> 8) & 0xffff) / 65536.0 < loss) return;
 	}
+	if (to.v6)
+	{
+		if (m_fd6 < 0) return;
+		sockaddr_in6 a6{};
+		a6.sin6_family = AF_INET6;
+		memcpy(&a6.sin6_addr, to.a6, 16);
+		a6.sin6_port = htons(to.port);
+		sendto(sock_fd(m_fd6), (const char *)data, int(len), 0, (sockaddr *)&a6, sizeof(a6));
+		return;
+	}
 	sockaddr_in a{};
 	a.sin_family = AF_INET;
 	if (via.ip && to.ip != 0x7f000001)
@@ -115,12 +166,12 @@ void udp_socket::send(const net_addr &to, const void *data, size_t len)
 		memcpy(w.data() + 6, data, len);
 		a.sin_addr.s_addr = htonl(via.ip);
 		a.sin_port = htons(via.port);
-		sendto(decltype(socket(0, 0, 0))(m_fd), (const char *)w.data(), int(w.size()), 0, (sockaddr *)&a, sizeof(a));
+		sendto(sock_fd(m_fd), (const char *)w.data(), int(w.size()), 0, (sockaddr *)&a, sizeof(a));
 		return;
 	}
 	a.sin_addr.s_addr = htonl(to.ip);
 	a.sin_port = htons(to.port);
-	sendto(decltype(socket(0, 0, 0))(m_fd), (const char *)data, int(len), 0, (sockaddr *)&a, sizeof(a));
+	sendto(sock_fd(m_fd), (const char *)data, int(len), 0, (sockaddr *)&a, sizeof(a));
 }
 
 int udp_socket::recv(net_addr &from, void *data, size_t cap)
@@ -128,8 +179,21 @@ int udp_socket::recv(net_addr &from, void *data, size_t cap)
 	if (m_fd < 0) return -1;
 	sockaddr_in a{};
 	socklen_t al = sizeof(a);
-	int n = int(recvfrom(decltype(socket(0, 0, 0))(m_fd), (char *)data, int(cap), 0, (sockaddr *)&a, &al));
-	if (n < 0) return -1;
+	int n = int(recvfrom(sock_fd(m_fd), (char *)data, int(cap), 0, (sockaddr *)&a, &al));
+	if (n < 0)
+	{
+		if (m_fd6 < 0) return -1;
+		sockaddr_in6 a6{};
+		socklen_t al6 = sizeof(a6);
+		n = int(recvfrom(sock_fd(m_fd6), (char *)data, int(cap), 0, (sockaddr *)&a6, &al6));
+		if (n < 0) return -1;
+		from = {};
+		from.v6 = true;
+		memcpy(from.a6, &a6.sin6_addr, 16);
+		from.port = ntohs(a6.sin6_port);
+		return n;
+	}
+	from = {};
 	from.ip = ntohl(a.sin_addr.s_addr);
 	from.port = ntohs(a.sin_port);
 	if (via.ip && from == via && n >= 6)
@@ -148,25 +212,65 @@ u16 udp_socket::local_port() const
 	if (m_fd < 0) return 0;
 	sockaddr_in a{};
 	socklen_t al = sizeof(a);
-	if (getsockname(decltype(socket(0, 0, 0))(m_fd), (sockaddr *)&a, &al) != 0) return 0;
+	if (getsockname(sock_fd(m_fd), (sockaddr *)&a, &al) != 0) return 0;
 	return ntohs(a.sin_port);
 }
 
 bool udp_socket::resolve(const std::string &host, u16 port, net_addr &out, std::string &err)
 {
 	sock_init();
-	addrinfo hints{}, *res = nullptr;
-	hints.ai_family = AF_INET;
-	hints.ai_socktype = SOCK_DGRAM;
-	if (getaddrinfo(host.c_str(), nullptr, &hints, &res) != 0 || !res)
-	{
-		err = "address not found: '" + host + "'";
-		return false;
-	}
-	out.ip = ntohl(((sockaddr_in *)res->ai_addr)->sin_addr.s_addr);
+	std::string h = host;
+	if (h.size() > 2 && h.front() == '[' && h.back() == ']') h = h.substr(1, h.size() - 2);   // [2001:db8::1]
+	out = {};
 	out.port = port;
-	freeaddrinfo(res);
-	return true;
+	in6_addr t6{};
+	if (h.find(':') != std::string::npos && inet_pton(AF_INET6, h.c_str(), &t6) == 1)
+	{
+		out.v6 = true;
+		memcpy(out.a6, &t6, 16);
+		return true;
+	}
+	// a name: its IPv4 address, else its IPv6 address
+	for (int fam : { AF_INET, AF_INET6 })
+	{
+		addrinfo hints{}, *res = nullptr;
+		hints.ai_family = fam;
+		hints.ai_socktype = SOCK_DGRAM;
+		if (getaddrinfo(h.c_str(), nullptr, &hints, &res) != 0 || !res) continue;
+		if (fam == AF_INET) out.ip = ntohl(((sockaddr_in *)res->ai_addr)->sin_addr.s_addr);
+		else { out.v6 = true; memcpy(out.a6, &((sockaddr_in6 *)res->ai_addr)->sin6_addr, 16); }
+		freeaddrinfo(res);
+		return true;
+	}
+	err = "address not found: '" + host + "'";
+	return false;
+}
+
+bool net_local_ipv6(net_addr &out)
+{
+	sock_init();
+	out = {};
+	// the source address the system picks for the internet (no packet is sent by connect() on UDP)
+	auto s = socket(AF_INET6, SOCK_DGRAM, 0);
+	sockaddr_in6 a{};
+	a.sin6_family = AF_INET6;
+	a.sin6_port = htons(53);
+	const u8 google[16] = { 0x20, 0x01, 0x48, 0x60, 0x48, 0x60, 0, 0, 0, 0, 0, 0, 0, 0, 0x88, 0x88 };
+	memcpy(&a.sin6_addr, google, 16);
+	bool ok = false;
+	if (connect(s, (sockaddr *)&a, sizeof(a)) == 0)
+	{
+		sockaddr_in6 me{};
+		socklen_t ml = sizeof(me);
+		if (getsockname(s, (sockaddr *)&me, &ml) == 0)
+		{
+			const u8 *b = (const u8 *)&me.sin6_addr;
+			ok = (b[0] & 0xe0) == 0x20;          // global unicast (2000::/3), not link-local or unique-local
+			if (ok) { out.v6 = true; memcpy(out.a6, b, 16); }
+		}
+	}
+	sock_close((long long)s);
+	return ok;
 }
 
 std::vector<std::string> net_local_ipv4()
@@ -255,10 +359,12 @@ bool netplay::host(u16 port, std::string &err)
 bool netplay::join(const std::string &host, u16 port, std::string &err)
 {
 	stop();
-	net_addr a;
-	if (!net_code_parse(host, a) && !udp_socket::resolve(host, port, a, err)) return false;
+	net_addr a, a6;
+	if (!net_code_parse(host, a, &a6) && !udp_socket::resolve(host, port, a, err)) return false;
 	reset_state();
 	if (!m_sock.open(0, err)) return false;
+	if (a.v6 && !m_sock.has_ipv6()) { m_sock.close(); err = "that is an IPv6 address, and this computer has no IPv6"; return false; }
+	if (a6.v6 && m_sock.has_ipv6()) { m_target6 = a6; m_target6_t = net_now_ms(); }
 	m_mode = mode::client;
 	m_phase = phase::lobby;
 	peer h;
@@ -301,7 +407,7 @@ void netplay::reset_state()
 	for (auto &m : m_in) m.clear();
 	m_merged.clear(); m_merged_upto = 0; m_stall_since = 0; m_hash.clear();
 	m_desync = false;
-	m_target = {}; m_also_public = 0; m_lan_t = 0; m_lan_found = false;
+	m_target = {}; m_target6 = {}; m_also_public = 0; m_lan_t = 0; m_lan_found = false;
 }
 
 void netplay::send_raw(const net_addr &to, const std::vector<u8> &b)
@@ -564,7 +670,9 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 	}
 	// Until the host has answered, a packet from the host's IP address on another port is the
 	// host behind a router that gives each destination its own port: talk to that port.
-	if (!pp && m_slot < 0 && !m_peers.empty() && from.ip == m_peers[0].addr.ip) { m_peers[0].addr = from; pp = &m_peers[0]; }
+	if (!pp && m_slot < 0 && !m_peers.empty() && !from.v6 && !m_peers[0].addr.v6 && from.ip == m_peers[0].addr.ip) { m_peers[0].addr = from; pp = &m_peers[0]; }
+	// A code with both addresses: the host answered on IPv6.
+	if (!pp && m_slot < 0 && !m_peers.empty() && m_target6.v6 && from == m_target6) { m_peers[0].addr = from; m_target6 = {}; pp = &m_peers[0]; }
 	if (!pp) return;    // only talk to our host
 	pp->last_seen = now;
 	pp->echo = tsend;
@@ -726,7 +834,7 @@ void netplay::tick_client(u32 now)
 	{
 		// the same public address as the host: both are behind one router, which may not send
 		// packets for its own address back inside, so ask on the home network too
-		if (m_slot < 0 && !m_lan_found && m_stun == stun_state::found && m_public.ip == m_target.ip && now - m_lan_t >= 500)
+		if (m_slot < 0 && !m_lan_found && m_stun == stun_state::found && !m_target.v6 && m_public.ip == m_target.ip && now - m_lan_t >= 500)
 		{
 			m_lan_t = now;
 			wbuf w;
@@ -743,7 +851,11 @@ void netplay::tick_client(u32 now)
 		if (slow && (now - m_start_t >= 400 || m_slot < 0))
 		{
 			m_start_t = now;
-			wbuf w; hdr(w, 'h'); w.u16_(VERSION); send_raw(h.addr, w.b);
+			wbuf w; hdr(w, 'h'); w.u16_(VERSION);
+			// a code with both addresses: IPv6 first, for 1.5 s, then IPv4 (one at a time, so
+			// the host never sees the player twice)
+			if (m_target6.v6 && now - m_target6_t > 1500) m_target6 = {};
+			send_raw(m_target6.v6 && m_slot < 0 ? m_target6 : h.addr, w.b);
 		}
 		return;
 	}

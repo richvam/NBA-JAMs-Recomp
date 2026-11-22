@@ -398,6 +398,8 @@ private:
 	u32 m_join_t = 0;                  // when joining started (the hint after a few seconds)
 	void net_traversal_start();
 	std::string net_code_note(std::string &code);
+	std::string note_v4(std::string &code, bool host);
+	net_addr m_code4;                         // the IPv4 part of the code last shown
 	bool m_editing = false;            // text is being typed: on the on-screen keyboard or a physical one (U4.1)
 	ui::keyboard m_kbd;
 	std::string &m_edit = m_kbd.text;
@@ -405,6 +407,7 @@ private:
 	int kbd_step();                    // 0 still typing, 1 OK, 2 cancelled
 	bool m_net_game = false;           // current game runs under netplay
 	std::vector<std::string> m_local_ips;
+	net_addr m_local6;                        // this computer's public IPv6 address, if it has one (N2.2)
 };
 
 void app::refresh_availability()
@@ -1100,6 +1103,7 @@ void app::open_online()
 	m_screen = screen::net_menu;
 	m_online_scr = ui::screen();
 	m_local_ips = net_local_ipv4();
+	net_local_ipv6(m_local6);
 }
 
 void app::menu_frame()
@@ -1834,6 +1838,23 @@ std::string app::net_code_note(std::string &code)
 {
 	code.clear();
 	const bool host = m_net.role() == netplay::mode::host;
+	// IPv6 has no router in the way of the address: this computer's own address and port
+	net_addr six{};
+	if (m_local6.v6 && m_net.socket().has_ipv6()) { six = m_local6; six.port = m_net.socket().local_port(); }
+	std::string note = note_v4(code, host);
+	if (six.v6)
+	{
+		const bool had4 = !code.empty();
+		code = net_code_pair(had4 ? m_code4 : net_addr{}, six);
+		note = had4 ? note + " The code ends with your IPv6 address: a player with IPv6 tries that first."
+		            : "Your code holds only your IPv6 address: players with IPv6 can join with it.";
+	}
+	return note;
+}
+
+std::string app::note_v4(std::string &code, bool host)
+{
+	m_code4 = {};
 	net_addr ext{};
 	if (host && m_upnp.status() == upnp_mapper::state::mapped)
 	{
@@ -1841,11 +1862,12 @@ std::string app::net_code_note(std::string &code)
 		int a, b, c, d;
 		if (sscanf(ip.c_str(), "%d.%d.%d.%d", &a, &b, &c, &d) == 4) ext = { u32(a) << 24 | u32(b) << 16 | u32(c) << 8 | u32(d), u16(m_cfg.net_port) };
 		if (ext.ip) m_net.also_public(ext.ip);
-		if (ext.ip && !net_ip_private(ext.ip)) { code = net_code(ext); return "Your router's port is open (" + m_upnp.method() + "): anyone can join with this code."; }
+		if (ext.ip && !net_ip_private(ext.ip)) { m_code4 = ext; code = net_code(ext); return "Your router's port is open (" + m_upnp.method() + "): anyone can join with this code."; }
 	}
 	if (m_net.stun_status() == netplay::stun_state::found)
 	{
-		code = net_code(m_net.public_addr());
+		m_code4 = m_net.public_addr();
+		code = net_code(m_code4);
 		if (host) return ext.ip ? "Your router is behind another one, so its open port does not reach the internet. Let each player in by their code."
 		                        : "Players join with this code. If one cannot, let them in by their code.";
 		return "If the host's code alone does not connect, send them this one.";
@@ -1913,9 +1935,14 @@ void app::net_lobby_frame()
 		// a player's code, to let them in
 		if (kbd_step() == 1)
 		{
-			net_addr a;
-			if (net_code_parse(m_edit, a)) { m_net.invite(a); message("Letting " + net_code(a) + " in for 60 seconds", 3000); }
-			else message("That is not a code: ten letters and digits, like ABCDE-FGHJK", 5000);
+			net_addr a, a6;
+			if (net_code_parse(m_edit, a, &a6))
+			{
+				m_net.invite(a);
+				if (a6.v6) m_net.invite(a6);
+				message("Letting " + net_code(a) + " in for 60 seconds", 3000);
+			}
+			else message("That is not a code: letters and digits, like ABCDE-FGHJK", 5000);
 		}
 		ui::update_lobby(m_lobby_scr, state());
 		ui_show(m_lobby_scr);
@@ -1925,7 +1952,7 @@ void app::net_lobby_frame()
 	while (ui_next(ev))
 	{
 		ui::result r = m_lobby_scr.handle(ev);
-		if (r.what == ui::result::activated && r.id == ui::lb_invite) { kbd_open(ui::layout::text, "The player's code", "", 16); break; }
+		if (r.what == ui::result::activated && r.id == ui::lb_invite) { kbd_open(ui::layout::text, "The player's code", "", 48); break; }
 		if (r.what == ui::result::activated && r.id == ui::lb_copy)
 		{
 			std::string code;

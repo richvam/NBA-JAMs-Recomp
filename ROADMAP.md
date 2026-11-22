@@ -761,10 +761,20 @@ meeting point (N3) the codes are exchanged by the players themselves (a chat). W
 player's public address equals the host's (both behind one router, which usually does not
 loop packets for its own address back inside), the player asks on the home network by
 broadcast for the host with that public address and joins it there (`nattest`: 3 more checks;
-added after the owner's first try from home). IPv6 is not
-done. UPnP and STUN can be switched off on the Online screen; the STUN server is a setting
+added after the owner's first try from home). IPv6 is done too: the game socket has an IPv6
+twin on the same port, and a computer with a public IPv6 address (2000::/3, the source the
+system picks for the internet) adds it and its port to its code, which then has 39 characters
+(the IPv4 code first, so the first eleven still work alone). A player whose computer has IPv6
+sends to the IPv6 address first and to the IPv4 one after 1.5 s without an answer, one at a
+time so the host never counts them twice; "Let a player in" with a player's long code
+punches both. An IPv6 address can be typed as the host's address (with or without
+brackets). `nattest` has 7 more checks (codes, typed addresses, joining over ::1 by address,
+by a code with both, and on to IPv4 when IPv6 does not answer), and `nettest` played 1200
+frames of NBA Jam over ::1 with the same hashes as over IPv4. **Not checked:** two real
+computers with IPv6, and a home router's IPv6 firewall (most drop packets nobody asked
+for; the invite should open it the way it opens a NAT, but that is untested). UPnP and STUN can be switched off on the Online screen; the STUN server is a setting
 (`stun.l.google.com:19302` by default) and the help says it sees the player's IP address.
-`nattest` (17 checks, in CI): codes, STUN messages, UPnP against a test router run in the
+`nattest` (29 checks, in CI): codes, STUN messages, UPnP against a test router run in the
 test (mapping, removal, a router that only takes permanent forwards, a device without the
 service, no router), and the router matrix of N2.2's check: 12 of 16 pairs of full cone,
 restricted, port restricted and symmetric routers connect by codes, and the 4 that cannot
