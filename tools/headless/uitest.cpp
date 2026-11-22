@@ -1236,6 +1236,31 @@ int main(int argc, char **argv)
 		for (int id : { (int)ps_resume, (int)ps_volume, (int)ps_shot, (int)ps_quit, (int)ps_coin0 }) open = open && !on.find(id)->disabled;
 		CHECK(greyed && open && on.find(ps_quit)->label == "Leave the online game" && on.find(ps_coin0)->label == "You" && on.tabs[0].panels[0].title == "Online game: still running",
 		      "Pause menu online: reset, TEST switch, mods, the full settings and the others' coins are greyed; resume, volume, screenshot, your coin and leave are not");
+		// N1.4: save states only when they are on, and never online
+		{
+			pause_state s0 = ps;
+			screen off = make_pause(s0);
+			pause_state s1 = ps;
+			s1.states = true; s1.slot = 1; s1.slots[1] = "10:56";
+			screen st1 = make_pause(s1);
+			walk(st1, "Pause menu (save states on)");
+			pause_state s2 = s1;
+			s2.online = true;
+			screen st2 = make_pause(s2);
+			pause_state s3 = s1;
+			s3.slot = 0;
+			update_pause(st1, s3);
+			CHECK(!off.find(ps_slot) && !off.find(ps_state_save) && !off.find(ps_state_load) && !st2.find(ps_slot) && !st2.find(ps_state_save) && !st2.find(ps_state_load),
+			      "Pause menu: no save state items when save states are off (the default) or online");
+			CHECK(st1.find(ps_slot) && st1.find(ps_state_save) && st1.find(ps_state_load) && st1.find(ps_state_load)->disabled && st1.find(ps_state_load)->value_text == "empty" &&
+			      !st1.find(ps_state_save)->disabled, "Pause menu with save states on: Slot, Save and Load; Load is greyed on an empty slot");
+			update_pause(st1, s1);
+			CHECK(!st1.find(ps_state_load)->disabled && st1.find(ps_state_load)->value_text == "10:56" && st1.find(ps_slot)->choice == 1,
+			      "Pause menu with save states on: a used slot can be loaded and says when it was saved");
+			settings_state sd;
+			CHECK(!sd.save_states, "Save states are off by default");
+		}
+
 		on.ask("Leave the online game? It ends for you.", ps_quit);
 		result no = on.handle(ev(act::back));
 		on.ask("Leave the online game? It ends for you.", ps_quit);

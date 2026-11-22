@@ -19,6 +19,8 @@
 #include "netplay.h"
 #include "nat.h"
 #include "mods.h"
+#include "state_file.h"
+#include "audio_join.h"
 #include "mod_draw.h"
 #include "controls.h"
 #include "shaders.h"
@@ -65,6 +67,7 @@ struct config
 	bool use_opengl = true;
 	float volume = 0.8f;
 	bool news = true;             // ask the Releases feed for the latest version at start (R2.3)
+	bool save_states = false;     // N1.4: Save and Load in the pause menu, offline only
 	int net_port = 7845;
 	int net_delay = 4;
 	std::string net_host;
@@ -103,7 +106,7 @@ static SDL_Scancode *key_slot(key_map &k, int i)
 static void save_config(const std::string &path, config &c)
 {
 	std::ofstream f(path);
-	f << "# NBA JAM Recomp - configuration\n[general]\n# news=1 asks github.com once at start for the latest release (only to tell you; nothing is downloaded)\nnews=" << c.news << "\n# pause_buttons: held half a second on a controller for the pause menu (Esc and Guide always work): start+back or l3+r3\npause_buttons=" << (c.pause_buttons == 1 ? "l3+r3" : "start+back") << "\n# the menus play the highlighted game's own music and sounds, from its ROMs\nmenu_music=" << c.menu_music << "\nmenu_sounds=" << c.menu_sounds << "\nmenu_volume=" << c.menu_volume << "\n\n[video]\n# scale: size of the window in multiples of 400x300; 0 = chosen from the screen size\nscale=" << c.scale << "\nfullscreen=" << c.fullscreen << "\n# tv_margins=1 keeps the menus 5% in from each edge, for TVs that cut the edges off\ntv_margins=" << c.tv_margins
+	f << "# NBA JAM Recomp - configuration\n[general]\n# news=1 asks github.com once at start for the latest release (only to tell you; nothing is downloaded)\nnews=" << c.news << "\n# pause_buttons: held half a second on a controller for the pause menu (Esc and Guide always work): start+back or l3+r3\npause_buttons=" << (c.pause_buttons == 1 ? "l3+r3" : "start+back") << "\n# save_states=1 adds Save and Load (three slots per game) to the pause menu of an offline game\nsave_states=" << c.save_states << "\n# the menus play the highlighted game's own music and sounds, from its ROMs\nmenu_music=" << c.menu_music << "\nmenu_sounds=" << c.menu_sounds << "\nmenu_volume=" << c.menu_volume << "\n\n[video]\n# scale: size of the window in multiples of 400x300; 0 = chosen from the screen size\nscale=" << c.scale << "\nfullscreen=" << c.fullscreen << "\n# tv_margins=1 keeps the menus 5% in from each edge, for TVs that cut the edges off\ntv_margins=" << c.tv_margins
 	  << "\n# shader: 0 sharp, 1 smooth, 2 scanlines, 3 CRT, 4 curved CRT\nshader=" << c.shader
 	  << "\n# view: original (4:3) or stretch (fills the window, distorted). A true widescreen view does not exist yet.\nview=" << view_shape_id(c.shape)
 	  << "\n# scaling: integer (whole multiples of the game's lines), fit (fills the height, crisp pixels), smooth (fills the height, filtered)\nscaling=" << view_scaling_id(c.scaling) << "\n# side_fill: around a 4:3 picture on a wider screen: black, blur (the picture, blurred and dimmed), overlay (an image from overlays/ in the data folder)\nside_fill=" << (c.side_fill == 1 ? "blur" : c.side_fill == 2 ? "overlay" : "black") << "\noverlay=" << c.overlay << "\n# overlay_opacity: 0.1 to 1, for overlays with a transparent opening\noverlay_opacity=" << c.overlay_opacity << "\nscanline_strength=" << c.scan_strength
@@ -141,6 +144,7 @@ static void load_config(const std::string &path, config &c)
 		std::string k = trim(line.substr(0, eq)), v = trim(line.substr(eq + 1));
 		if (k == "language") continue;       // from older versions: the program is English only for now
 		else if (k == "news") c.news = atoi(v.c_str()) != 0;
+		else if (k == "save_states") c.save_states = atoi(v.c_str()) != 0;
 		else if (k == "pause_buttons") c.pause_buttons = v == "l3+r3" ? 1 : 0;
 		else if (k == "menu_music") c.menu_music = atoi(v.c_str()) != 0;
 		else if (k == "menu_sounds") c.menu_sounds = atoi(v.c_str()) != 0;
@@ -375,6 +379,14 @@ private:
 	std::vector<std::string> m_why;
 	bool m_menu_up = false, m_menu_down = false, m_menu_left = false, m_menu_right = false, m_menu_ok = false, m_menu_back = false, m_menu_net = false;
 	std::vector<float> m_abuf;
+	audio_join m_join;                 // no click where a loaded state's sound starts (N1.2)
+	// save states (roadmap N1.4): offline, three slots per game in states/<game>/
+	int m_state_slot = 0;
+	std::string m_slot_info[3];        // what is in each slot of this game ("" empty)
+	std::string slot_path(int n) const;
+	void read_slots();
+	void save_slot(int n);
+	bool load_slot(int n);
 
 	// Lua mods
 	mod_manager m_mods;
@@ -832,6 +844,7 @@ bool app::start_game(int index, bool net_client)
 	// Lua mods patch the ROM / hook frames; they also count in the netplay fingerprint
 	m_mods.set_netplay(m_net_game);
 	m_mods.start(g.id, *m_mach);
+	m_join = audio_join();
 	m_mach->reset();
 	m_cur_game = index;
 	m_paused = false;
@@ -1185,6 +1198,7 @@ ui::settings_state app::settings_now()
 	st.volume = m_cfg.volume;
 	st.free_play = m_cfg.dips.free_play; st.four_players = m_cfg.dips.four_players; st.video_clips = m_cfg.dips.video_clips; st.country = m_cfg.dips.country;
 	st.news = m_cfg.news;
+	st.save_states = m_cfg.save_states;
 	st.pause_buttons = m_cfg.pause_buttons;
 	st.menu_music = m_cfg.menu_music; st.menu_sounds = m_cfg.menu_sounds; st.menu_volume = m_cfg.menu_volume;
 	return st;
@@ -1201,6 +1215,7 @@ void app::apply_settings(const ui::settings_state &want)
 	m_cfg.dips.free_play = want.free_play; m_cfg.dips.four_players = want.four_players; m_cfg.dips.video_clips = want.video_clips;
 	m_cfg.dips.country = std::clamp(want.country, 0, 2);
 	m_cfg.pause_buttons = std::clamp(want.pause_buttons, 0, 1);
+	m_cfg.save_states = want.save_states;
 	m_cfg.menu_music = want.menu_music; m_cfg.menu_sounds = want.menu_sounds; m_cfg.menu_volume = std::clamp(want.menu_volume, 0.0f, 1.0f);
 	m_cfg.tv_margins = want.tv_margins;
 	if (want.fullscreen != had.fullscreen)
@@ -2011,6 +2026,7 @@ bool app::step_game(bool menu_open)
 		m_service_pulse = std::max(0, m_service_pulse - 1);
 		m_abuf.clear();
 		m_mach->take_audio(m_abuf);
+		m_join.apply(m_abuf);
 		if (m_audio && !m_abuf.empty())
 		{
 			for (float &v : m_abuf) v = std::clamp(v * m_cfg.volume * 1.6f, -1.0f, 1.0f);
@@ -2036,6 +2052,77 @@ bool app::game_frame()
 	draw_overlay(cv);
 	present(cv.px.data(), w, h, true);
 	return ran;
+}
+
+// ---------------------------------------------------------------- save states (N1.4)
+// Offline only: the pause menu shows Save and Load when save_states is on and the game is
+// not online, and both check that again here. A slot holds the machine and the Lua
+// scripts' state (state_file.h); it loads only into the same game and the same build.
+std::string app::slot_path(int n) const
+{
+	return path_join(path_join(path_join(m_base, "states"), game_list()[size_t(m_cur_game)].id), "slot" + std::to_string(n + 1) + ".state");
+}
+
+void app::read_slots()
+{
+	for (int n = 0; n < 3; n++)
+	{
+		m_slot_info[n].clear();
+		std::vector<u8> f;
+		state_file::header h;
+		if (!read_whole_file(slot_path(n), f)) continue;
+		if (!state_file::read_header(f, h)) { m_slot_info[n] = "damaged"; continue; }
+		if (h.build != app_version()) { m_slot_info[n] = "other version"; continue; }
+		// the time when it was saved today, else the day (the menu's value column is narrow)
+		std::time_t t = std::time_t(h.saved_at), now = std::time(nullptr);
+		std::tm a = *std::localtime(&t), b = *std::localtime(&now);
+		char when[32];
+		std::strftime(when, sizeof(when), a.tm_yday == b.tm_yday && a.tm_year == b.tm_year ? "%H:%M" : "%d %b", &a);
+		m_slot_info[n] = when;
+	}
+}
+
+void app::save_slot(int n)
+{
+	std::vector<u8> mach, scripts, file;
+	std::string err;
+	if (!m_mach->save_state_to(mach)) { message("Could not save: " + m_mach->state_error(), 4000); return; }
+	if (!m_mods.save_state(scripts, err)) { message("Could not save: " + err, 4000); return; }
+	state_file::header h;
+	h.build = app_version();
+	h.game = game_list()[size_t(m_cur_game)].id;
+	h.saved_at = int64_t(std::time(nullptr));
+	h.hash = m_mach->state_hash();
+	if (!state_file::pack(h, mach, scripts, file) || !write_whole_file(slot_path(n), file)) { message("Could not write " + slot_path(n), 4000); return; }
+	SDL_Log("save state: slot %d saved, game state %08x, %zu bytes", n + 1, h.hash, file.size());
+	message("Saved in slot " + std::to_string(n + 1), 2000);
+	read_slots();
+}
+
+bool app::load_slot(int n)
+{
+	std::vector<u8> file, mach, scripts, before;
+	std::string err;
+	state_file::header h;
+	if (!read_whole_file(slot_path(n), file)) { message("Slot " + std::to_string(n + 1) + " is empty", 2000); return false; }
+	if (!state_file::unpack(file, h, mach, scripts, err)) { message("Could not load: " + err, 4000); return false; }
+	if (h.game != game_list()[size_t(m_cur_game)].id) { message("Could not load: a state of another game", 4000); return false; }
+	if (h.build != app_version()) { message("Could not load: saved by another version (" + h.build + ")", 4000); return false; }
+	// a machine load that fails part way leaves the machine changed: keep it as it is now
+	if (!m_mach->save_state_to(before)) { message("Could not load: " + m_mach->state_error(), 4000); return false; }
+	bool mach_ok = true;
+	if (!m_mods.load_state(scripts, err, [&] { mach_ok = m_mach->load_state(mach); if (!mach_ok) err = m_mach->state_error(); return mach_ok; }))
+	{
+		if (!mach_ok) m_mach->load_state(before);
+		message("Could not load: " + err, 4000);
+		return false;
+	}
+	if (m_audio) SDL_ClearQueuedAudio(m_audio);
+	m_join.jump();
+	const u32 now = m_mach->state_hash();
+	SDL_Log("save state: slot %d loaded, game state %08x%s", n + 1, now, now == h.hash ? ", as saved" : ", NOT as saved");
+	message("Loaded slot " + std::to_string(n + 1), 2000);
+	return true;
 }
 
 // ---------------------------------------------------------------- pause menu (U5)
@@ -2066,6 +2153,10 @@ void app::open_pause()
 	ui::pause_state st;
 	st.game = game_list()[size_t(m_cur_game)].title;
 	st.online = m_net_game;
+	st.states = m_cfg.save_states && !m_net_game;
+	if (st.states) read_slots();
+	st.slot = m_state_slot;
+	for (int n = 0; n < 3; n++) st.slots[n] = m_slot_info[n];
 	m_pause_scr = ui::make_pause(st);
 	m_screen = screen::pause;
 	m_show_help = false;
@@ -2096,6 +2187,9 @@ bool app::pause_frame()
 		st.test = m_test;
 		for (int p = 0; p < 4; p++) st.coins[p] = (m_coin_pulse[p] + 7) / 8;
 		st.service = (m_service_pulse + 7) / 8;
+		st.states = m_cfg.save_states && !m_net_game;
+		st.slot = m_state_slot;
+		for (int n = 0; n < 3; n++) st.slots[n] = m_slot_info[n];
 		return st;
 	};
 	if (m_menu_guide || pause_shortcut()) { resume_game(); return ran; }
@@ -2110,6 +2204,7 @@ bool app::pause_frame()
 		{
 			if (r.id == ui::ps_volume) m_cfg.volume = std::clamp(std::round(it->value * 10.0f) / 10.0f, 0.0f, 1.0f);
 			if (r.id == ui::ps_test && !m_net_game) { m_test = it->on; message(m_test ? "TEST switch: ON (service menu)" : "TEST switch: OFF", 2000); }
+			if (r.id == ui::ps_slot) m_state_slot = std::clamp(it->choice, 0, 2);
 		}
 		if (r.what != ui::result::activated) continue;
 		switch (r.id)
@@ -2128,6 +2223,8 @@ bool app::pause_frame()
 			else { stop_game(); return ran; }
 			break;
 		case ui::ps_service: if (!m_net_game) m_service_pulse += 8; break;
+		case ui::ps_state_save: if (!m_net_game && m_cfg.save_states) save_slot(m_state_slot); break;
+		case ui::ps_state_load: if (!m_net_game && m_cfg.save_states && load_slot(m_state_slot)) { resume_game(); return ran; } break;
 		case ui::ps_reset: if (!m_net_game) { m_mach->reset(); message("Reset", 1500); resume_game(); return ran; } break;
 		// the full screens, offline only; Back there returns here
 		case ui::ps_video:
