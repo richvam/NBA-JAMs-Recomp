@@ -52,6 +52,17 @@ public:
 	virtual cpu_device *maincpu() { return nullptr; }
 	virtual cpu_device *soundcpu() { return nullptr; }
 	virtual u32 state_hash() const { return 0; }        // main RAM hash (netplay desync check)
+
+	// Save states (roadmap N1.1): the whole machine, every CPU and device, as bytes. The
+	// ROMs are not in it; a state loads only into a machine of the same game and build.
+	// save_state() gives an empty vector and load_state() false (the machine as it was
+	// is not kept) on failure, with the reason in state_error().
+	virtual std::vector<u8> save_state() { return {}; }
+	virtual bool load_state(const std::vector<u8> &) { return false; }
+	const std::string &state_error() const { return m_state_error; }
+protected:
+	std::string m_state_error;
+public:
 	virtual u32 fingerprint() const { return 0; }       // ROM identity (netplay)
 
 	// Lua mods: program ROM (interleaved little-endian words, mapped at bit address

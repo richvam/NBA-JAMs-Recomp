@@ -26,6 +26,7 @@ public:
 	}
 	std::vector<float> m_buf;
 	float m_gain = 1.0f;
+	void io(state_io &s) { s.vec(m_buf); s(m_gain); s(m_rate); s(m_frac); s(m_last); }
 protected:
 	virtual void generate(float *out, int n) = 0;
 	running_machine *m_machine = nullptr;
@@ -70,6 +71,7 @@ public:
 		}
 		return n;
 	}
+	void io(state_io &s) { s.mark("mixer"); s(m_last); s(m_frac); }
 private:
 	running_machine *m_machine = nullptr;
 	std::vector<stream_source *> m_sources;
@@ -84,6 +86,7 @@ class dac8_source : public stream_source
 public:
 	void write(u8 data) { update(); m_level = (float(data) - 128.0f) / 128.0f; }
 	void write16(u16 data) { update(); m_level = float(s16(data)) / 32768.0f; }
+	void io(state_io &s) { stream_source::io(s); s(m_level); }
 protected:
 	void generate(float *out, int n) override { std::fill_n(out, n, m_level); }
 	float m_level = 0;

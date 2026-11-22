@@ -15,6 +15,7 @@ public:
 	u8 read();
 	void write(u8 command);
 	void reset() { update(); for (auto &v : m_voice) v.playing = false; m_command = -1; }
+	void io(state_io &s) { stream_source::io(s); s(m_voice); s(m_command); }
 protected:
 	void generate(float *out, int n) override;
 private:
@@ -38,6 +39,14 @@ public:
 	u8 read(offs_t offset) { update(); return m_chip.read(offset & 1); }
 	void write(offs_t offset, u8 data) { update(); m_chip.write(offset & 1, data); }
 	void reset() { m_chip.reset(); }
+	void io(state_io &s)
+	{
+		stream_source::io(s);
+		std::vector<uint8_t> chip;
+		if (s.saving()) { ymfm::ymfm_saved_state st(chip, true); m_chip.save_restore(st); }
+		s.vec(chip);
+		if (!s.saving() && s.ok()) { ymfm::ymfm_saved_state st(chip, false); m_chip.save_restore(st); }
+	}
 	std::function<void(int)> irq_cb;
 	// ymfm_interface
 	void ymfm_set_timer(uint32_t tnum, int32_t duration_in_clocks) override;
@@ -68,6 +77,12 @@ public:
 	void install_hidden_ram(u16 start, u16 end) { m_hidden_start = start; m_hidden_end = end; }
 
 	mc6809e_device &cpu() { return m_cpu; }
+	void io(state_io &s)
+	{
+		s.mark("adpcm");
+		s(m_ram); s(m_hidden); s(m_rombank); s(m_okibank); s(m_latch); s(m_talkback); s(m_sound_int_state);
+		m_ym.io(s); m_oki.io(s); m_dac.io(s);
+	}
 	u32 m_cmds = 0, m_oki_cmds = 0, m_ym_writes = 0, m_dac_writes = 0;
 
 private:

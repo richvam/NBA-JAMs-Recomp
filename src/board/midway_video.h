@@ -42,6 +42,17 @@ public:
 	// counters for diagnostics
 	u64 m_dma_count = 0;
 
+	// save states (roadmap N1.1): video RAM, the blitter's registers and its state
+	void io(state_io &s)
+	{
+		s.mark("video");
+		s(m_midtunit_control); s(m_gfxbank_offset); s(m_videobank_select); s(m_dma_register);
+		m_dma_state.gfxrom = nullptr;    // a pointer into this program's copy of the ROM: not saved
+		s(m_dma_state);
+		m_dma_state.gfxrom = m_gfxrom;
+		s.raw(m_local_videoram.get(), 0x100000 / 2 * sizeof(u16));
+	}
+
 private:
 	running_machine &m_machine;
 	kind m_kind;

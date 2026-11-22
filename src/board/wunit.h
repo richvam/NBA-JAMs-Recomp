@@ -37,6 +37,8 @@ public:
 	std::vector<u8> *program_rom() override { return &m_roms.program; }
 	u16 peek16(u32 a) override { return read16(a & ~15u, 0xffff); }
 	void poke16(u32 a, u16 v) override { write16(a & ~15u, v, 0xffff); }
+	std::vector<u8> save_state() override;
+	bool load_state(const std::vector<u8> &d) override;
 	u32 fingerprint() const override
 	{
 		u32 h = fnv1a(m_roms.program.data(), m_roms.program.size());
@@ -53,6 +55,7 @@ private:
 	u16 read16(offs_t a, u16 mask);
 	void write16(offs_t a, u16 data, u16 mask);
 	void capture_frame();
+	void io(state_io &s);
 
 	// serial PIC simulation (MAME midway_serial_pic_device)
 	void pic_generate(int upper);

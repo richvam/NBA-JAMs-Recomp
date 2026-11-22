@@ -640,6 +640,8 @@ expectation, both languages, the README list updated by Haiku.
 
 **Gate:** advisor sign-off, then tag the release.
 
+**Gate status:** signed off by the owner on 2026-11-21 (the full mod suite passed on main ad9aed8: 472 passed, 0 failed). The release is not tagged yet, at the owner's decision.
+
 ## Known risks
 
 * **NBA JAM 1993 and the ROM-only Hangtime revisions** have no symbols. Every address
@@ -721,6 +723,8 @@ rollback. Useful offline too.
 | N1.2 | Audio continues cleanly across a load (no click, no drift), and the Lua engine's per-script state is saved with the machine. | Audio capture across a load; a script counter survives |
 | N1.3 | Size and speed: a state small and fast enough to send to a joining player and, later, to take every frame. Report bytes (raw and compressed) and microseconds per save and load. | Numbers in the pull request; they feed N9.1 |
 | N1.4 (Sonnet) | Offline save slots in the pause menu, off by default, and never available online. | Save and load from the menu in a scripted run |
+
+**Status:** N1.1 is done. A save state is the whole machine as bytes: `state_io` (src/emu/emu.h) saves and loads with the same `io()` function per part, so the order and sizes cannot disagree, and a load that finds a section or size it does not expect fails. MAME's own `save_item` / `save_pointer` lists in the TMS34010, M6809 and ADSP-2105 cores now do what they do in MAME (with `device_pre_save` / `device_post_load`). The machine saves the time, every allocated timer, the screen and the scheduler's part of each CPU. The T-unit saves main, NVRAM and palette RAM, the video RAM and the blitter, the protection queue, and the sound board (6809, YM2151 through ymfm's own save, OKI6295, DAC); the Wolf-unit saves the same parts and the DCS board (ADSP-2105 memory, latches, timers, DAC queue) and the serial PIC. A one-shot timer's callback is not data, so the TMS34010's interrupt synchronize and the DCS latches and IRQ clear now use `timer_pool`, allocated timers with the same order; saving fails if a one-shot is still pending. The ROMs are not in a state (and neither are the Lua scripts' ROM patches, which is N1.2). `tools/headless/statetest` saves at frame N, plays 3 000 frames with scripted two-player inputs and hashes each frame (main RAM, picture and sound), loads in the same machine and in a new one, plays again, and checks that every hash is equal and that a state saved right after a load is the same bytes: all five games pass at frames 60, 1 000, 2 400 and 6 000. A state is about 2.5 MB raw; a save takes 0.5 to 2 ms and a load about 0.1 ms (N1.3 will measure this properly, with compression).
 
 **Gate:** advisor reviews the determinism results. Nothing else in Part 4 that touches a
 running game starts before this passes on all five games.

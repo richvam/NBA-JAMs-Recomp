@@ -380,3 +380,30 @@ void running_machine::run_until(const attotime &target)
 		t->fire();
 	}
 }
+
+// --------------------------------------------------------------------------
+// save states
+// --------------------------------------------------------------------------
+void screen_device::io(state_io &s)
+{
+	s.mark("screen");
+	s(m_frame_start); s(m_frame_number); s(m_last_partial);
+	int w = m_bitmap.width(), h = m_bitmap.height();
+	s(w); s(h);
+	if (!s.saving() && s.ok() && (w != m_bitmap.width() || h != m_bitmap.height())) { s.fail("screen size differs"); return; }
+	s.raw(m_bitmap.raw(), size_t(w) * h * sizeof(u16));
+}
+
+void running_machine::io(state_io &s)
+{
+	s.mark("machine");
+	for (auto &o : m_oneshots)
+		if (o->m_enabled) { s.fail("a one-shot timer is pending"); return; }
+	s(m_basetime); s(m_rand); s(m_timer_seq);
+	u32 n = u32(m_timers.size());
+	s(n);
+	if (!s.saving() && s.ok() && n != m_timers.size()) { s.fail("timer count differs"); return; }
+	for (auto &t : m_timers) t->io(s);
+	m_screen->io(s);
+	for (cpu_device *c : m_cpus) c->io(s);
+}

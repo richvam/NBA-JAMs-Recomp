@@ -100,6 +100,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - New Lua mod cpu_vs_cpu.lua (every game): whole games between two computer teams, one after another, for watching.
 
 ### Changed
+- The emulator can now save and load the whole state of a running game (every CPU, sound board, video and timer), checked on all five games. There is no save menu yet; this is groundwork for later online features.
 - The read-me has a Lua mods section, and mods/README.txt lists every script that comes with the program, the games it runs on and which ones stay off online.
 - The CRT mask is as coarse at 4K as at 1080p (it was twice as fine at 4K), and it lines up
   with the picture wherever the picture sits on the screen.

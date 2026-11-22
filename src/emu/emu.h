@@ -152,6 +152,71 @@ template <typename... Args> [[noreturn]] inline void fatalerror(const char *fmt,
 #define NAME(x) x, #x
 
 // --------------------------------------------------------------------------
+// save states (roadmap N1.1): one io(state_io &) per part, run the same way to save and
+// to load, so the two can never disagree on order or size. A load that finds a size
+// or a section mark it does not expect fails (ok() false) without going further.
+// --------------------------------------------------------------------------
+class state_io
+{
+public:
+	static state_io saver(std::vector<uint8_t> &out) { out.clear(); return state_io(&out, nullptr, 0); }
+	static state_io loader(const std::vector<uint8_t> &in) { return state_io(nullptr, in.data(), in.size()); }
+	bool saving() const { return m_out != nullptr; }
+	bool ok() const { return m_ok; }
+	bool at_end() const { return m_pos == m_size; }
+	const std::string &error() const { return m_err; }
+	void fail(const std::string &why) { if (m_ok) { m_ok = false; m_err = why; } }
+
+	void raw(void *p, size_t n)
+	{
+		if (!n) return;
+		if (m_out) { const uint8_t *b = static_cast<const uint8_t *>(p); m_out->insert(m_out->end(), b, b + n); return; }
+		if (!m_ok) return;
+		if (m_pos + n > m_size) { fail("the state ends early"); return; }
+		std::memcpy(p, m_in + m_pos, n);
+		m_pos += n;
+	}
+	template <typename T> void operator()(T &v)
+	{
+		static_assert(std::is_trivially_copyable_v<T>, "state_io: not plain data");
+		raw(&v, sizeof(T));
+	}
+	template <typename T> void vec(std::vector<T> &v)
+	{
+		static_assert(std::is_trivially_copyable_v<T>, "state_io: not plain data");
+		uint32_t n = uint32_t(v.size());
+		(*this)(n);
+		if (!saving()) { if (!m_ok) return; if (size_t(n) * sizeof(T) > m_size - m_pos) { fail("the state ends early"); return; } v.resize(n); }
+		raw(v.data(), size_t(n) * sizeof(T));
+	}
+	// a fixed-size block whose size must match on load
+	void block(void *p, size_t n, const char *what)
+	{
+		uint32_t len = uint32_t(n);
+		(*this)(len);
+		if (!saving() && m_ok && len != n) { fail(std::string(what) + ": size differs"); return; }
+		raw(p, n);
+	}
+	// a section mark: catches a load from a different build or board early
+	void mark(const char *name)
+	{
+		uint32_t h = 2166136261u;
+		for (const char *c = name; *c; c++) { h ^= uint8_t(*c); h *= 16777619u; }
+		if (getenv("STATE_TRACE")) fprintf(stderr, "mark %s at %zu\n", name, m_out ? m_out->size() : m_pos);
+		uint32_t got = h;
+		(*this)(got);
+		if (!saving() && m_ok && got != h) fail(std::string("section ") + name + " not where expected");
+	}
+private:
+	state_io(std::vector<uint8_t> *out, const uint8_t *in, size_t n) : m_out(out), m_in(in), m_size(n) {}
+	std::vector<uint8_t> *m_out;
+	const uint8_t *m_in;
+	size_t m_size, m_pos = 0;
+	bool m_ok = true;
+	std::string m_err;
+};
+
+// --------------------------------------------------------------------------
 // attotime
 // --------------------------------------------------------------------------
 constexpr attoseconds_t ATTOSECONDS_PER_SECOND = 1000000000000000000LL;
@@ -469,6 +534,7 @@ public:
 	s32 m_param = 0;
 	bool m_enabled = false;
 	u64 m_seq = 0;
+	void io(state_io &s) { s(m_start); s(m_expire); s(m_period); s(m_param); s(m_enabled); s(m_seq); }
 };
 
 class device_scheduler
@@ -736,6 +802,7 @@ public:
 	bitmap_ind16 m_bitmap;
 	int m_last_partial = -1;
 	std::function<void()> on_vblank;   // frame complete (called at vblank start)
+	void io(state_io &s);
 
 private:
 	running_machine &m_machine;
@@ -790,8 +857,25 @@ public:
 	}
 	emu_timer *timer_alloc_raw(std::function<void(s32)> cb);
 
-	template <typename... A> void save_item(A &&...) {}
-	template <typename... A> void save_pointer(A &&...) {}
+	// MAME's lists of what a device keeps: saved and loaded by io() in the order given
+	template <typename T> void save_item(T &v, const char *name)
+	{
+		static_assert(std::is_trivially_copyable_v<T>, "save_item: not plain data");
+		m_saves.push_back({ &v, sizeof(T), name });
+	}
+	template <typename T> void save_item(T &v, const char *name, int) { save_item(v, name); }
+	template <typename T> void save_pointer(T *p, const char *name, size_t count)
+	{
+		static_assert(std::is_trivially_copyable_v<T>, "save_pointer: not plain data");
+		m_saves.push_back({ p, sizeof(T) * count, name });
+	}
+	virtual void io(state_io &s)
+	{
+		s.mark(tag());
+		if (s.saving()) device_pre_save();
+		for (auto &e : m_saves) s.block(e.p, e.n, e.name);
+		if (!s.saving() && s.ok()) device_post_load();
+	}
 
 	template <typename... A> void logerror(const char *fmt, A &&... args) const
 	{
@@ -810,6 +894,8 @@ protected:
 	running_machine *m_machine = nullptr;
 	std::string m_tag;
 	u32 m_clock = 0;
+	struct save_entry { void *p; size_t n; const char *name; };
+	std::vector<save_entry> m_saves;
 };
 
 class device_video_interface
@@ -873,6 +959,13 @@ public:
 	attotime m_slice_start;
 	int m_slice_cycles = 0;
 	u64 m_total_cycles_base = 0;
+
+	void io(state_io &s) override
+	{
+		device_t::io(s);
+		s(m_localtime); s(m_slice_cycles); s(m_total_cycles_base);
+		s(m_input_state); s(m_halted); s(m_in_reset);
+	}
 
 	virtual u64 execute_clocks_to_cycles(u64 clocks) const noexcept { return clocks; }
 	virtual u64 execute_cycles_to_clocks(u64 cycles) const noexcept { return cycles; }
@@ -945,6 +1038,11 @@ public:
 
 	// run the system until the given absolute time
 	void run_until(const attotime &target);
+
+	// save states: time, timers, the screen and the scheduler's part of each CPU (each
+	// board saves its CPUs' own registers). A one-shot timer cannot be saved (its callback
+	// is not data), so io() fails if one is pending; every board uses allocated timers.
+	void io(state_io &s);
 	attotime m_basetime;           // global time
 	cpu_device *m_executing = nullptr;
 	attotime m_max_slice = attotime::from_usec(50);
@@ -959,6 +1057,32 @@ private:
 	u32 m_rand = 0x9876;
 	u64 m_timer_seq = 0;
 	emu_timer *next_timer();
+};
+
+// A one-shot timer that can be saved: a few allocated timers that share one callback,
+// for code that would call scheduler().synchronize() or timer_set() (a one-shot timer's
+// callback is not data, so a save state cannot hold it). Two pending at once each fire,
+// in the order set, as one-shots do; only when all are pending does it fall back to one.
+class timer_pool
+{
+public:
+	void init(running_machine &m, std::function<void(s32)> cb, int count = 4)
+	{
+		m_machine = &m;
+		m_cb = std::move(cb);
+		for (int i = 0; i < count; i++) m_t.push_back(m.timer_alloc(m_cb));
+	}
+	void set(attotime duration, s32 param = 0)
+	{
+		for (emu_timer *t : m_t)
+			if (!t->enabled()) { t->adjust(duration, param); return; }
+		m_machine->timer_set(duration, m_cb, param);
+	}
+	void synchronize(s32 param = 0) { set(attotime::zero, param); }
+private:
+	running_machine *m_machine = nullptr;
+	std::function<void(s32)> m_cb;
+	std::vector<emu_timer *> m_t;
 };
 
 #endif // __EMU_H__
