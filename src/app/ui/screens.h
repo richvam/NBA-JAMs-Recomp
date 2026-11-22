@@ -176,6 +176,10 @@ struct lobby_state
 	int inviting = 0;                    // host: players being let in by their code
 	bool no_answer = false;              // joining: no answer for a few seconds
 	std::string mods;                    // the Lua mods the host runs (roadmap 1.7), "none"
+	// N2.4: this computer's connection type (open, moderate, strict), and for a player one
+	// line per opponent: ping, jitter and whether the path is direct or relayed
+	std::string connection;
+	std::vector<player> links;
 };
 
 enum lobby_id { lb_start = 1, lb_delay, lb_leave, lb_invite, lb_copy };

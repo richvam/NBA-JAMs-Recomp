@@ -991,6 +991,29 @@ int main(int argc, char **argv)
 		update_lobby(jn, lj);
 		CHECK(waiting && text_of(jn, 0, 0).find("You are player 3") != std::string::npos && text_of(jn, 0, 0).find("41 ms") != std::string::npos && text_of(jn, 0, 0).find("Waiting for the host to start") != std::string::npos,
 		      "Lobby: a player who joins sees the answer arrive, which player they are and the ping; only the host can start");
+		// N2.4: the connection report
+		ls.connection = "moderate";
+		lj.connection = "strict";
+		lj.links = { { "Host", "41 ms, jitter 3, relayed" }, { "Player 2", "60 ms, jitter 5, via host" } };
+		update_lobby(lb, ls);
+		update_lobby(jn, lj);
+		CHECK(text_of(lb, 0, 0).find("Your connection") != std::string::npos && text_of(lb, 0, 0).find("moderate") != std::string::npos &&
+		      text_of(jn, 0, 0).find("strict") != std::string::npos && text_of(jn, 0, 0).find("41 ms, jitter 3, relayed") != std::string::npos &&
+		      text_of(jn, 0, 0).find("via host") != std::string::npos,
+		      "Lobby: each side sees its connection type; a player sees ping, jitter and the path to the host and to each other player (N2.4)");
+		{
+			// the report as nattest measured it (restricted host, symmetric player, 20 + 30 ms)
+			lobby_state h2 = ls, p2 = lj;
+			h2.players = { { "Player 1", "you (host)" }, { "Player 2", "55 ms, jitter 0, direct, ready" }, { "Player 3", "62 ms, jitter 7, via P2" } };
+			p2.links = { { "Host", "55 ms, jitter 0, direct" }, { "Player 3", "117 ms, jitter 7, via host" } };
+			p2.slot = 1;
+			screen hs = make_lobby(h2), ps = make_lobby(p2);
+			canvas c1(screen::kW, screen::kH), c2(screen::kW, screen::kH);
+			hs.draw(c1, th, device::xbox, 0);
+			ps.draw(c2, th, device::xbox, 0);
+			write_png(out, "lobby_report_host.png", c1);
+			write_png(out, "lobby_report_player.png", c2);
+		}
 		ls.mods = "Quarter length, Net RAM test";
 		update_lobby(lb, ls);
 		lj.mods = ls.mods;

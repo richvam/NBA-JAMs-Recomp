@@ -500,6 +500,7 @@ void update_lobby(screen &s, const lobby_state &st)
 	if (st.host)
 	{
 		who.title = "Players: " + std::to_string(st.players.size()) + " of 4";
+		if (!st.connection.empty()) w.push_back(row("Your connection", st.connection));
 		for (auto &p : st.players) w.push_back(label(p.name + "   " + p.status));
 		if (st.inviting) w.push_back(label("Letting in " + std::to_string(st.inviting) + (st.inviting == 1 ? " player" : " players") + " by code..."));
 		if (st.players.size() < 2) { w.push_back(label("")); add_text(w, "Nobody has joined yet. You can start alone to try it.", int(s.panel_rect(0).w) - 30, 3); }
@@ -515,8 +516,12 @@ void update_lobby(screen &s, const lobby_state &st)
 	else
 	{
 		who.title = "Connection";
-		w.push_back(row("Host", st.address));
-		w.push_back(row("UDP port", std::to_string(st.port)));
+		// once in, the rows are the report (N2.4); the address and port were typed
+		if (st.slot < 0 || st.links.empty())
+		{
+			w.push_back(row("Host", st.address));
+			w.push_back(row("UDP port", std::to_string(st.port)));
+		}
 		if (st.slot < 0)
 		{
 			w.push_back(label("Waiting for an answer..."));
@@ -525,8 +530,10 @@ void update_lobby(screen &s, const lobby_state &st)
 		else
 		{
 			w.push_back(row("You are", "player " + std::to_string(st.slot + 1)));
-			w.push_back(row("Ping", std::to_string(st.ping) + " ms"));
-			w.push_back(row("Players", std::to_string(st.count)));
+			if (!st.connection.empty()) w.push_back(row("Your connection", st.connection));
+			if (st.links.empty()) w.push_back(row("Ping", std::to_string(st.ping) + " ms"));
+			for (auto &l : st.links) w.push_back(row(l.name, l.status));
+			if (st.links.empty()) w.push_back(row("Players", std::to_string(st.count)));
 			w.push_back(label(st.receiving ? "Receiving the game data..." : "Waiting for the host to start..."));
 		}
 		i.push_back(header("GAME"));
