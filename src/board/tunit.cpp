@@ -339,3 +339,35 @@ void tunit_machine::write16(offs_t a, u16 data, u16 mask)
 	if (IN_RANGE(a, 0x01d81060, 0x01d8107f)) return; // watchdog
 	if (IN_RANGE(a, 0xc0000000, 0xc00001ff)) { m_maincpu.io_register_w(WOFF(a, 0xc0000000), data, mask); return; }
 }
+
+void tunit_machine::io(state_io &s)
+{
+	s.mark("tunit");
+	m_machine.io(s);
+	m_video.io(s);
+	m_sound.io(s);
+	m_mixer.io(s);
+	s.vec(m_ram); s.vec(m_nvram); s.vec(m_palram); s(m_pens);
+	s(m_in0); s(m_in1); s(m_in2); s(m_dsw); s(m_fake_sound_state); s(m_prot_queue); s(m_prot_index);
+	s.vec(m_frame); s(m_frames);
+	s.mark("end");
+}
+
+// save states (roadmap N1.1)
+std::vector<u8> tunit_machine::save_state()
+{
+	std::vector<u8> out;
+	state_io s = state_io::saver(out);
+	io(s);
+	if (!s.ok()) { m_state_error = s.error(); out.clear(); }
+	return out;
+}
+
+bool tunit_machine::load_state(const std::vector<u8> &d)
+{
+	state_io s = state_io::loader(d);
+	io(s);
+	if (s.ok() && !s.at_end()) s.fail("the state is longer than expected");
+	if (!s.ok()) { m_state_error = s.error(); return false; }
+	return true;
+}

@@ -22,6 +22,7 @@ class dac_queue_source : public stream_source
 public:
 	void push(const s16 *s, int n) { update(); for (int i = 0; i < n; i++) m_q.push_back(s[i]); if (m_q.size() > 48000) m_q.erase(m_q.begin(), m_q.begin() + (m_q.size() - 24000)); }
 	void enable(bool e) { update(); m_enabled = e; if (!e) m_q.clear(); }
+	void io(state_io &s) { stream_source::io(s); s.vec(m_q); s(m_rd); s(m_last); s(m_enabled); }
 protected:
 	void generate(float *out, int n) override
 	{
@@ -52,6 +53,7 @@ public:
 	void reset_w(int state);
 
 	adsp2105_cpu &cpu() { return m_cpu; }
+	void io(state_io &s);
 	u32 m_dbg_in = 0, m_dbg_out = 0, m_dbg_irq = 0;
 
 private:
@@ -98,6 +100,7 @@ private:
 	u16 m_progflags = 0;
 
 	emu_timer *m_reg_timer = nullptr, *m_internal_timer = nullptr;
+	timer_pool m_reset_sync, m_data_sync, m_output_sync, m_irq_clear;
 	bool m_timer_ignore = false;
 	int m_timer_enable = 0, m_timer_scale = 1;
 	u16 m_timer_period = 0, m_timer_start_count = 0;

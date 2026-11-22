@@ -37,6 +37,17 @@ void dcs_audio::start(std::vector<u16> bootrom, audio_mixer &mixer)
 
 	m_reg_timer = m_machine.timer_alloc([this](s32) { dcs_irq_cb(); });
 	m_internal_timer = m_machine.timer_alloc([this](s32) { internal_timer_cb(); });
+	m_reset_sync.init(m_machine, [this](s32) { dcs_reset(); });
+	m_data_sync.init(m_machine, [this](s32 d) {
+		m_cpu.set_input_line(ADSP2105_IRQ2, ASSERT_LINE);
+		m_latch_control &= ~LCTRL_INPUT_EMPTY;
+		m_input_data = u16(d);
+	});
+	m_output_sync.init(m_machine, [this](s32) {
+		m_latch_control &= ~LCTRL_OUTPUT_EMPTY;
+		m_output_data = m_pre_output_data;
+	});
+	m_irq_clear.init(m_machine, [this](s32 line) { m_cpu.set_input_line(line, CLEAR_LINE); });
 
 	// operators set the DCS volume low (factory default 30/255) because the cabinet amp
 	// adds the gain; compensate so it plays at a level similar to the T-Unit games
@@ -127,7 +138,7 @@ void dcs_audio::reset_w(int state)
 {
 	if (!state)
 	{
-		m_machine.scheduler().synchronize([this](s32) { dcs_reset(); });
+		m_reset_sync.synchronize();
 		m_cpu.set_input_line(INPUT_LINE_RESET, ASSERT_LINE);
 	}
 	else
@@ -140,11 +151,7 @@ void dcs_audio::reset_w(int state)
 void dcs_audio::data_w(u16 data)
 {
 	m_dbg_in++;
-	m_machine.scheduler().synchronize([this](s32 d) {
-		m_cpu.set_input_line(ADSP2105_IRQ2, ASSERT_LINE);
-		m_latch_control &= ~LCTRL_INPUT_EMPTY;
-		m_input_data = u16(d);
-	}, data);
+	m_data_sync.synchronize(data);
 }
 
 void dcs_audio::input_latch_ack_w()
@@ -163,10 +170,7 @@ void dcs_audio::output_latch_w(u16 data)
 {
 	m_pre_output_data = data;
 	m_dbg_out++;
-	m_machine.scheduler().synchronize([this](s32) {
-		m_latch_control &= ~LCTRL_OUTPUT_EMPTY;
-		m_output_data = m_pre_output_data;
-	});
+	m_output_sync.synchronize();
 }
 
 u16 dcs_audio::data_r()
@@ -311,7 +315,7 @@ void dcs_audio::adsp_control_w(offs_t offset, u16 data)
 void dcs_audio::pulse_irq(int line)
 {
 	m_cpu.set_input_line(line, ASSERT_LINE);
-	m_machine.timer_set(attotime::from_nsec(100), [this, line](s32) { m_cpu.set_input_line(line, CLEAR_LINE); }, 0);
+	m_irq_clear.set(attotime::from_nsec(100), line);
 }
 
 void dcs_audio::dcs_irq_cb()
@@ -376,4 +380,16 @@ void dcs_audio::sound_tx_callback(offs_t offset, u32)
 	}
 	m_dac.enable(false);
 	m_reg_timer->enable(false);
+}
+
+// save states (roadmap N1.1); the CPU's own registers are saved by the machine
+void dcs_audio::io(state_io &s)
+{
+	s.mark("dcs");
+	s(m_sounddata_bank); s(m_iprog); s(m_eprog); s(m_dram); s(m_iram); s(m_control_regs);
+	s(m_latch_control); s(m_input_data); s(m_output_data); s(m_pre_output_data);
+	s(m_size); s(m_incs); s(m_ireg); s(m_ireg_base); s(m_channels); s(m_progflags);
+	s(m_timer_ignore); s(m_timer_enable); s(m_timer_scale); s(m_timer_period); s(m_timer_start_count);
+	s(m_timer_start_cycles); s(m_timers_fired);
+	m_dac.io(s);
 }
