@@ -126,6 +126,18 @@ public:
 	bool found_on_lan() const { return m_lan_found; }
 	std::vector<net_addr> lan_probe_to;           // test hook: where to ask instead of the broadcast
 
+	// --- peer relay (roadmap N2.3) ---
+	// A player who cannot reach the host directly goes through a member who can reach both.
+	// The host names one in a longer code (its own code, then the member's); a player who
+	// joined with it and has no answer after relay_after_ms sends through that member, who
+	// forwards both ways (at most RELAY_BYTES_PER_S each way per player). When the host lets
+	// a player in by code, every member sends to that player too, so their routers let it in.
+	static constexpr u32 RELAY_BYTES_PER_S = 64 * 1024;
+	net_addr relay_candidate() const;             // host: the member to name, or none (ip and port 0)
+	bool relayed() const { return m_relay_on; }  // player: talking to the host through a member
+	u32 relayed_bytes() const { return m_relayed; }   // member: bytes forwarded for others
+	u32 relay_after_ms = 3000;
+
 private:
 	struct peer
 	{
@@ -158,6 +170,14 @@ private:
 	std::vector<invite_t> m_invites;
 	void tick_stun(u32 now);
 	net_addr m_target;             // client: the address joined (from the code)
+	net_addr m_relay;              // client: the member named in the code
+	bool m_relay_on = false;
+	u32 m_join_t = 0, m_relayed = 0;
+	std::vector<std::pair<net_addr, net_addr>> m_routes;   // host: player -> the member relaying it
+	struct flow { net_addr other; u32 t0, bytes; };
+	std::vector<flow> m_flows;                     // member: bytes relayed this second, per player
+	bool relay_packet(const net_addr &from, const u8 *p, int n);
+	bool relay_budget(const net_addr &other, size_t bytes);
 	net_addr m_target6;            // client: the host's IPv6 address from a code with both, tried first
 	u32 m_target6_t = 0;
 	u32 m_also_public = 0, m_lan_t = 0;

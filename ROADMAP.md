@@ -772,9 +772,23 @@ brackets). `nattest` has 7 more checks (codes, typed addresses, joining over ::1
 by a code with both, and on to IPv4 when IPv6 does not answer), and `nettest` played 1200
 frames of NBA Jam over ::1 with the same hashes as over IPv4. **Not checked:** two real
 computers with IPv6, and a home router's IPv6 firewall (most drop packets nobody asked
-for; the invite should open it the way it opens a NAT, but that is untested). UPnP and STUN can be switched off on the Online screen; the STUN server is a setting
+for; the invite should open it the way it opens a NAT, but that is untested).
+
+**Status:** N2.3 is done. Without the meeting point (N3) a player cannot find a relay alone, so
+the host names one: once a player is in, the host's lobby shows a longer code, its own code then
+that member's address as the host sees it (20 characters; the member with the lowest ping that
+is not relayed itself). A player who joins with it and has no answer after 3 s sends through that
+member: `X` packets to the member, who forwards them only to its own host as `Y` with the
+player's address, and the host's replies back (`X` to the member, sent on as they are). A member
+forwards at most 64 KB a second per player. When the host lets a player in by code, every member
+sends to that player too (`I`), so a member behind a restricted router lets it in. The host's
+player list says "through J2". `nattest` has 4 more checks: host and player behind symmetric
+routers (which cannot connect directly) join through a member behind a full cone router, the list
+shows it, the three play 300 frames of lockstep without a desync, and a 200 KB flood through the
+member is cut to about 64 KB. **Not checked:** real routers; a relay found automatically with no
+code (needs N3); the player's own screen does not yet say it is relayed (N2.4 shows the path). UPnP and STUN can be switched off on the Online screen; the STUN server is a setting
 (`stun.l.google.com:19302` by default) and the help says it sees the player's IP address.
-`nattest` (29 checks, in CI): codes, STUN messages, UPnP against a test router run in the
+`nattest` (33 checks, in CI): codes, STUN messages, UPnP against a test router run in the
 test (mapping, removal, a router that only takes permanent forwards, a device without the
 service, no router), and the router matrix of N2.2's check: 12 of 16 pairs of full cone,
 restricted, port restricted and symmetric routers connect by codes, and the 4 that cannot

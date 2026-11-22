@@ -445,7 +445,7 @@ void update_online(screen &s, const online_state &st)
 	std::vector<item> items;
 	add_text(items, "The host picks the game and plays as player 1. Everybody needs the same ROMs.", px);
 	items.push_back(header("THE HOST"));
-	add_text(items, "Tells the others a code. The router's port is opened by UPnP, PCP or NAT-PMP when it allows it; if not, the host lets each player in by the player's own code. With IPv6 the code is longer and needs no router.", px);
+	add_text(items, "Tells the others a code. The router's port is opened by UPnP, PCP or NAT-PMP when it allows it; if not, the host lets each player in by the player's own code. With IPv6 the code is longer and needs no router. A player who still cannot connect can go through a player already in, with the longer code the lobby shows.", px);
 	items.push_back(header("JOINING"));
 	add_text(items, "Type the host's code (or address). If no answer comes, send the host your code.", px);
 	items.push_back(header("STUN"));

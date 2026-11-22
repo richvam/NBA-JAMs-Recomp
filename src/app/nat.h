@@ -20,7 +20,8 @@
 std::string net_code(const net_addr &a);                       // IPv4: "ABCDE-FGHJK"; IPv6: 29 characters
 std::string net_code_pair(const net_addr &v4, const net_addr &v6);   // both, IPv4 first (39 characters)
 // a code, dashes and case ignored; with both parts, out is the IPv4 one and also6 the IPv6 one
-bool net_code_parse(const std::string &s, net_addr &out, net_addr *also6 = nullptr);
+// a host code followed by a member's code (20 characters) gives the member in relay (N2.3)
+bool net_code_parse(const std::string &s, net_addr &out, net_addr *also6 = nullptr, net_addr *relay = nullptr);
 bool net_ip_private(u32 ip);                                    // 10/8, 172.16/12, 192.168/16, 100.64/10 (carrier NAT), 169.254/16, 127/8
 std::string net_ip_str(u32 ip);
 

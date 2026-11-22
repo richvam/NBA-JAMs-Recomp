@@ -359,8 +359,8 @@ bool netplay::host(u16 port, std::string &err)
 bool netplay::join(const std::string &host, u16 port, std::string &err)
 {
 	stop();
-	net_addr a, a6;
-	if (!net_code_parse(host, a, &a6) && !udp_socket::resolve(host, port, a, err)) return false;
+	net_addr a, a6, relay;
+	if (!net_code_parse(host, a, &a6, &relay) && !udp_socket::resolve(host, port, a, err)) return false;
 	reset_state();
 	if (!m_sock.open(0, err)) return false;
 	if (a.v6 && !m_sock.has_ipv6()) { m_sock.close(); err = "that is an IPv6 address, and this computer has no IPv6"; return false; }
@@ -373,6 +373,8 @@ bool netplay::join(const std::string &host, u16 port, std::string &err)
 	h.last_seen = net_now_ms();
 	m_peers.push_back(h);
 	m_slot = -1;
+	m_relay = relay;
+	m_join_t = net_now_ms();
 	return true;
 }
 
@@ -407,19 +409,137 @@ void netplay::reset_state()
 	for (auto &m : m_in) m.clear();
 	m_merged.clear(); m_merged_upto = 0; m_stall_since = 0; m_hash.clear();
 	m_desync = false;
-	m_target = {}; m_target6 = {}; m_also_public = 0; m_lan_t = 0; m_lan_found = false;
+	m_target = {}; m_target6 = {}; m_relay = {}; m_relay_on = false; m_routes.clear(); m_flows.clear(); m_relayed = 0; m_also_public = 0; m_lan_t = 0; m_lan_found = false;
+}
+
+// ---------------------------------------------------------------------------
+// peer relay (roadmap N2.3)
+//   'X' [address] [packet]: to a relay, "send this packet to that address"
+//   'Y' [address] [packet]: from a relay to its host, "this packet came from that address"
+//   'I' [address]: host to its players, "send to this address for 60 s" (opens their routers)
+// The address is 1 byte family (4 or 6), the IPv4 or IPv6 address, the port (big-endian).
+// ---------------------------------------------------------------------------
+static void put_addr(std::vector<u8> &w, const net_addr &a)
+{
+	w.push_back(a.v6 ? 6 : 4);
+	if (a.v6) w.insert(w.end(), a.a6, a.a6 + 16);
+	else for (int s = 24; s >= 0; s -= 8) w.push_back(u8(a.ip >> s));
+	w.push_back(u8(a.port >> 8)); w.push_back(u8(a.port));
+}
+
+static int get_addr(const u8 *p, int n, net_addr &a)     // bytes used, 0 when malformed
+{
+	a = {};
+	if (n < 1 || (p[0] != 4 && p[0] != 6)) return 0;
+	int len = p[0] == 6 ? 16 : 4;
+	if (n < 1 + len + 2) return 0;
+	if (len == 16) { a.v6 = true; memcpy(a.a6, p + 1, 16); }
+	else a.ip = u32(p[1]) << 24 | u32(p[2]) << 16 | u32(p[3]) << 8 | p[4];
+	a.port = u16(p[1 + len] << 8 | p[2 + len]);
+	return 1 + len + 2;
+}
+
+static std::vector<u8> wrap(char t, const net_addr &a, const u8 *p, size_t n)
+{
+	std::vector<u8> w{ u8(t), MAGIC };
+	put_addr(w, a);
+	w.insert(w.end(), p, p + n);
+	return w;
+}
+
+bool netplay::relay_budget(const net_addr &other, size_t bytes)
+{
+	u32 now = net_now_ms();
+	for (auto &f : m_flows)
+		if (f.other == other)
+		{
+			if (now - f.t0 >= 1000) { f.t0 = now; f.bytes = 0; }
+			if (f.bytes + bytes > RELAY_BYTES_PER_S) return false;
+			f.bytes += u32(bytes);
+			return true;
+		}
+	if (m_flows.size() >= 8) m_flows.erase(m_flows.begin());
+	m_flows.push_back({ other, now, u32(bytes) });
+	return true;
+}
+
+// a relay packet; true when it was one (handled here)
+bool netplay::relay_packet(const net_addr &from, const u8 *p, int n)
+{
+	if (n < 2 || p[1] != MAGIC || (p[0] != 'X' && p[0] != 'Y' && p[0] != 'I')) return false;
+	net_addr a;
+	int k = get_addr(p + 2, n - 2, a);
+	if (!k) return true;
+	const u8 *in = p + 2 + k;
+	int inn = n - 2 - k;
+	const bool from_host = m_mode == mode::client && !m_peers.empty() && from == m_peers[0].addr && !m_relay_on;
+	if (p[0] == 'I') { if (from_host) invite(a); return true; }
+	if (p[0] == 'X' && m_mode == mode::client && m_slot > 0 && inn >= 10)
+	{
+		// a relay: from the host to a player, or from a player to the host
+		if (from_host) { if (relay_budget(a, size_t(inn))) { m_sock.send(a, in, size_t(inn)); m_relayed += u32(inn); } }
+		else if (relay_budget(from, size_t(inn)))   // only ever to our own host, whatever address it names
+		{
+			auto w = wrap('Y', from, in, size_t(inn));
+			m_sock.send(m_peers[0].addr, w.data(), w.size());
+			m_relayed += u32(inn);
+		}
+		return true;
+	}
+	if (p[0] == 'Y' && m_mode == mode::host && inn >= 10 && in[1] == MAGIC)
+	{
+		// a player that reaches us only through one of ours
+		bool member = false;
+		for (auto &q : m_peers) member = member || q.addr == from;
+		if (!member) return true;
+		bool known = false;
+		for (auto &r : m_routes) if (r.first == a) { r.second = from; known = true; }
+		if (!known) m_routes.push_back({ a, from });
+		handle(a, in, inn);
+		return true;
+	}
+	return true;
 }
 
 void netplay::send_raw(const net_addr &to, const std::vector<u8> &b)
 {
+	if (m_mode == mode::host)
+		for (auto &r : m_routes)
+			if (r.first == to) { auto w = wrap('X', to, b.data(), b.size()); m_sock.send(r.second, w.data(), w.size()); return; }
+	if (m_mode == mode::client && m_relay_on && !m_peers.empty() && to == m_peers[0].addr)
+	{
+		auto w = wrap('X', to, b.data(), b.size());
+		m_sock.send(m_relay, w.data(), w.size());
+		return;
+	}
 	m_sock.send(to, b.data(), b.size());
+}
+
+net_addr netplay::relay_candidate() const
+{
+	// the member with the lowest ping that is not relayed itself and is reached over IPv4
+	const peer *best = nullptr;
+	for (auto &p : m_peers)
+	{
+		bool routed = false;
+		for (auto &r : m_routes) routed = routed || r.first == p.addr;
+		if (routed || p.addr.v6 || p.addr.ip == 0x7f000001) continue;
+		if (!best || p.ping < best->ping) best = &p;
+	}
+	return best ? best->addr : net_addr{};
 }
 
 std::vector<std::string> netplay::peer_list() const
 {
 	std::vector<std::string> v;
 	for (auto &p : m_peers)
-		v.push_back("J" + std::to_string(p.slot + 1) + "  " + net_addr_str(p.addr) + "  " + std::to_string(p.ping) + " ms" + (p.ready ? "  ready" : ""));
+	{
+		std::string via;
+		for (auto &r : m_routes)
+			if (r.first == p.addr)
+				for (auto &q : m_peers) if (q.addr == r.second) via = "  through J" + std::to_string(q.slot + 1);
+		v.push_back("J" + std::to_string(p.slot + 1) + "  " + net_addr_str(p.addr) + "  " + std::to_string(p.ping) + " ms" + via + (p.ready ? "  ready" : ""));
+	}
 	return v;
 }
 
@@ -526,6 +646,9 @@ void netplay::poll()
 	int n;
 	while ((n = m_sock.recv(from, buf, sizeof(buf))) >= 0)
 	{
+		// a relayed player hears its host from the relay
+		if (m_relay_on && from == m_relay && n >= 2 && buf[1] == MAGIC && buf[0] != 'X' && buf[0] != 'Y') from = m_peers[0].addr;
+		if (relay_packet(from, buf, n)) continue;
 		if (n >= 10 && buf[1] == MAGIC) handle(from, buf, n);
 		else if (m_stun != stun_state::off && from == m_stun_server)
 		{
@@ -829,6 +952,8 @@ void netplay::tick_client(u32 now)
 	m_last_tick = now;
 	if (slow) m_hello_t = now;
 	auto hdr = [&](wbuf &w, char t) { w.u8_(u8(t)); w.u8_(MAGIC); w.u32_(now); w.u32_(h.echo ? h.echo + (now - h.echo_at) : 0); };
+	// no answer through the code: go through the member the host's code names (N2.3)
+	if (m_slot < 0 && !m_relay_on && m_relay.port && now - m_join_t >= relay_after_ms) { m_relay_on = true; m_start_t = 0; m_hello_t = 0; }
 
 	if (!m_got_start)
 	{
@@ -924,6 +1049,13 @@ void netplay::tick_stun(u32 now)
 
 void netplay::invite(const net_addr &player)
 {
+	// the players already in send to it too, so any of them can relay for it (N2.3)
+	if (m_mode == mode::host)
+	{
+		std::vector<u8> w{ u8('I'), MAGIC };
+		put_addr(w, player);
+		for (auto &p : m_peers) send_raw(p.addr, w);
+	}
 	for (auto &i : m_invites) if (i.to == player) { i.until = net_now_ms() + 60000; return; }
 	m_invites.push_back({ player, net_now_ms() + 60000 });
 }

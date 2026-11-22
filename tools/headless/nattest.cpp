@@ -190,6 +190,90 @@ static bool same_router(bool lan, bool other_host = false)
 	return ok;
 }
 
+// Peer relay (N2.3): host and player both behind symmetric routers, which cannot connect
+// directly; a member behind a full cone router relays. The three play 300 frames of lockstep
+// (no game: the inputs and hashes only) and the relay's forwarding is capped.
+struct relay_result { bool joined = false, relayed = false, shown = false, played = false, capped = false; };
+static relay_result relay_play()
+{
+	relay_result res;
+	stun_server st;
+	nat_box hn(symmetric, ip4(127, 0, 1, 1)), rn(full_cone, ip4(127, 0, 1, 2)), cn(symmetric, ip4(127, 0, 1, 3));
+	netplay host, rl, cl;
+	std::string err;
+	if (!host.host(0, err)) return res;
+	host.socket().via = hn.inside_addr();
+	auto pump = [&] { st.pump(); hn.pump(); rn.pump(); cn.pump(); host.poll(); if (rl.active()) rl.poll(); if (cl.active()) cl.poll(); };
+	auto until = [&](auto done, int ms) { auto t0 = net_now_ms(); while (!done() && net_now_ms() - t0 < u32(ms)) { pump(); sleep_ms(2); } return done(); };
+	host.stun_begin(st.addr());
+	if (!until([&] { return host.stun_status() == netplay::stun_state::found; }, 4000)) return res;
+	// the member: joins by the host's code, the host lets it in by its code
+	if (!rl.join(net_code(host.public_addr()), 0, err)) return res;
+	rl.socket().via = rn.inside_addr();
+	rl.stun_begin(st.addr());
+	if (!until([&] { return rl.stun_status() == netplay::stun_state::found; }, 4000)) return res;
+	host.invite(rl.public_addr());
+	if (!until([&] { return rl.local_slot() == 1 && host.players() == 2; }, 6000)) { printf("  member did not join\n"); return res; }
+	until([&] { return false; }, 300);
+	net_addr relay = host.relay_candidate();
+	if (!relay.port) { printf("  no relay candidate\n"); return res; }
+	// the player: the longer code (host, then member)
+	std::string code = net_code(host.public_addr()) + "-" + net_code(relay);
+	if (!cl.join(code, 0, err)) return res;
+	cl.relay_after_ms = 1500;
+	cl.socket().via = cn.inside_addr();
+	cl.stun_begin(st.addr());
+	if (!until([&] { return cl.stun_status() == netplay::stun_state::found; }, 4000)) return res;
+	host.invite(cl.public_addr());
+	res.joined = until([&] { return cl.active() && cl.local_slot() == 2 && host.players() == 3; }, 8000);
+	res.relayed = cl.relayed() && rl.relayed_bytes() > 0;
+	for (auto &l : host.peer_list()) res.shown = res.shown || l.find("through J2") != std::string::npos;
+	if (!res.joined) { host.stop(); rl.stop(); cl.stop(); return res; }
+	// lockstep through the relay
+	host.host_start("relaytest", 1, dip_settings(), std::vector<u8>(64, 7), 4);
+	bool ready = until([&] { return rl.start_received() && cl.start_received(); }, 8000);
+	rl.client_ready(true, ""); cl.client_ready(true, "");
+	ready = ready && until([&] { return host.all_ready(); }, 8000);
+	if (ready)
+	{
+		netplay *all[3] = { &host, &rl, &cl };
+		auto t0 = net_now_ms();
+		cabinet_inputs::player in{};
+		while (net_now_ms() - t0 < 20000)
+		{
+			pump();
+			bool done = true;
+			for (netplay *n : all)
+			{
+				if (n->frame() < 300 && n->can_run()) { n->frame_inputs(in); n->frame_done(n->frame() * 2654435761u); }
+				done = done && n->frame() >= 300;
+			}
+			if (done) break;
+			sleep_ms(1);
+		}
+		res.played = host.frame() >= 300 && rl.frame() >= 300 && cl.frame() >= 300 && !host.desynced() && !rl.desynced() && !cl.desynced() && cl.relayed();
+	}
+	// a flood through the member is capped at RELAY_BYTES_PER_S
+	{
+		int raw = udp_bind(ip4(127, 0, 0, 1), 0);
+		u32 before = rl.relayed_bytes();
+		std::vector<u8> pkt{ u8('X'), 0x4a, 4 };
+		net_addr h = host.public_addr();
+		for (int sft = 24; sft >= 0; sft -= 8) pkt.push_back(u8(h.ip >> sft));
+		pkt.push_back(u8(h.port >> 8)); pkt.push_back(u8(h.port));
+		pkt.push_back('z'); pkt.push_back(0x4a);
+		pkt.resize(pkt.size() + 1000, 0);
+		for (int i = 0; i < 200; i++) { send_to(raw, relay, pkt.data(), pkt.size()); if (i % 20 == 0) pump(); }
+		until([&] { return false; }, 300);
+		u32 sent = rl.relayed_bytes() - before;
+		res.capped = sent > 0 && sent <= netplay::RELAY_BYTES_PER_S + 4096;
+		printf("  flood: 200 KB sent to the member, %u bytes forwarded\n", sent);
+		close(raw);
+	}
+	host.stop(); rl.stop(); cl.stop();
+	return res;
+}
+
 // IPv6 (N2.2): no router in the simulator, the loopback ::1. how: 0 = the address typed,
 // 1 = a code with both parts (IPv6 right, IPv4 to a closed port), 2 = both (IPv6 to a closed
 // port, IPv4 right). Returns whether it joined; v6 says over which.
@@ -554,6 +638,14 @@ int main(int argc, char **argv)
 	CHECK(!same_router(false), "same router: without the home-network search the host's code does not connect (the router does not loop back)");
 	CHECK(same_router(true), "same router: the player sees its public address equals the host's, finds the host on the home network, and joins");
 	CHECK(!same_router(true, true), "same router: a code with another public address does not start the search");
+	// ---- peer relay (N2.3) ----
+	{
+		relay_result r = relay_play();
+		CHECK(r.joined && r.relayed, "relay: a player behind a symmetric router joins a host behind one through a member behind a full cone router");
+		CHECK(r.shown, "relay: the host's player list says the player comes through J2");
+		CHECK(r.played, "relay: the three play 300 frames of lockstep without a desync");
+		CHECK(r.capped, "relay: what a member forwards for one player is capped (64 KB a second)");
+	}
 	// ---- IPv6 (N2.2) ----
 	{
 		netplay probe;
