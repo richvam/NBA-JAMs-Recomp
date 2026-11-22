@@ -17,6 +17,7 @@
 #include <cstdio>
 #include <cstring>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <set>
 #include <string>
@@ -320,6 +321,72 @@ static report_result report(nat_kind hk, nat_kind ck, int hdelay, int cdelay, in
 	if (!hl.empty()) res.ping_h = hl[0].ping;
 	if (!cll.empty()) { res.ping_c = cll[0].ping; res.jit_c = cll[0].jitter; res.direct = !cll[0].relayed; }
 	host.stop(); cl.stop();
+	return res;
+}
+
+// Mesh (N2.5): four peers behind full cone routers that delay what leaves them: the host and
+// player 3 by 40 ms, players 2 and 4 by 5 ms. Unpaced lockstep with an input delay of 4 frames
+// runs as fast as the inputs arrive, so the time per 4 frames is the latency that limits it:
+// with the mesh the worst direct pair (40 ms), through the host the sum (40 + 40 ms).
+struct mesh_result { bool setup = false, ok = false; double ms_per4 = 0; u32 mesh_frames = 0; };
+static mesh_result mesh_run(bool mesh)
+{
+	mesh_result res;
+	stun_server st;
+	const int delays[4] = { 40, 5, 40, 5 };
+	std::vector<std::unique_ptr<nat_box>> box;
+	for (int i = 0; i < 4; i++) { box.emplace_back(new nat_box(full_cone, ip4(127, 0, 1, u8(1 + i)))); box.back()->delay_ms = delays[i]; }
+	netplay np[4];
+	for (auto &n : np) n.mesh = mesh;
+	std::string err;
+	if (!np[0].host(0, err)) return res;
+	np[0].socket().via = box[0]->inside_addr();
+	auto pump = [&] { st.pump(); for (auto &b : box) b->pump(); for (auto &n : np) if (n.active()) n.poll(); };
+	auto until = [&](auto done, int ms) { auto t0 = net_now_ms(); while (!done() && net_now_ms() - t0 < u32(ms)) { pump(); sleep_ms(1); } return done(); };
+	np[0].stun_begin(st.addr());
+	if (!until([&] { return np[0].stun_status() == netplay::stun_state::found; }, 4000)) return res;
+	for (int i = 1; i < 4; i++)
+	{
+		if (!np[i].join(net_code(np[0].public_addr()), 0, err)) return res;
+		np[i].socket().via = box[size_t(i)]->inside_addr();
+		if (!until([&] { return np[i].local_slot() == i && np[0].players() == i + 1; }, 6000)) { printf("  player %d did not join\n", i + 1); return res; }
+	}
+	np[0].host_start("meshtest", 1, dip_settings(), std::vector<u8>(64, 7), 4);
+	if (!until([&] { return np[1].start_received() && np[2].start_received() && np[3].start_received(); }, 8000)) return res;
+	for (int i = 1; i < 4; i++) np[i].client_ready(true, "");
+	if (!until([&] { return np[0].all_ready(); }, 8000)) return res;
+	res.setup = true;
+	cabinet_inputs::player in{};
+	auto t0 = net_now_ms();
+	u32 t100 = 0;
+	const u32 N = 300;
+	while (net_now_ms() - t0 < 30000)
+	{
+		pump();
+		bool done = true;
+		for (int i = 0; i < 4; i++)
+		{
+			netplay &n = np[i];
+			if (n.frame() < N && n.can_run())
+			{
+				in.shoot = ((n.frame() + u32(i)) % 7) == 0;   // different inputs per player and frame
+				cabinet_inputs ci = n.frame_inputs(in);
+				u32 mix = 0;
+				for (int q = 0; q < 4; q++) mix = mix * 31 + u32(ci.p[q].shoot);
+				n.frame_done(n.frame() * 2654435761u + mix);   // a hash of the merged inputs: a wrong merge is a desync
+			}
+			done = done && n.frame() >= N;
+		}
+		if (!t100 && np[1].frame() >= 100) t100 = net_now_ms();
+		if (done) break;
+		sleep_ms(1);
+	}
+	bool desync = false;
+	for (auto &n : np) desync = desync || n.desynced();
+	res.ok = np[1].frame() >= N && np[3].frame() >= N && !desync;
+	res.ms_per4 = t100 ? double(net_now_ms() - t100) / double(N - 100) * 4.0 : 0;   // after the start settled
+	for (int i = 1; i < 4; i++) res.mesh_frames += np[i].mesh_frames();
+	for (auto &n : np) n.stop();
 	return res;
 }
 
@@ -702,6 +769,17 @@ int main(int argc, char **argv)
 		       netplay::conn_name(b.host), netplay::conn_name(b.player), b.ping_c, b.jit_c, a.jit_c);
 		CHECK(b.host == ct::moderate && b.player == ct::moderate && b.jit_c >= 4 && b.jit_c <= 30 && a.jit_c <= 4,
 		      "report: cone routers are moderate; jitter follows the spread the router adds (about 10 ms for 0..30) and is near 0 without");
+	}
+	// ---- mesh (N2.5) ----
+	{
+		// joining four peers through the simulated routers can miss in a busy WSL; only a
+		// setup that failed is tried again (up to three times), never a slow or wrong game
+		auto run = [](bool m) { mesh_result r; for (int t = 0; t < 3 && !r.setup; t++) r = mesh_run(m); return r; };
+		mesh_result hub = run(false), mesh = run(true);
+		printf("  four peers, 40/5/40/5 ms: through the host %.0f ms per 4 frames, with the mesh %.0f ms (%u frames merged by players)\n", hub.ms_per4, mesh.ms_per4, mesh.mesh_frames);
+		CHECK(hub.ok && mesh.ok, "mesh: four players play 300 frames of lockstep without a desync, with and without the mesh");
+		CHECK(mesh.ms_per4 >= 30 && mesh.ms_per4 <= 60 && hub.ms_per4 >= 70 && mesh.mesh_frames > 0,
+		      "mesh: the delay follows the worst direct pair (40 ms), not the sum through the host (80 ms)");
 	}
 	// ---- peer relay (N2.3) ----
 	{

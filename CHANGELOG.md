@@ -144,6 +144,9 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
   list says who comes through whom.
 - The lobby shows your connection type (open, moderate or strict) and, for every other player,
   the ping, the jitter and whether the path is direct, relayed or through the host.
+- Games with three or four players react faster when the players are far from the host but
+  near each other: every player sends their inputs straight to the others too, and the host
+  is only the way round when two players cannot reach each other.
 - An online game does not start while a Lua mod that writes memory or runs every frame is
   switched on, because the players could not be kept in sync. Mods that only patch the game
   at load still work if every player has the same ones on. "Quarter length" is affected and

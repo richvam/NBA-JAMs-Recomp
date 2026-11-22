@@ -138,6 +138,14 @@ public:
 	u32 relayed_bytes() const { return m_relayed; }   // member: bytes forwarded for others
 	u32 relay_after_ms = 3000;
 
+	// --- mesh for four players (roadmap N2.5) ---
+	// During the game every player also sends its inputs straight to the others (the host
+	// tells each where the others are, every 500 ms; relayed players are left out). A player
+	// with every input for a frame merges it itself; the host's merge still comes as before,
+	// so a pair that cannot reach each other falls back to the host as hub.
+	bool mesh = true;
+	u32 mesh_frames() const { return m_mesh_frames; }   // player: frames merged here before the host's merge came
+
 	// --- connection report (roadmap N2.4) ---
 	// open: the port is forwarded (UPnP, PCP, NAT-PMP), or no router changes the address
 	// (port_forwarded: the caller knows), or IPv6; moderate: a router that keeps one port for
@@ -189,6 +197,11 @@ private:
 	std::vector<invite_t> m_invites;
 	void tick_stun(u32 now);
 	net_addr m_target;             // client: the address joined (from the code)
+	std::vector<std::pair<int, net_addr>> m_roster;   // client: the other players reached directly
+	u32 m_roster_t = 0, m_mesh_frames = 0;
+	bool local_merge_ok(u32 f) const;
+	void send_direct(const net_addr &to);
+	bool mesh_packet(const net_addr &from, const u8 *p, int n);
 	net_addr m_seen_as;            // our address as the other side sees it (host: the first player to say)
 	std::vector<link_info> m_host_links;   // client: the host's links to every player
 	u32 m_report_t = 0;

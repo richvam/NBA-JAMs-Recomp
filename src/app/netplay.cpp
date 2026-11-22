@@ -410,6 +410,7 @@ void netplay::reset_state()
 	for (auto &m : m_in) m.clear();
 	m_merged.clear(); m_merged_upto = 0; m_stall_since = 0; m_hash.clear();
 	m_desync = false;
+	m_roster.clear(); m_roster_t = 0; m_mesh_frames = 0;
 	m_seen_as = {}; m_host_links.clear(); m_report_t = 0; m_jitter = m_last_rtt = 0;
 	m_target = {}; m_target6 = {}; m_relay = {}; m_relay_on = false; m_routes.clear(); m_flows.clear(); m_relayed = 0; m_also_public = 0; m_lan_t = 0; m_lan_found = false;
 }
@@ -577,6 +578,44 @@ const char *netplay::conn_name(conn_type t)
 	}
 }
 
+// ---------------------------------------------------------------------------
+// mesh (roadmap N2.5)
+//   'D' MAGIC slot first count inputs...: a player's own inputs, sent straight to every other
+//   player (and the host's to every player) besides the usual way through the host
+// ---------------------------------------------------------------------------
+void netplay::send_direct(const net_addr &to)
+{
+	auto &mine = m_in[m_slot];
+	if (mine.empty()) return;
+	u32 last = mine.rbegin()->first + 1;
+	u32 first = last > 16 ? last - 16 : 0;
+	if (first < m_frame) first = std::min(m_frame, last);
+	std::vector<u8> w{ u8('D'), MAGIC, u8(m_slot) };
+	for (int s = 0; s < 4; s++) w.push_back(u8(first >> (8 * s)));
+	w.push_back(u8(last - first));
+	for (u32 f = first; f < last; f++) { u16 v = input_of(m_slot, f); w.push_back(u8(v)); w.push_back(u8(v >> 8)); }
+	send_raw(to, w);
+}
+
+bool netplay::mesh_packet(const net_addr &from, const u8 *p, int n)
+{
+	if (n < 2 || p[0] != 'D' || p[1] != MAGIC) return false;
+	if (m_mode != mode::client || !mesh || m_phase != phase::running || n < 8) return true;
+	int slot = p[2];
+	bool known = slot == 0 ? (!m_peers.empty() && from == m_peers[0].addr) : false;
+	for (auto &m : m_roster) known = known || (m.first == slot && m.second == from);
+	if (!known || slot == m_slot || slot >= m_nplayers) return true;
+	u32 first = u32(p[3]) | u32(p[4]) << 8 | u32(p[5]) << 16 | u32(p[6]) << 24;
+	int cnt = p[7];
+	if (n < 8 + 2 * cnt) return true;
+	for (int k = 0; k < cnt; k++)
+	{
+		u32 f = first + u32(k);
+		if (f >= u32(m_delay) && f >= m_frame) m_in[slot].emplace(f, u16(p[8 + 2 * k] | p[9 + 2 * k] << 8));
+	}
+	return true;
+}
+
 net_addr netplay::relay_candidate() const
 {
 	// the member with the lowest ping that is not relayed itself and is reached over IPv4
@@ -657,7 +696,16 @@ void netplay::try_merge()
 
 bool netplay::can_run() const
 {
-	return m_phase == phase::running && m_merged.count(m_frame) != 0;
+	return m_phase == phase::running && (m_merged.count(m_frame) != 0 || local_merge_ok(m_frame));
+}
+
+// N2.5: a player with every player's input for frame f (sent straight to it, or its own)
+// merges that frame itself instead of waiting for the host's merge, which is the same
+bool netplay::local_merge_ok(u32 f) const
+{
+	if (m_mode != mode::client || !mesh || m_slot < 0) return false;
+	for (int s = 0; s < m_nplayers; s++) if (!has_input(s, f)) return false;
+	return true;
 }
 
 int netplay::buffered() const
@@ -677,6 +725,13 @@ cabinet_inputs netplay::frame_inputs(const cabinet_inputs::player &local_now)
 	u32 tf = m_frame + u32(m_delay);
 	if (!has_input(m_slot, tf)) m_in[m_slot][tf] = net_pack_input(local_now);
 	if (m_mode == mode::host) try_merge();
+	if (!m_merged.count(m_frame) && local_merge_ok(m_frame))
+	{
+		u64 m = 0;
+		for (int s = 0; s < m_nplayers; s++) m |= u64(input_of(s, m_frame)) << (16 * s);
+		m_merged[m_frame] = m;
+		m_mesh_frames++;
+	}
 	cabinet_inputs in{};
 	auto it = m_merged.find(m_frame);
 	u64 m = it == m_merged.end() ? 0 : it->second;
@@ -711,6 +766,7 @@ void netplay::poll()
 		// a relayed player hears its host from the relay
 		if (m_relay_on && from == m_relay && n >= 2 && buf[1] == MAGIC && buf[0] != 'X' && buf[0] != 'Y') from = m_peers[0].addr;
 		if (relay_packet(from, buf, n)) continue;
+		if (mesh_packet(from, buf, n)) continue;
 		if (n >= 10 && buf[1] == MAGIC) handle(from, buf, n);
 		else if (m_stun != stun_state::off && from == m_stun_server)
 		{
@@ -872,6 +928,23 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 	if (techo) sample(m_ping, m_jitter, m_last_rtt, int(now - techo));
 	switch (type)
 	{
+		case 'M':
+		{
+			// the host: where the other players are, to send them our inputs directly (N2.5)
+			int cnt = r.u8_();
+			std::vector<std::pair<int, net_addr>> ro;
+			for (int j = 0; j < cnt && r.ok && j < 4; j++)
+			{
+				int sl = r.u8_();
+				net_addr a;
+				int k = r.i < n ? get_addr(p + r.i, n - r.i, a) : 0;
+				if (!k) break;
+				r.i += k;
+				if (sl != m_slot && sl > 0 && sl < 4) ro.push_back({ sl, a });
+			}
+			if (r.ok) m_roster = ro;
+			break;
+		}
 		case 'o':
 		{
 			// the host: our address as it sees it, then every player's link to it (N2.4)
@@ -979,6 +1052,8 @@ void netplay::tick_host(u32 now)
 
 	const bool report = now - m_report_t >= 1000;
 	if (report) m_report_t = now;
+	const bool roster_due = now - m_roster_t >= 500;
+	if (roster_due) m_roster_t = now;
 	const std::vector<link_info> mine = report ? links() : std::vector<link_info>();
 	for (auto &p : m_peers)
 	{
@@ -1016,6 +1091,22 @@ void netplay::tick_host(u32 now)
 					send_raw(p.addr, w.b);
 				}
 		}
+		if (mesh && (m_phase == phase::transfer || m_phase == phase::running) && roster_due)
+		{
+			// the players reached directly (not through a relay), for the mesh (N2.5)
+			wbuf w; hdr(w, 'M');
+			std::vector<const peer *> direct;
+			for (auto &q : m_peers)
+			{
+				bool routed = false;
+				for (auto &r : m_routes) routed = routed || r.first == q.addr;
+				if (!routed) direct.push_back(&q);
+			}
+			w.u8_(u8(direct.size()));
+			for (const peer *q : direct) { w.u8_(u8(q->slot)); put_addr(w.b, q->addr); }
+			send_raw(p.addr, w.b);
+		}
+		if (m_phase == phase::running && mesh) send_direct(p.addr);
 		if (m_phase == phase::running)
 		{
 			wbuf w; hdr(w, 'f');
@@ -1102,6 +1193,8 @@ void netplay::tick_client(u32 now)
 		if (m_client_ready_sent && !m_client_ok) stop(m_client_why.c_str());
 		return;
 	}
+	if (m_phase == phase::running && mesh)
+		for (auto &m : m_roster) send_direct(m.second);
 	if (m_phase == phase::running)
 	{
 		// next merged frame we are missing
