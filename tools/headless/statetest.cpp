@@ -10,6 +10,8 @@
 // Prints the size of a state and how long a save and a load take. Exit status 0 when every
 // game passes.
 #include "games.h"
+#include "audio_join.h"
+#include <cmath>
 #include <chrono>
 #include <cstdio>
 #include <cstring>
@@ -27,12 +29,21 @@ static cabinet_inputs inputs_for(int f)
 	return in;
 }
 
+// the sound as played: the largest step between two samples, and the last sample
+static float g_last = 0, g_step = 0;
+static bool g_any = false;
+static void heard(const std::vector<float> &a)
+{
+	for (float v : a) { if (g_any) g_step = std::max(g_step, std::fabs(v - g_last)); g_last = v; g_any = true; }
+}
+
 static u32 frame_hash(arcade_machine &m, std::vector<float> &a)
 {
 	u32 h = m.state_hash();
 	h = fnv1a(m.frame(), size_t(m.width()) * m.height() * 4, h);
 	a.clear();
 	m.take_audio(a);
+	heard(a);
 	return fnv1a(a.data(), a.size() * sizeof(float), h);
 }
 
@@ -79,12 +90,32 @@ int main(int argc, char **argv)
 		std::vector<u8> st = m->save_state();
 		auto t1 = std::chrono::steady_clock::now();
 		if (st.empty()) { printf("FAIL %s: save: %s\n", g.id, m->state_error().c_str()); fail++; continue; }
+		g_any = false; g_step = 0;
 		std::vector<u32> ref = play(*m, before + 1, after);
+		float normal_step = g_step, last_played = g_last;
 
 		auto t2 = std::chrono::steady_clock::now();
 		bool ok1 = m->load_state(st);
 		auto t3 = std::chrono::steady_clock::now();
 		if (!ok1) { printf("FAIL %s: load: %s\n", g.id, m->state_error().c_str()); fail++; continue; }
+		// the sound at the jump back (roadmap N1.2): the step from the last sample played to
+		// the first one after the load, as it is and with audio_join
+		float raw_step = 0, joined_step = 0;
+		{
+			arcade_machine &mm = *m;
+			std::vector<u8> here = mm.save_state();
+			mm.set_inputs(inputs_for(before + 1)); mm.run_frame();
+			std::vector<float> b; mm.take_audio(b);
+			if (!b.empty()) raw_step = std::fabs(b[0] - last_played);
+			audio_join j;
+			j.played({ last_played });
+			j.jump();
+			j.apply(b);
+			float prev = last_played;
+			for (float v : b) { joined_step = std::max(joined_step, std::fabs(v - prev)); prev = v; }
+			mm.load_state(here);
+		}
+		g_any = false;
 		std::vector<u32> same = play(*m, before + 1, after);
 
 		auto m2 = cat.create(g, err);
@@ -99,17 +130,20 @@ int main(int argc, char **argv)
 		int d1 = first_diff(ref, same), d2 = first_diff(ref, fresh);
 		bool bytes_same = again == st;
 		auto us = [](auto a, auto b) { return (long long)std::chrono::duration_cast<std::chrono::microseconds>(b - a).count(); };
-		if (d1 < 0 && d2 < 0 && bytes_same)
+		bool smooth = joined_step <= normal_step + 1e-6f;
+		if (d1 < 0 && d2 < 0 && bytes_same && smooth)
 		{
 			pass++;
-			printf("PASS %s: saved at frame %d, %d frames equal after a load (same machine and a new one); state %zu bytes, save %lld us, load %lld us\n",
-				g.id, before, after, st.size(), us(t0, t1), us(t2, t3));
+			printf("PASS %s: saved at frame %d, %d frames equal after a load (same machine and a new one); state %zu bytes, save %lld us, load %lld us; "
+				"sound at the jump back: step %.4f as it is, %.4f joined (largest in play %.4f)\n",
+				g.id, before, after, st.size(), us(t0, t1), us(t2, t3), raw_step, joined_step, normal_step);
 		}
 		else
 		{
 			fail++;
 			printf("FAIL %s:", g.id);
 			if (d1 >= 0) printf(" same machine differs from frame %d;", before + 1 + d1);
+			if (!smooth) printf(" the joined sound steps %.4f, more than %.4f in play;", joined_step, normal_step);
 			if (d2 >= 0) printf(" new machine differs from frame %d;", before + 1 + d2);
 			if (!bytes_same)
 			{

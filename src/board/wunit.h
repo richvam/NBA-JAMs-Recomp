@@ -83,6 +83,7 @@ private:
 	int m_pic_upper;
 
 	std::vector<u32> m_frame;
+	std::vector<u8> m_rom_orig;    // the program ROM as loaded
 	int m_vis_w = 400, m_vis_h = 254;
 	u64 m_frames = 0;
 };

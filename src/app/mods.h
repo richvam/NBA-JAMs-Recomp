@@ -120,6 +120,14 @@ public:
 	void take_inputs(cabinet_inputs &in);
 	const std::vector<mod_draw> &draws() const { return m_draw; }
 	void stop();
+
+	// Save states (roadmap N1.2): the running scripts' data (see lua_state.ipp) and the
+	// manager's own (frame count, queued presses, held players). load_state() first checks
+	// that the same scripts run and that each one's state can be matched, changing nothing;
+	// then it calls `between` (the machine's own load) and, only if that returns true, writes
+	// the scripts' state. On false nothing has changed, and err says why.
+	bool save_state(std::vector<u8> &out, std::string &err) const;
+	bool load_state(const std::vector<u8> &in, std::string &err, const std::function<bool()> &between = {});
 	std::vector<std::string> take_log();                         // messages for the UI
 	int active_count() const { return int(m_running.size()); }
 

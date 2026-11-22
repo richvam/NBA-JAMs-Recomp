@@ -185,8 +185,27 @@ int main(int argc, char **argv)
 	int live_at = live ? atoi(live) : -1;
 	int failed = 0;
 	std::vector<u8> nv0;   // NVRAM at frame 1 (NVHASH)
+	// STATE=<a>:<b> (roadmap N1.2): save the machine and the scripts after frame a, play to
+	// frame b, load, and play frames a+1..b again: every frame (main RAM, picture, the
+	// scripts' draws) and every script message must be the same. The second time the
+	// messages are not added to the log the expectations read.
+	int st_a = -1, st_b = -1, st_phase = 0;
+	if (const char *sv = getenv("STATE")) { st_a = atoi(sv); if (strchr(sv, ':')) st_b = atoi(strchr(sv, ':') + 1); }
+	std::vector<u8> st_mach, st_mods;
+	std::vector<u32> st_hash;
+	std::vector<std::vector<std::string>> st_logs;
+	bool st_load = false;
 	for (int f = 0; f < frames; f++)
 	{
+		if (st_load)
+		{
+			st_load = false;
+			std::string err;
+			bool ok = mods.load_state(st_mods, err, [&] { if (m.load_state(st_mach)) return true; err = m.state_error(); return false; });
+			printf("  frame %6d  %s\n", f, ok ? ("state of frame " + std::to_string(st_a) + " loaded").c_str() : ("FAIL loading the state: " + err).c_str());
+			if (!ok) { failed++; st_phase = 3; }
+			else { f = st_a + 1; st_phase = 2; }
+		}
 		cabinet_inputs in{};
 		if (play && f > p0)
 		{
@@ -215,7 +234,47 @@ int main(int argc, char **argv)
 		}
 		m.run_frame();
 		mods.frame();
-		for (auto &l : mods.take_log()) log.push_back(l);
+		std::vector<std::string> frame_log = mods.take_log();
+		if (st_phase != 2) for (auto &l : frame_log) log.push_back(l);
+		if (st_a >= 0 && st_b > st_a)
+		{
+			u32 h = fnv1a(m.frame(), size_t(m.width()) * m.height() * 4, m.state_hash());
+			for (auto &d : mods.draws()) { int v[6] = { int(d.type), d.x, d.y, d.x2, d.y2, int(d.color) }; h = fnv1a(v, sizeof v, fnv1a(d.s.data(), d.s.size(), h)); }
+			if (st_phase == 0 && f == st_a)
+			{
+				std::string err;
+				st_mach = m.save_state();
+				if (st_mach.empty()) err = m.state_error();
+				else if (!mods.save_state(st_mods, err)) st_mach.clear();
+				if (st_mach.empty()) { printf("FAIL saving the state at frame %d: %s\n", f, err.c_str()); failed++; st_phase = 3; }
+				else { printf("  frame %6d  state saved: machine %zu bytes, scripts %zu bytes\n", f, st_mach.size(), st_mods.size()); st_phase = 1; }
+			}
+			else if (st_phase == 1)
+			{
+				st_hash.push_back(h);
+				st_logs.push_back(frame_log);
+				if (f == st_b) st_load = true;
+			}
+			else if (st_phase == 2)
+			{
+				size_t k = size_t(f - st_a - 1);
+				bool same = k < st_hash.size() && st_hash[k] == h && st_logs[k] == frame_log;
+				if (!same)
+				{
+					printf("FAIL after the load, frame %d differs (%s)\n", f, k < st_hash.size() && st_hash[k] != h ? "picture, RAM or draws" : "script messages");
+					for (auto &l : frame_log) printf("    now:    %s\n", l.c_str());
+					if (k < st_logs.size()) for (auto &l : st_logs[k]) printf("    before: %s\n", l.c_str());
+					log.push_back("state FAIL after the load");
+					failed++; st_phase = 3;
+				}
+				else if (f == st_b)
+				{
+					printf("PASS state: frames %d to %d the same after loading the state of frame %d\n", st_a + 1, st_b, st_a);
+					log.push_back("state: frames " + std::to_string(st_a + 1) + " to " + std::to_string(st_b) + " the same after the load");
+					st_phase = 3;
+				}
+			}
+		}
 		// SHOT=<frame>:<file.png>: the picture of that frame with the mods' overlay (roadmap 1.6)
 		if (const char *shot = getenv("SHOT"); shot && f == atoi(shot) && strchr(shot, ':'))
 		{

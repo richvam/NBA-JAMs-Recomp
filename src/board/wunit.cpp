@@ -12,6 +12,7 @@ wunit_machine::wunit_machine(wunit_roms roms, int pic_upper)
 	, m_pic_upper(pic_upper)
 {
 	m_roms.program.resize(0x100000, 0xff);
+	m_rom_orig = m_roms.program;   // save states keep only what scripts change (N1.2)
 	m_roms.gfx.resize(0x2000000, 0);
 	m_ram.assign(0x40000, 0);
 	m_nvram.assign(0x6000, 0);
@@ -281,6 +282,7 @@ void wunit_machine::io(state_io &s)
 	s(m_iodata); s(m_ports); s(m_cmos_write_enable);
 	s(m_pic_data); s(m_pic_buff); s(m_pic_idx); s(m_pic_status);
 	s.vec(m_frame); s(m_frames);
+	io_rom_patches(s, m_roms.program, m_rom_orig);
 	s.mark("end");
 }
 
