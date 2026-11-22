@@ -801,9 +801,22 @@ a player sees the host and every other player ("via host", with the two links ad
 random spread. Restricted and symmetric with 20 + 30 ms give moderate, strict, open when
 forwarded, and a ping of 55 ms on both sides; cone routers with a 0..30 ms spread give a jitter of
 about 7 ms, and 0 without the spread; the relayed player is strict and the host sees it relayed by
-player 2. **Not checked:** real routers; the report during a game (only the lobby shows it). UPnP and STUN can be switched off on the Online screen; the STUN server is a setting
+player 2. **Not checked:** real routers; the report during a game (only the lobby shows it).
+
+**Status:** N2.5 is done. During the game the host tells every player, every 500 ms, where the
+others are (`M`, as the host sees them; relayed players are left out), and every player sends
+its last 16 inputs to every other player each tick (`D`); the host sends its own to everyone the
+same way. A player that has every player's input for a frame merges it itself (the same merge
+the host makes, so the result cannot differ); the host's merged frames still come as before, so
+a pair that cannot reach each other (symmetric routers, a relay) falls back to the host as hub
+with nothing to switch. `nattest` (2 more checks): four peers behind routers delaying 40, 5, 40
+and 5 ms play 300 frames of lockstep without a desync; unpaced, 4 frames take 96 ms through the
+host (40 + 40 ms, plus the frames themselves) and 48 ms with the mesh (the worst direct pair, 40
+ms), in three runs out of three. `nettest` played 1200 frames of NBA Jam with the same hashes as
+before, also with 10% loss. **Not checked:** four real computers; the punching between players
+relies on both sides sending (cone routers), and a pair that cannot punch uses the host. UPnP and STUN can be switched off on the Online screen; the STUN server is a setting
 (`stun.l.google.com:19302` by default) and the help says it sees the player's IP address.
-`nattest` (37 checks, in CI): codes, STUN messages, UPnP against a test router run in the
+`nattest` (39 checks, in CI): codes, STUN messages, UPnP against a test router run in the
 test (mapping, removal, a router that only takes permanent forwards, a device without the
 service, no router), and the router matrix of N2.2's check: 12 of 16 pairs of full cone,
 restricted, port restricted and symmetric routers connect by codes, and the 4 that cannot
