@@ -61,7 +61,7 @@ tunit_machine::tunit_machine(tunit_roms roms, tunit_protection prot)
 	m_ram.assign(0x40000, 0);
 	m_nvram.assign(0x2000, 0);
 	m_palram.assign(0x8000, 0);
-	std::fill(std::begin(m_pens), std::end(m_pens), 0);
+	std::fill(std::begin(m_pens), std::end(m_pens), 0xff000000u);   // what palette RAM 0 gives (a load rebuilds the pens from it)
 
 	m_mixer.init(m_machine, 48000);
 
@@ -348,21 +348,34 @@ void tunit_machine::io(state_io &s)
 	m_video.io(s);
 	m_sound.io(s);
 	m_mixer.io(s);
-	s.vec(m_ram); s.vec(m_nvram); s.vec(m_palram); s(m_pens);
+	s.mark("main ram");
+	s.vec(m_ram); s.vec(m_nvram); s.vec(m_palram);
 	s(m_in0); s(m_in1); s(m_in2); s(m_dsw); s(m_fake_sound_state); s(m_prot_queue); s(m_prot_index);
-	s.vec(m_frame); s(m_frames);
+	s(m_frames);
 	io_rom_patches(s, m_roms.program, m_rom_orig);
 	s.mark("end");
+	// roadmap N1.3: the pens are not in a state, they follow from the palette RAM; nor is the
+	// picture, which the next frame draws (frame() shows the picture from before the load
+	// until then)
+	if (!s.saving() && s.ok())
+	{
+		for (size_t o = 0; o < m_palram.size() && o < 0x8000; o++)
+		{
+			u16 r = m_palram[o];
+			u32 rr = (r >> 10) & 0x1f, gg = (r >> 5) & 0x1f, bb = r & 0x1f;
+			rr = (rr << 3) | (rr >> 2); gg = (gg << 3) | (gg >> 2); bb = (bb << 3) | (bb >> 2);
+			m_pens[o] = 0xff000000 | (rr << 16) | (gg << 8) | bb;
+		}
+	}
 }
 
 // save states (roadmap N1.1)
-std::vector<u8> tunit_machine::save_state()
+bool tunit_machine::save_state_to(std::vector<u8> &out)
 {
-	std::vector<u8> out;
 	state_io s = state_io::saver(out);
 	io(s);
-	if (!s.ok()) { m_state_error = s.error(); out.clear(); }
-	return out;
+	if (!s.ok()) { m_state_error = s.error(); out.clear(); return false; }
+	return true;
 }
 
 bool tunit_machine::load_state(const std::vector<u8> &d)

@@ -202,11 +202,15 @@ public:
 	{
 		uint32_t h = 2166136261u;
 		for (const char *c = name; *c; c++) { h ^= uint8_t(*c); h *= 16777619u; }
-		if (getenv("STATE_TRACE")) fprintf(stderr, "mark %s at %zu\n", name, m_out ? m_out->size() : m_pos);
+		static const bool trace = getenv("STATE_TRACE") != nullptr;
+		if (trace) fprintf(stderr, "mark %s at %zu\n", name, m_out ? m_out->size() : m_pos);
+		if (s_marks && m_out) s_marks->emplace_back(name, m_out->size());
 		uint32_t got = h;
 		(*this)(got);
 		if (!saving() && m_ok && got != h) fail(std::string("section ") + name + " not where expected");
 	}
+	// when set, each mark of a save is listed here with its offset (tools/headless/statebench)
+	static inline std::vector<std::pair<std::string, size_t>> *s_marks = nullptr;
 private:
 	state_io(std::vector<uint8_t> *out, const uint8_t *in, size_t n) : m_out(out), m_in(in), m_size(n) {}
 	std::vector<uint8_t> *m_out;

@@ -51,7 +51,7 @@ public:
 	void poke16(u32 a, u16 v) override { write16(a & ~15u, v, 0xffff); }
 	void set_sound_only(bool on) override { m_maincpu.set_input_line(INPUT_LINE_HALT, on ? ASSERT_LINE : CLEAR_LINE); }
 	void sound_command(u8 b) override { m_sound.reset_write(0); m_sound.write(b); }
-	std::vector<u8> save_state() override;
+	bool save_state_to(std::vector<u8> &out) override;
 	bool load_state(const std::vector<u8> &d) override;
 	u32 fingerprint() const override
 	{

@@ -391,7 +391,8 @@ void screen_device::io(state_io &s)
 	int w = m_bitmap.width(), h = m_bitmap.height();
 	s(w); s(h);
 	if (!s.saving() && s.ok() && (w != m_bitmap.width() || h != m_bitmap.height())) { s.fail("screen size differs"); return; }
-	s.raw(m_bitmap.raw(), size_t(w) * h * sizeof(u16));
+	// the bitmap is not saved (roadmap N1.3): a state is taken between frames, and the next
+	// frame draws every line of it again before the picture is taken from it
 }
 
 void running_machine::io(state_io &s)

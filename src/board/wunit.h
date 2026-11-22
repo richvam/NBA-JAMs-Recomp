@@ -37,7 +37,7 @@ public:
 	std::vector<u8> *program_rom() override { return &m_roms.program; }
 	u16 peek16(u32 a) override { return read16(a & ~15u, 0xffff); }
 	void poke16(u32 a, u16 v) override { write16(a & ~15u, v, 0xffff); }
-	std::vector<u8> save_state() override;
+	bool save_state_to(std::vector<u8> &out) override;
 	bool load_state(const std::vector<u8> &d) override;
 	u32 fingerprint() const override
 	{

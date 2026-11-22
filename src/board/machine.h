@@ -43,6 +43,9 @@ inline void io_rom_patches(state_io &s, std::vector<u8> &rom, const std::vector<
 		std::vector<std::pair<u32, u32>> r;
 		for (size_t i = 0; i < rom.size();)
 		{
+			// whole blocks that are the same are skipped with memcmp (roadmap N1.3: the ROM
+			// is megabytes and a state may be saved every frame)
+			if ((i & 4095) == 0 && i + 4096 <= rom.size() && !std::memcmp(&rom[i], &orig[i], 4096)) { i += 4096; continue; }
 			if (rom[i] == orig[i]) { i++; continue; }
 			size_t j = i;
 			while (j < rom.size() && rom[j] != orig[j]) j++;
@@ -94,7 +97,10 @@ public:
 	// ROMs are not in it; a state loads only into a machine of the same game and build.
 	// save_state() gives an empty vector and load_state() false (the machine as it was
 	// is not kept) on failure, with the reason in state_error().
-	virtual std::vector<u8> save_state() { return {}; }
+	// save_state_to() writes into a buffer the caller keeps, so saving every frame does not
+	// allocate (roadmap N1.3); it returns false (out empty) on failure.
+	std::vector<u8> save_state() { std::vector<u8> v; save_state_to(v); return v; }
+	virtual bool save_state_to(std::vector<u8> &out) { out.clear(); return false; }
 	virtual bool load_state(const std::vector<u8> &) { return false; }
 	const std::string &state_error() const { return m_state_error; }
 protected:

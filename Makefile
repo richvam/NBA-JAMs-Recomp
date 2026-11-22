@@ -106,6 +106,8 @@ $(BUILD)/cattest: tools/headless/cattest.cpp src/app/games.cpp src/app/romload.c
 	$(CXX) $(CXXFLAGS) $(APP_INC) $< src/app/games.cpp src/app/romload.cpp $(BUILD)/miniz.o $(BUILD)/libcore.a -o $@
 $(BUILD)/statetest: tools/headless/statetest.cpp src/app/games.cpp src/app/romload.cpp $(BUILD)/libcore.a $(BUILD)/miniz.o
 	$(CXX) $(CXXFLAGS) $(APP_INC) $< src/app/games.cpp src/app/romload.cpp $(BUILD)/miniz.o $(BUILD)/libcore.a -o $@
+$(BUILD)/statebench: tools/headless/statebench.cpp src/app/games.cpp src/app/romload.cpp $(BUILD)/libcore.a $(BUILD)/miniz.o
+	$(CXX) $(CXXFLAGS) $(APP_INC) $< src/app/games.cpp src/app/romload.cpp $(BUILD)/miniz.o $(BUILD)/libcore.a -o $@
 .PHONY: win linux-app
 
 print-version:
