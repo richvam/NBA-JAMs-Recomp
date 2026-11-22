@@ -10,6 +10,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <iphlpapi.h>
 typedef int socklen_t;
 typedef SOCKET sock_t;
 static const sock_t kBad = INVALID_SOCKET;
@@ -293,7 +294,7 @@ void upnp_mapper::start(u16 port)
 	stop();
 	m_quit = false;
 	m_state = state::working;
-	{ std::lock_guard<std::mutex> l(m_mx); m_ext.clear(); m_err.clear(); }
+	{ std::lock_guard<std::mutex> l(m_mx); m_ext.clear(); m_err.clear(); m_method.clear(); }
 	m_thread = std::thread([this, port] { run(port); });
 }
 
@@ -306,6 +307,7 @@ void upnp_mapper::stop()
 
 std::string upnp_mapper::external_ip() const { std::lock_guard<std::mutex> l(m_mx); return m_ext; }
 std::string upnp_mapper::error() const { std::lock_guard<std::mutex> l(m_mx); return m_err; }
+std::string upnp_mapper::method() const { std::lock_guard<std::mutex> l(m_mx); return m_method; }
 
 void upnp_mapper::run(u16 port)
 {
@@ -362,7 +364,7 @@ void upnp_mapper::run(u16 port)
 	}
 	sclose(u);
 	if (m_quit) { m_state = state::off; return; }
-	if (locs.empty()) return fail("no router answered (UPnP off?)");
+	if (locs.empty()) return run_pmp(port, "no router answered UPnP");
 
 	// 2. the router's description and its WAN connection service
 	igd g;
@@ -373,7 +375,7 @@ void upnp_mapper::run(u16 port)
 		if (http(loc, "GET", "", "", xml, &local, 2000) == 200 && find_service(loc, xml, g)) break;
 		g = igd();
 	}
-	if (g.control.empty()) return fail("the router does not offer port mapping");
+	if (g.control.empty()) return run_pmp(port, "the router does not offer UPnP port mapping");
 
 	// 3. the mapping; some routers only take permanent ones (725), a stale one of ours is replaced (718)
 	auto add = [&](std::string &why) {
@@ -396,7 +398,8 @@ void upnp_mapper::run(u16 port)
 		return false;
 	};
 	std::string why;
-	if (!add(why)) return fail(why);
+	if (!add(why)) return run_pmp(port, why);
+	{ std::lock_guard<std::mutex> l(m_mx); m_method = "UPnP"; }
 	std::string r, ext;
 	if (soap(g, "GetExternalIPAddress", "", r) == 200) ext = tag(r, "NewExternalIPAddress");
 	{ std::lock_guard<std::mutex> l(m_mx); m_ext = ext; }
@@ -411,4 +414,195 @@ void upnp_mapper::run(u16 port)
 	}
 	std::string d;
 	soap(g, "DeletePortMapping", "<NewRemoteHost></NewRemoteHost><NewExternalPort>" + std::to_string(port) + "</NewExternalPort><NewProtocol>UDP</NewProtocol>", d);
+}
+
+// ---------------------------------------------------------------------------
+// PCP (RFC 6887) and NAT-PMP (RFC 6886): when UPnP is not there (roadmap N2.1). Both are
+// UDP to the router's port 5351. A PCP MAP request is sent first; a router that only
+// speaks NAT-PMP answers it with version 0 (or "unsupported version"), and then NAT-PMP
+// is used. The mapping is renewed at half its lifetime and removed (lifetime 0) at the end.
+// ---------------------------------------------------------------------------
+u32 default_gateway()
+{
+#ifdef _WIN32
+	ULONG sz = 0;
+	GetIpForwardTable(nullptr, &sz, FALSE);
+	if (!sz) return 0;
+	std::vector<u8> buf(sz);
+	MIB_IPFORWARDTABLE *t = reinterpret_cast<MIB_IPFORWARDTABLE *>(buf.data());
+	if (GetIpForwardTable(t, &sz, TRUE) != NO_ERROR) return 0;
+	u32 best = 0;
+	DWORD metric = ~DWORD(0);
+	for (DWORD i = 0; i < t->dwNumEntries; i++)
+	{
+		const MIB_IPFORWARDROW &r = t->table[i];
+		if (r.dwForwardDest == 0 && r.dwForwardMask == 0 && r.dwForwardNextHop != 0 && r.dwForwardMetric1 < metric) { best = ntohl(r.dwForwardNextHop); metric = r.dwForwardMetric1; }
+	}
+	return best;
+#else
+	FILE *f = fopen("/proc/net/route", "r");
+	if (!f) return 0;
+	char line[256];
+	u32 gw = 0;
+	while (fgets(line, sizeof line, f))
+	{
+		char ifn[64];
+		unsigned dst = 0, via = 0, flags = 0;
+		if (sscanf(line, "%63s %x %x %x", ifn, &dst, &via, &flags) == 4 && dst == 0 && via != 0 && (flags & 2)) { gw = ntohl(via); break; }
+	}
+	fclose(f);
+	return gw;
+#endif
+}
+
+namespace
+{
+void be16(u8 *p, u16 v) { p[0] = u8(v >> 8); p[1] = u8(v); }
+void be32(u8 *p, u32 v) { p[0] = u8(v >> 24); p[1] = u8(v >> 16); p[2] = u8(v >> 8); p[3] = u8(v); }
+u16 rd16(const u8 *p) { return u16(p[0] << 8 | p[1]); }
+u32 rd32(const u8 *p) { return u32(p[0]) << 24 | u32(p[1]) << 16 | u32(p[2]) << 8 | p[3]; }
+void v4mapped(u8 *p, u32 ip) { std::memset(p, 0, 10); p[10] = p[11] = 0xff; be32(p + 12, ip); }
+}
+
+std::vector<u8> pcp_map_request(u32 client_ip, u16 port, u32 lifetime, const u8 nonce[12])
+{
+	std::vector<u8> m(60, 0);
+	m[0] = 2; m[1] = 1;                         // version 2, MAP request
+	be32(&m[4], lifetime);
+	v4mapped(&m[8], client_ip);
+	std::memcpy(&m[24], nonce, 12);
+	m[36] = 17;                                 // UDP
+	be16(&m[40], port); be16(&m[42], port);     // internal port, suggested external port
+	v4mapped(&m[44], 0);
+	return m;
+}
+
+std::vector<u8> pmp_map_request(u16 port, u32 lifetime)
+{
+	std::vector<u8> m(12, 0);
+	m[1] = 1;                                   // version 0, map UDP
+	be16(&m[4], port); be16(&m[6], lifetime ? port : 0);
+	be32(&m[8], lifetime);
+	return m;
+}
+
+// one request: 250 ms, then 500, then 1000 (RFC 6886 asks for more tries, but a router
+// that has not answered in 1.75 s is taken to have no NAT-PMP). Bytes of the answer, or 0.
+static int ask_router(sock_t s, const sockaddr_in &to, const std::vector<u8> &req, u8 *out, int cap, const std::atomic<bool> &quit)
+{
+	int wait = 250;
+	for (int tries = 0; tries < 3 && !quit; tries++, wait *= 2)
+	{
+		sendto(s, (const char *)req.data(), int(req.size()), 0, (const sockaddr *)&to, sizeof to);		auto t0 = std::chrono::steady_clock::now();
+		while (!quit && std::chrono::steady_clock::now() - t0 < std::chrono::milliseconds(wait))
+		{
+			if (!wait_sock(s, false, 50)) continue;
+			sockaddr_in from{};
+			socklen_t fl = sizeof from;
+			int n = int(recvfrom(s, (char *)out, cap, 0, (sockaddr *)&from, &fl));
+			if (n >= 4 && from.sin_addr.s_addr == to.sin_addr.s_addr && from.sin_port == to.sin_port) return n;
+		}
+	}
+	return 0;
+}
+
+void upnp_mapper::run_pmp(u16 port, const std::string &upnp_why)
+{
+	auto fail = [&](const std::string &e) { { std::lock_guard<std::mutex> l(m_mx); m_err = upnp_why + "; " + e; } m_state = state::failed; };
+	std::string target = pmp_target;
+	if (target.empty() && getenv("NBA_PMP_GATEWAY")) target = getenv("NBA_PMP_GATEWAY");
+	sockaddr_in to{};
+	to.sin_family = AF_INET;
+	if (target.empty())
+	{
+		u32 gw = default_gateway();
+		if (!gw) return fail("no default gateway for PCP or NAT-PMP");
+		to.sin_addr.s_addr = htonl(gw);
+		to.sin_port = htons(5351);
+	}
+	else
+	{
+		unsigned a = 0, b = 0, c = 0, d = 0, p = 5351;
+		sscanf(target.c_str(), "%u.%u.%u.%u:%u", &a, &b, &c, &d, &p);
+		to.sin_addr.s_addr = htonl(a << 24 | (b & 255) << 16 | (c & 255) << 8 | (d & 255));
+		to.sin_port = htons(u16(p));
+	}
+	sock_t s = socket(AF_INET, SOCK_DGRAM, 0);
+	if (s == kBad) return fail("no socket");
+	{
+		// bound before sending, and not connected: some network stacks (WSL's fallback mode)
+		// drop what comes to an unbound or connected UDP socket; answers are told by sender
+		sockaddr_in any{};
+		any.sin_family = AF_INET;
+		any.sin_addr.s_addr = htonl(INADDR_ANY);
+		bind(s, (sockaddr *)&any, sizeof any);
+	}
+	// the address the router sees this computer at (PCP asks for it): a connected probe
+	u32 client = 0;
+	{
+		sock_t p = socket(AF_INET, SOCK_DGRAM, 0);
+		if (p != kBad)
+		{
+			sockaddr_in me{};
+			socklen_t ml = sizeof me;
+			if (connect(p, (const sockaddr *)&to, sizeof to) == 0 && getsockname(p, (sockaddr *)&me, &ml) == 0) client = ntohl(me.sin_addr.s_addr);
+			sclose(p);
+		}
+	}
+	u8 nonce[12];
+	{
+		u64 seed = u64(std::chrono::steady_clock::now().time_since_epoch().count()) ^ u64(uintptr_t(this));
+		for (int i = 0; i < 12; i++) { seed = seed * 6364136223846793005ull + 1442695040888963407ull; nonce[i] = u8(seed >> 56); }
+	}
+
+	enum { none, pcp, pmp } proto = none;
+	u32 life = 0, ext_ip = 0;
+	u8 r[1100];
+	auto map = [&](u32 lifetime) -> bool {
+		if (proto != pmp)
+		{
+			int n = ask_router(s, to, pcp_map_request(client, port, lifetime, nonce), r, sizeof r, m_quit);
+			if (n >= 60 && r[0] == 2 && r[1] == 0x81 && !std::memcmp(r + 24, nonce, 12))
+			{
+				if (r[3] != 0) return false;                   // a PCP error: no mapping
+				proto = pcp; life = rd32(r + 4);
+				if (r[54] == 0xff && r[55] == 0xff) ext_ip = rd32(r + 56);
+				return true;
+			}
+			if (proto == pcp || n == 0) return false;
+			// version 0, or "unsupported version": NAT-PMP
+		}
+		int n = ask_router(s, to, pmp_map_request(port, lifetime), r, sizeof r, m_quit);
+		if (n < 16 || r[0] != 0 || r[1] != 129 || rd16(r + 2) != 0) return false;
+		proto = pmp; life = rd32(r + 12);
+		if (lifetime && !ext_ip)
+		{
+			int k = ask_router(s, to, { 0, 0 }, r, sizeof r, m_quit);
+			if (k >= 12 && r[0] == 0 && r[1] == 128 && rd16(r + 2) == 0) ext_ip = rd32(r + 8);
+		}
+		return true;
+	};
+	if (!map(3600))
+	{
+		sclose(s);
+		if (m_quit) { m_state = state::off; return; }
+		return fail("the router did not answer PCP or NAT-PMP");
+	}
+	{
+		std::lock_guard<std::mutex> l(m_mx);
+		m_method = proto == pcp ? "PCP" : "NAT-PMP";
+		m_ext = ext_ip ? net_ip_str(ext_ip) : "";
+		m_err.clear();
+	}
+	m_state = state::mapped;
+	auto since = std::chrono::steady_clock::now();
+	while (!m_quit)
+	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		if (std::chrono::steady_clock::now() - since > std::chrono::seconds(std::max<u32>(60, life / 2))) { map(3600); since = std::chrono::steady_clock::now(); }
+	}
+	std::atomic<bool> go{ false };
+	if (proto == pcp) ask_router(s, to, pcp_map_request(client, port, 0, nonce), r, sizeof r, go);
+	else ask_router(s, to, pmp_map_request(port, 0), r, sizeof r, go);
+	sclose(s);
 }

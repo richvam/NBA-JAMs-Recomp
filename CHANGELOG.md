@@ -135,6 +135,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - With a controller in use, moving or resizing the window under a still mouse pointer no longer takes the focus away from the controller.
 
 ### Online
+- Hosting opens the router's port by PCP or NAT-PMP too, when the router has no UPnP.
 - An online game does not start while a Lua mod that writes memory or runs every frame is
   switched on, because the players could not be kept in sync. Mods that only patch the game
   at load still work if every player has the same ones on. "Quarter length" is affected and
