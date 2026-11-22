@@ -8,7 +8,8 @@
 //   * UPnP IGD: asks the router to forward the host's UDP port and for its public address.
 //     Blocking HTTP on a worker thread; the mapping is removed when hosting stops.
 //   * PCP and NAT-PMP: the same forward from a router without UPnP (UDP to its port 5351).
-// IPv6 is not done.
+//   * IPv6 (N2.2): a computer with a public IPv6 address adds it to its code; a player who has
+//     IPv6 too tries that first and IPv4 after 1.5 s without an answer.
 #pragma once
 #include "netplay.h"
 #include <atomic>
@@ -16,8 +17,10 @@
 #include <string>
 #include <thread>
 
-std::string net_code(const net_addr &a);                       // "ABCDE-FGHJK"
-bool net_code_parse(const std::string &s, net_addr &out);      // a code, dashes and case ignored
+std::string net_code(const net_addr &a);                       // IPv4: "ABCDE-FGHJK"; IPv6: 29 characters
+std::string net_code_pair(const net_addr &v4, const net_addr &v6);   // both, IPv4 first (39 characters)
+// a code, dashes and case ignored; with both parts, out is the IPv4 one and also6 the IPv6 one
+bool net_code_parse(const std::string &s, net_addr &out, net_addr *also6 = nullptr);
 bool net_ip_private(u32 ip);                                    // 10/8, 172.16/12, 192.168/16, 100.64/10 (carrier NAT), 169.254/16, 127/8
 std::string net_ip_str(u32 ip);
 

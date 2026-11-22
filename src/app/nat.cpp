@@ -50,18 +50,63 @@ bool net_ip_private(u32 ip)
 	       (ip >> 16) == 0xA9FE || (ip >> 24) == 127;
 }
 
-std::string net_code(const net_addr &a)
+// The address and port as big-endian bytes written with 5 bits a character, a dash after
+// every five: IPv4 (6 bytes) in 10 characters, IPv6 (18 bytes) in 29.
+static std::string code_of(const u8 *v, int nbytes, int nchars)
 {
-	u64 v = u64(a.ip) << 16 | a.port;          // 48 bits; ten characters hold 50
-	std::string s(11, '-');
-	for (int i = 9; i >= 0; i--) { s[size_t(i < 5 ? i : i + 1)] = kB32[v & 31]; v >>= 5; }
+	std::string s;
+	for (int i = 0; i < nchars; i++)
+	{
+		int bit0 = nchars * 5 - nbytes * 8;              // leading zero bits
+		int d = 0;
+		for (int k = 0; k < 5; k++)
+		{
+			int bit = i * 5 + k - bit0;                    // bit index into v, from the top
+			d = d << 1 | (bit >= 0 ? v[bit >> 3] >> (7 - (bit & 7)) & 1 : 0);
+		}
+		if (i && i % 5 == 0) s += '-';
+		s += kB32[d];
+	}
 	return s;
 }
 
-bool net_code_parse(const std::string &s, net_addr &out)
+static bool bytes_of(const std::vector<int> &d, size_t from, int nchars, u8 *v, int nbytes)
 {
-	u64 v = 0;
-	int n = 0;
+	memset(v, 0, size_t(nbytes));
+	int bit0 = nchars * 5 - nbytes * 8;
+	for (int i = 0; i < nchars; i++)
+		for (int k = 0; k < 5; k++)
+		{
+			int on = d[from + size_t(i)] >> (4 - k) & 1, bit = i * 5 + k - bit0;
+			if (bit < 0) { if (on) return false; continue; }
+			v[bit >> 3] |= u8(on << (7 - (bit & 7)));
+		}
+	return true;
+}
+
+std::string net_code(const net_addr &a)
+{
+	if (a.v6)
+	{
+		u8 v[18];
+		memcpy(v, a.a6, 16);
+		v[16] = u8(a.port >> 8); v[17] = u8(a.port);
+		return code_of(v, 18, 29);
+	}
+	u8 v[6] = { u8(a.ip >> 24), u8(a.ip >> 16), u8(a.ip >> 8), u8(a.ip), u8(a.port >> 8), u8(a.port) };
+	return code_of(v, 6, 10);
+}
+
+std::string net_code_pair(const net_addr &v4, const net_addr &v6)
+{
+	if (!v6.v6) return net_code(v4);
+	if (!v4.ip) return net_code(v6);
+	return net_code(v4) + "-" + net_code(v6);
+}
+
+bool net_code_parse(const std::string &s, net_addr &out, net_addr *also6)
+{
+	std::vector<int> d;
 	for (char c : s)
 	{
 		if (c == '-' || c == ' ') continue;
@@ -70,13 +115,40 @@ bool net_code_parse(const std::string &s, net_addr &out)
 		if (c == 'I' || c == 'L') c = '1';
 		const char *p = strchr(kB32, c);
 		if (!p || !c) return false;
-		v = v << 5 | u64(p - kB32);
-		if (++n > 10) return false;
+		d.push_back(int(p - kB32));
+		if (d.size() > 39) return false;
 	}
-	if (n != 10 || (v >> 48) != 0) return false;
-	out.ip = u32(v >> 16);
-	out.port = u16(v);
-	return out.ip != 0 && out.port != 0;
+	auto v4 = [&](size_t from, net_addr &o)
+	{
+		u8 v[6];
+		if (!bytes_of(d, from, 10, v, 6)) return false;
+		o = {};
+		o.ip = u32(v[0]) << 24 | u32(v[1]) << 16 | u32(v[2]) << 8 | v[3];
+		o.port = u16(v[4] << 8 | v[5]);
+		return o.ip != 0 && o.port != 0;
+	};
+	auto v6 = [&](size_t from, net_addr &o)
+	{
+		u8 v[18];
+		if (!bytes_of(d, from, 29, v, 18)) return false;
+		o = {};
+		o.v6 = true;
+		memcpy(o.a6, v, 16);
+		o.port = u16(v[16] << 8 | v[17]);
+		static const u8 loopback[16] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 };   // ::1, for tests
+		return o.port != 0 && ((v[0] & 0xe0) == 0x20 || memcmp(v, loopback, 16) == 0);   // a public (2000::/3) address
+	};
+	if (also6) *also6 = {};
+	if (d.size() == 10) return v4(0, out);
+	if (d.size() == 29) return v6(0, out);
+	if (d.size() == 39)
+	{
+		net_addr six;
+		if (!v4(0, out) || !v6(10, six)) return false;
+		if (also6) *also6 = six;
+		return true;
+	}
+	return false;
 }
 
 // ---------------------------------------------------------------------------

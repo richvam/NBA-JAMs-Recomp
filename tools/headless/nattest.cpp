@@ -190,6 +190,31 @@ static bool same_router(bool lan, bool other_host = false)
 	return ok;
 }
 
+// IPv6 (N2.2): no router in the simulator, the loopback ::1. how: 0 = the address typed,
+// 1 = a code with both parts (IPv6 right, IPv4 to a closed port), 2 = both (IPv6 to a closed
+// port, IPv4 right). Returns whether it joined; v6 says over which.
+static bool ipv6_join(int how, bool &v6)
+{
+	netplay host, cl;
+	std::string err;
+	v6 = false;
+	if (!host.host(0, err) || !host.socket().has_ipv6()) return false;
+	u16 port = host.socket().local_port();
+	net_addr six{}, four{ ip4(127, 0, 0, 1), port }, closed4{ ip4(127, 0, 0, 1), 1 };
+	six.v6 = true; six.a6[15] = 1; six.port = port;
+	net_addr closed6 = six; closed6.port = 1;
+	bool joined = how == 0 ? cl.join("[::1]", port, err) : cl.join(how == 1 ? net_code_pair(closed4, six) : net_code_pair(four, closed6), 0, err);
+	if (!joined) { printf("  join: %s\n", err.c_str()); return false; }
+	auto t0 = net_now_ms();
+	while (!(cl.active() && cl.local_slot() == 1) && net_now_ms() - t0 < 4000) { host.poll(); cl.poll(); sleep_ms(2); }
+	for (int i = 0; i < 300; i++) { host.poll(); if (cl.active()) cl.poll(); sleep_ms(2); }
+	bool ok = cl.active() && cl.local_slot() == 1 && host.players() == 2;
+	auto pl = host.peer_list();
+	v6 = ok && !pl.empty() && pl[0].find('[') != std::string::npos;
+	host.stop(); cl.stop();
+	return ok;
+}
+
 // ---------------------------------------------------------------- a test router for UPnP
 struct test_igd
 {
@@ -374,6 +399,24 @@ int main(int argc, char **argv)
 		      !net_ip_private(ip4(203, 0, 113, 7)) && !net_ip_private(ip4(172, 32, 0, 1)) && !net_ip_private(ip4(100, 128, 0, 1)),
 		      "addresses: private and carrier-NAT ranges are told from public ones");
 	}
+	// ---- IPv6 codes (N2.2) ----
+	{
+		net_addr six{}, back{}, four{ ip4(203, 0, 113, 7), 7845 }, a4{}, a6{};
+		const u8 g[16] = { 0x20, 0x01, 0x0d, 0xb8, 0x12, 0x34, 0, 0, 0, 0, 0, 0, 0xab, 0xcd, 0x00, 0x01 };
+		six.v6 = true; memcpy(six.a6, g, 16); six.port = 7845;
+		std::string c = net_code(six);
+		CHECK(c.size() == 34 && net_code_parse(c, back) && back == six && net_addr_str(back) == "[2001:db8:1234::abcd:1]:7845",
+		      "IPv6 codes: an IPv6 address and port make a 29-character code and back");
+		std::string pc = net_code_pair(four, six);
+		CHECK(pc.size() == 46 && pc.substr(0, 11) == net_code(four) && net_code_parse(pc, a4, &a6) && a4 == four && a6 == six,
+		      "IPv6 codes: a code with both starts with the IPv4 code; both parts come back");
+		net_addr ll = six; ll.a6[0] = 0xfe; ll.a6[1] = 0x80;
+		CHECK(!net_code_parse(net_code(ll), back) && net_code_pair(four, net_addr{}) == net_code(four),
+		      "IPv6 codes: a link-local address is not a code; without IPv6 the code is the IPv4 one");
+		net_addr r;
+		CHECK(udp_socket::resolve("[2001:db8::1]", 9, r, c) && r.v6 && r.a6[0] == 0x20 && r.a6[15] == 1 && r.port == 9 && udp_socket::resolve("::1", 9, r, c) && r.v6,
+		      "IPv6 addresses: typed with or without brackets");
+	}
 	// ---- STUN messages ----
 	{
 		u8 tx[12] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 }, other[12] = {}, req[20];
@@ -511,6 +554,20 @@ int main(int argc, char **argv)
 	CHECK(!same_router(false), "same router: without the home-network search the host's code does not connect (the router does not loop back)");
 	CHECK(same_router(true), "same router: the player sees its public address equals the host's, finds the host on the home network, and joins");
 	CHECK(!same_router(true, true), "same router: a code with another public address does not start the search");
+	// ---- IPv6 (N2.2) ----
+	{
+		netplay probe;
+		std::string err;
+		if (probe.host(0, err) && probe.socket().has_ipv6())
+		{
+			probe.stop();
+			bool v6 = false;
+			CHECK(ipv6_join(0, v6) && v6, "IPv6: a player joins by the host's IPv6 address");
+			CHECK(ipv6_join(1, v6) && v6, "IPv6: with a code with both, IPv6 is tried first and used");
+			CHECK(ipv6_join(2, v6) && !v6, "IPv6: when IPv6 does not answer the player goes on to IPv4, and the host counts them once");
+		}
+		else printf("skip IPv6: this computer has no IPv6 (not even ::1)\n");
+	}
 	printf("\n%d checks, %d failed\n", g_run, g_fail);
 	return g_fail ? 1 : 0;
 }

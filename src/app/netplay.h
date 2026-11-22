@@ -18,15 +18,26 @@
 u16 net_pack_input(const cabinet_inputs::player &p);
 void net_unpack_input(u16 v, cabinet_inputs::player &p);
 
-struct net_addr { u32 ip = 0; u16 port = 0; bool operator==(const net_addr &o) const { return ip == o.ip && port == o.port; } };
-std::string net_addr_str(const net_addr &a);
+// An IPv4 address (ip) or, when v6 is set, the IPv6 address in a6 (roadmap N2.2)
+struct net_addr
+{
+	u32 ip = 0; u16 port = 0;
+	bool v6 = false; u8 a6[16] = {};
+	bool operator==(const net_addr &o) const;
+	bool operator!=(const net_addr &o) const { return !(*this == o); }
+};
+std::string net_addr_str(const net_addr &a);       // "1.2.3.4:5" or "[2001:db8::1]:5"
 std::vector<std::string> net_local_ipv4();
+bool net_local_ipv6(net_addr &out);                  // this computer's public (global) IPv6 address, port 0
 
 class udp_socket
 {
 public:
 	~udp_socket() { close(); }
-	bool open(u16 port, std::string &err, u32 bind_ip = 0);   // port 0 = any; bind_ip 0 = every interface
+	// port 0 = any; bind_ip 0 = every interface, and then an IPv6 socket on the same port too
+	// when the computer has IPv6 (packets to and from IPv6 addresses go through it)
+	bool open(u16 port, std::string &err, u32 bind_ip = 0);
+	bool has_ipv6() const { return m_fd6 >= 0; }
 	void close();
 	bool is_open() const { return m_fd >= 0; }
 	void send(const net_addr &to, const void *data, size_t len);
@@ -39,7 +50,7 @@ public:
 	// Packets to 127.0.0.1 go straight there: in the simulator that is the home network.
 	net_addr via;
 private:
-	long long m_fd = -1;
+	long long m_fd = -1, m_fd6 = -1;
 	u32 m_lossrng = 12345;
 };
 
@@ -147,6 +158,8 @@ private:
 	std::vector<invite_t> m_invites;
 	void tick_stun(u32 now);
 	net_addr m_target;             // client: the address joined (from the code)
+	net_addr m_target6;            // client: the host's IPv6 address from a code with both, tried first
+	u32 m_target6_t = 0;
 	u32 m_also_public = 0, m_lan_t = 0;
 	bool m_lan_found = false;
 	mode m_mode = mode::off;
