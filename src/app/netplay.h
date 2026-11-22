@@ -138,6 +138,25 @@ public:
 	u32 relayed_bytes() const { return m_relayed; }   // member: bytes forwarded for others
 	u32 relay_after_ms = 3000;
 
+	// --- connection report (roadmap N2.4) ---
+	// open: the port is forwarded (UPnP, PCP, NAT-PMP), or no router changes the address
+	// (port_forwarded: the caller knows), or IPv6; moderate: a router that keeps one port for
+	// every destination; strict: one that gives each destination its own port (another player
+	// sees another port than STUN did), or relayed. Each side learns how the other sees it from
+	// an 'o' packet every second; the host's also carries every player's ping and jitter.
+	enum class conn_type { unknown, open, moderate, strict };
+	conn_type connection(bool port_forwarded) const;
+	static const char *conn_name(conn_type t);
+	struct link_info
+	{
+		int slot = 0, ping = 0, jitter = 0;   // ms
+		bool relayed = false, v6 = false;
+		int through = -1;                     // host: the member relaying it
+		bool via_host = false;                // player: another player, through the host
+	};
+	std::vector<link_info> links() const;     // host: one per player; player: the host, then the others
+	net_addr seen_as() const { return m_seen_as; }
+
 private:
 	struct peer
 	{
@@ -150,7 +169,7 @@ private:
 		u32 acked_merged = 0;    // client: merged frames received below this (exclusive)
 		u32 chunk_mask_lo = 0, chunk_mask_hi = 0;
 		bool start_acked = false;
-		int ping = 0;
+		int ping = 0, jitter = 0, last_rtt = 0;
 	};
 	void reset_state();
 	void handle(const net_addr &from, const u8 *p, int n);
@@ -170,6 +189,11 @@ private:
 	std::vector<invite_t> m_invites;
 	void tick_stun(u32 now);
 	net_addr m_target;             // client: the address joined (from the code)
+	net_addr m_seen_as;            // our address as the other side sees it (host: the first player to say)
+	std::vector<link_info> m_host_links;   // client: the host's links to every player
+	u32 m_report_t = 0;
+	int m_jitter = 0, m_last_rtt = 0;
+	static void sample(int &ping, int &jitter, int &last, int rtt);
 	net_addr m_relay;              // client: the member named in the code
 	bool m_relay_on = false;
 	u32 m_join_t = 0, m_relayed = 0;

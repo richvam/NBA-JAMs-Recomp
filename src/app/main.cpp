@@ -1919,6 +1919,22 @@ void app::net_lobby_frame()
 		st.no_answer = !host && st.slot < 0 && SDL_GetTicks() - m_join_t > 5000;
 		if (host) m_net.set_lobby_mods(net_mod_names(g.id));
 		st.mods = m_net.lobby_mods();
+		// N2.4: the connection type and every link
+		bool forwarded = host && m_upnp.status() == upnp_mapper::state::mapped && !st.code.empty() && st.code_note.find("port is open") != std::string::npos;
+		if (m_net.stun_status() == netplay::stun_state::found)
+			for (const std::string &ip : m_local_ips) forwarded = forwarded || ip == net_ip_str(m_net.public_addr().ip);   // no router in between
+		st.connection = netplay::conn_name(m_net.connection(forwarded));
+		auto path = [](const netplay::link_info &l)
+		{
+			// short enough for one line of the players' panel
+			std::string s = std::to_string(l.ping) + " ms, jitter " + std::to_string(l.jitter) + ", ";
+			if (l.via_host) return s + "via host";
+			if (l.relayed) return s + (l.through >= 0 ? "via P" + std::to_string(l.through + 1) : std::string("relayed"));
+			return s + (l.v6 ? "direct IPv6" : "direct");
+		};
+		const auto links = m_net.links();
+		if (!host)
+			for (auto &l : links) st.links.push_back({ l.slot == 0 ? std::string("Host") : "Player " + std::to_string(l.slot + 1), path(l) });
 		if (host)
 		{
 			st.players.push_back({ "Player 1", "you (host)" });
@@ -1927,6 +1943,9 @@ void app::net_lobby_frame()
 			{
 				size_t sp = p.find("  ");
 				std::string slot = p.substr(0, sp), rest = sp == std::string::npos ? "" : p.substr(sp + 2);
+				int n = slot.size() > 1 ? atoi(slot.c_str() + 1) - 1 : -1;
+				for (auto &l : links)
+					if (l.slot == n) rest = path(l) + (rest.find("ready") != std::string::npos ? ", ready" : "");
 				st.players.push_back({ "Player " + (slot.size() > 1 ? slot.substr(1) : slot), rest });
 			}
 		}

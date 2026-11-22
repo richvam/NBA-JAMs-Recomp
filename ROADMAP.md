@@ -786,9 +786,24 @@ player list says "through J2". `nattest` has 4 more checks: host and player behi
 routers (which cannot connect directly) join through a member behind a full cone router, the list
 shows it, the three play 300 frames of lockstep without a desync, and a 200 KB flood through the
 member is cut to about 64 KB. **Not checked:** real routers; a relay found automatically with no
-code (needs N3); the player's own screen does not yet say it is relayed (N2.4 shows the path). UPnP and STUN can be switched off on the Online screen; the STUN server is a setting
+code (needs N3); the player's own screen does not yet say it is relayed (N2.4 shows the path).
+
+**Status:** N2.4 is done, in the lobby. Each side sends the other, every second, the address it
+sees it at (`o`); the host's also carries every player's ping, jitter and path. The connection
+type: **open** when the port is forwarded (UPnP, PCP, NAT-PMP), the public address is one of the
+computer's own, or the link is IPv6; **strict** when another player sees another port than the
+STUN server did (a router that gives each destination its own port) or the player is relayed;
+**moderate** otherwise. Full cone and restricted routers are not told apart (that needs a second
+STUN address), so both are moderate. Jitter is the mean change between round trips (RFC 3550,
+smoothed by 1/8). The host sees each player's ping, jitter and path ("direct", "direct IPv6", "via P2");
+a player sees the host and every other player ("via host", with the two links added). The path is shown as words, not the reference's wired and wireless icons.
+`nattest`: 4 more checks on the simulated routers, which now delay packets by a set amount plus a
+random spread. Restricted and symmetric with 20 + 30 ms give moderate, strict, open when
+forwarded, and a ping of 55 ms on both sides; cone routers with a 0..30 ms spread give a jitter of
+about 7 ms, and 0 without the spread; the relayed player is strict and the host sees it relayed by
+player 2. **Not checked:** real routers; the report during a game (only the lobby shows it). UPnP and STUN can be switched off on the Online screen; the STUN server is a setting
 (`stun.l.google.com:19302` by default) and the help says it sees the player's IP address.
-`nattest` (33 checks, in CI): codes, STUN messages, UPnP against a test router run in the
+`nattest` (37 checks, in CI): codes, STUN messages, UPnP against a test router run in the
 test (mapping, removal, a router that only takes permanent forwards, a device without the
 service, no router), and the router matrix of N2.2's check: 12 of 16 pairs of full cone,
 restricted, port restricted and symmetric routers connect by codes, and the 4 that cannot

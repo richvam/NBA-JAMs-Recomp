@@ -63,6 +63,11 @@ struct nat_box
 	int inside;                       // where the computers behind it send (with the destination in front)
 	struct mapping { net_addr in, dest; int fd; std::set<u64> sent_to; bool open = false; };
 	std::vector<mapping> maps;
+	// N2.4: every packet leaving through this router waits delay_ms, plus 0..spread_ms at random
+	int delay_ms = 0, spread_ms = 0;
+	u32 rng = 99;
+	struct held { u32 due; int fd; net_addr to; std::vector<u8> d; };
+	std::vector<held> queue;
 	nat_box(nat_kind k, u32 public_ip) : kind(k), pub(public_ip) { inside = udp_bind(ip4(127, 0, 0, 1), 0); }
 	~nat_box() { close(inside); for (auto &m : maps) close(m.fd); }
 	net_addr inside_addr() const { return local_of(inside); }
@@ -87,8 +92,14 @@ struct nat_box
 			if (!m) for (auto &x : maps) if (x.in == from && (kind != symmetric || x.dest == to)) { m = &x; break; }
 			if (!m) { mapping x; x.in = from; x.dest = to; x.fd = udp_bind(pub, 0); maps.push_back(x); m = &maps.back(); }
 			m->sent_to.insert(key(to));
-			send_to(m->fd, to, b + 6, size_t(n - 6));
+			if (!delay_ms && !spread_ms) { send_to(m->fd, to, b + 6, size_t(n - 6)); continue; }
+			rng = rng * 1103515245u + 12345u;
+			u32 extra = spread_ms ? (rng >> 8) % u32(spread_ms + 1) : 0;
+			queue.push_back({ net_now_ms() + u32(delay_ms) + extra, m->fd, to, std::vector<u8>(b + 6, b + n) });
 		}
+		for (size_t i = 0; i < queue.size();)
+			if (int(net_now_ms() - queue[i].due) >= 0) { send_to(queue[i].fd, queue[i].to, queue[i].d.data(), queue[i].d.size()); queue.erase(queue.begin() + long(i)); }
+			else i++;
 		for (auto &m : maps)
 			while ((n = recv_from(m.fd, from, b + 6, sizeof b - 6)) >= 0)
 			{
@@ -193,7 +204,7 @@ static bool same_router(bool lan, bool other_host = false)
 // Peer relay (N2.3): host and player both behind symmetric routers, which cannot connect
 // directly; a member behind a full cone router relays. The three play 300 frames of lockstep
 // (no game: the inputs and hashes only) and the relay's forwarding is capped.
-struct relay_result { bool joined = false, relayed = false, shown = false, played = false, capped = false; };
+struct relay_result { bool joined = false, relayed = false, shown = false, played = false, capped = false, report = false; };
 static relay_result relay_play()
 {
 	relay_result res;
@@ -227,6 +238,10 @@ static relay_result relay_play()
 	host.invite(cl.public_addr());
 	res.joined = until([&] { return cl.active() && cl.local_slot() == 2 && host.players() == 3; }, 8000);
 	res.relayed = cl.relayed() && rl.relayed_bytes() > 0;
+	until([&] { return false; }, 2500);
+	for (auto &l : host.links()) res.report = res.report || (l.slot == 2 && l.relayed && l.through == 1);
+	for (auto &l : cl.links()) res.report = res.report && (l.slot != 1 || l.via_host);
+	res.report = res.report && cl.connection(false) == netplay::conn_type::strict && cl.links().size() == 2;
 	for (auto &l : host.peer_list()) res.shown = res.shown || l.find("through J2") != std::string::npos;
 	if (!res.joined) { host.stop(); rl.stop(); cl.stop(); return res; }
 	// lockstep through the relay
@@ -271,6 +286,40 @@ static relay_result relay_play()
 		close(raw);
 	}
 	host.stop(); rl.stop(); cl.stop();
+	return res;
+}
+
+// The connection report (N2.4): host behind hk, player behind ck, each router delaying what
+// leaves it by its delay (and spread). Waits until the reports settled, then reads them.
+struct report_result { netplay::conn_type host = netplay::conn_type::unknown, player = netplay::conn_type::unknown, host_fw = netplay::conn_type::unknown; int ping_h = 0, ping_c = 0, jit_c = 0; bool direct = false; };
+static report_result report(nat_kind hk, nat_kind ck, int hdelay, int cdelay, int spread)
+{
+	report_result res;
+	stun_server st;
+	nat_box hn(hk, ip4(127, 0, 1, 1)), cn(ck, ip4(127, 0, 1, 2));
+	hn.delay_ms = hdelay; cn.delay_ms = cdelay; cn.spread_ms = spread;
+	netplay host, cl;
+	std::string err;
+	if (!host.host(0, err)) return res;
+	host.socket().via = hn.inside_addr();
+	auto pump = [&] { st.pump(); hn.pump(); cn.pump(); host.poll(); if (cl.active()) cl.poll(); };
+	auto until = [&](auto done, int ms) { auto t0 = net_now_ms(); while (!done() && net_now_ms() - t0 < u32(ms)) { pump(); sleep_ms(1); } return done(); };
+	host.stun_begin(st.addr());
+	if (!until([&] { return host.stun_status() == netplay::stun_state::found; }, 4000)) return res;
+	if (!cl.join(net_code(host.public_addr()), 0, err)) return res;
+	cl.socket().via = cn.inside_addr();
+	cl.stun_begin(st.addr());
+	if (!until([&] { return cl.stun_status() == netplay::stun_state::found; }, 4000)) return res;
+	host.invite(cl.public_addr());
+	if (!until([&] { return cl.local_slot() == 1 && host.players() == 2; }, 6000)) { host.stop(); cl.stop(); return res; }
+	until([&] { return false; }, 4000);     // reports every second, pings settle
+	res.host = host.connection(false);
+	res.host_fw = host.connection(true);
+	res.player = cl.connection(false);
+	auto hl = host.links(), cll = cl.links();
+	if (!hl.empty()) res.ping_h = hl[0].ping;
+	if (!cll.empty()) { res.ping_c = cll[0].ping; res.jit_c = cll[0].jitter; res.direct = !cll[0].relayed; }
+	host.stop(); cl.stop();
 	return res;
 }
 
@@ -638,11 +687,28 @@ int main(int argc, char **argv)
 	CHECK(!same_router(false), "same router: without the home-network search the host's code does not connect (the router does not loop back)");
 	CHECK(same_router(true), "same router: the player sees its public address equals the host's, finds the host on the home network, and joins");
 	CHECK(!same_router(true, true), "same router: a code with another public address does not start the search");
+	// ---- connection report (N2.4) ----
+	{
+		using ct = netplay::conn_type;
+		report_result a = report(restricted, symmetric, 20, 30, 0);
+		printf("  restricted host, symmetric player, 20 + 30 ms: host %s, player %s, ping %d / %d ms, jitter %d ms\n",
+		       netplay::conn_name(a.host), netplay::conn_name(a.player), a.ping_h, a.ping_c, a.jit_c);
+		CHECK(a.host == ct::moderate && a.player == ct::strict && a.host_fw == ct::open,
+		      "report: a restricted router is moderate, a symmetric one strict, a forwarded port open");
+		CHECK(a.ping_h >= 48 && a.ping_h <= 75 && a.ping_c >= 48 && a.ping_c <= 75 && a.direct,
+		      "report: both see a ping of the two routers' delays (20 + 30 ms) and a direct path");
+		report_result b = report(full_cone, restricted, 10, 10, 30);
+		printf("  full cone host, restricted player, 10 + 10 ms, 0..30 ms spread: host %s, player %s, ping %d ms, jitter %d ms (and %d without spread)\n",
+		       netplay::conn_name(b.host), netplay::conn_name(b.player), b.ping_c, b.jit_c, a.jit_c);
+		CHECK(b.host == ct::moderate && b.player == ct::moderate && b.jit_c >= 4 && b.jit_c <= 30 && a.jit_c <= 4,
+		      "report: cone routers are moderate; jitter follows the spread the router adds (about 10 ms for 0..30) and is near 0 without");
+	}
 	// ---- peer relay (N2.3) ----
 	{
 		relay_result r = relay_play();
 		CHECK(r.joined && r.relayed, "relay: a player behind a symmetric router joins a host behind one through a member behind a full cone router");
 		CHECK(r.shown, "relay: the host's player list says the player comes through J2");
+		CHECK(r.report, "report: the host sees the player relayed by player 2; the relayed player is strict and sees player 2 through the host");
 		CHECK(r.played, "relay: the three play 300 frames of lockstep without a desync");
 		CHECK(r.capped, "relay: what a member forwards for one player is capped (64 KB a second)");
 	}

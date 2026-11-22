@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <cstring>
 
 #ifdef _WIN32
@@ -409,6 +410,7 @@ void netplay::reset_state()
 	for (auto &m : m_in) m.clear();
 	m_merged.clear(); m_merged_upto = 0; m_stall_since = 0; m_hash.clear();
 	m_desync = false;
+	m_seen_as = {}; m_host_links.clear(); m_report_t = 0; m_jitter = m_last_rtt = 0;
 	m_target = {}; m_target6 = {}; m_relay = {}; m_relay_on = false; m_routes.clear(); m_flows.clear(); m_relayed = 0; m_also_public = 0; m_lan_t = 0; m_lan_found = false;
 }
 
@@ -513,6 +515,66 @@ void netplay::send_raw(const net_addr &to, const std::vector<u8> &b)
 		return;
 	}
 	m_sock.send(to, b.data(), b.size());
+}
+
+// smoothed round trip and jitter (RFC 3550: the mean change between samples, 1/8 a step here)
+void netplay::sample(int &ping, int &jitter, int &last, int rtt)
+{
+	if (rtt < 0 || rtt > 60000) return;
+	ping = ping ? (ping * 3 + rtt) / 4 : rtt;
+	if (last) jitter += (std::abs(rtt - last) - jitter) / 8;
+	last = rtt;
+}
+
+std::vector<netplay::link_info> netplay::links() const
+{
+	std::vector<link_info> v;
+	if (m_mode == mode::host)
+		for (auto &p : m_peers)
+		{
+			link_info l;
+			l.slot = p.slot; l.ping = p.ping; l.jitter = p.jitter; l.v6 = p.addr.v6;
+			for (auto &r : m_routes)
+				if (r.first == p.addr) { l.relayed = true; for (auto &q : m_peers) if (q.addr == r.second) l.through = q.slot; }
+			v.push_back(l);
+		}
+	else if (m_mode == mode::client && m_slot >= 0)
+	{
+		// the host directly; every other player through the host, so their link adds to ours
+		link_info h;
+		h.slot = 0; h.ping = m_ping; h.jitter = m_jitter; h.relayed = m_relay_on; h.v6 = !m_peers.empty() && m_peers[0].addr.v6;
+		v.push_back(h);
+		for (auto &o : m_host_links)
+		{
+			if (o.slot == m_slot) continue;
+			link_info l = o;
+			l.ping += m_ping; l.jitter += m_jitter; l.via_host = true;
+			v.push_back(l);
+		}
+	}
+	return v;
+}
+
+netplay::conn_type netplay::connection(bool port_forwarded) const
+{
+	if (m_mode == mode::client && m_relay_on) return conn_type::strict;
+	if (port_forwarded || m_seen_as.v6) return conn_type::open;
+	if (m_stun != stun_state::found) return conn_type::unknown;
+	// a router that gives each destination its own port: the other side sees another port
+	// than the STUN server did, and only a relay helps against such a router on both ends
+	if (m_seen_as.port && !m_seen_as.v6 && m_seen_as.ip == m_public.ip && m_seen_as.port != m_public.port) return conn_type::strict;
+	return conn_type::moderate;
+}
+
+const char *netplay::conn_name(conn_type t)
+{
+	switch (t)
+	{
+		case conn_type::open: return "open";
+		case conn_type::moderate: return "moderate";
+		case conn_type::strict: return "strict";
+		default: return "not known yet";
+	}
 }
 
 net_addr netplay::relay_candidate() const
@@ -728,7 +790,14 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 		pp->last_seen = now;
 		pp->echo = tsend;
 		pp->echo_at = now;
-		if (techo) pp->ping = (pp->ping * 3 + int(now - techo)) / 4;
+		if (techo) sample(pp->ping, pp->jitter, pp->last_rtt, int(now - techo));
+		if (type == 'o')
+		{
+			// what the player sees as our address (N2.4)
+			net_addr a;
+			if (r.i < n && get_addr(p + r.i, n - r.i, a)) m_seen_as = a;
+			return;
+		}
 		if (type == 'b')
 		{
 			std::string who = "P" + std::to_string(pp->slot + 1);
@@ -800,9 +869,27 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 	pp->last_seen = now;
 	pp->echo = tsend;
 	pp->echo_at = now;
-	if (techo) m_ping = (m_ping * 3 + int(now - techo)) / 4;
+	if (techo) sample(m_ping, m_jitter, m_last_rtt, int(now - techo));
 	switch (type)
 	{
+		case 'o':
+		{
+			// the host: our address as it sees it, then every player's link to it (N2.4)
+			int k = r.i < n ? get_addr(p + r.i, n - r.i, m_seen_as) : 0;
+			if (!k) break;
+			r.i += k;
+			int cnt = r.u8_();
+			m_host_links.clear();
+			for (int j = 0; j < cnt && r.ok; j++)
+			{
+				link_info l;
+				l.slot = r.u8_(); l.ping = r.u16_(); l.jitter = r.u16_();
+				u8 fl = r.u8_();
+				l.relayed = fl & 1; l.v6 = (fl & 2) != 0;
+				if (r.ok) m_host_links.push_back(l);
+			}
+			break;
+		}
 		case 'r': stop(("rejected: " + r.str()).c_str()); return;
 		case 'b': stop(m_phase == phase::running ? "the host has closed the game" : "the host has cancelled"); return;
 		case 'w': m_slot = r.u8_(); m_nplayers = r.u8_(); break;
@@ -890,9 +977,20 @@ void netplay::tick_host(u32 now)
 	m_last_tick = now;
 	if (slow) m_hello_t = now;
 
+	const bool report = now - m_report_t >= 1000;
+	if (report) m_report_t = now;
+	const std::vector<link_info> mine = report ? links() : std::vector<link_info>();
 	for (auto &p : m_peers)
 	{
 		auto hdr = [&](wbuf &w, char t) { w.u8_(u8(t)); w.u8_(MAGIC); w.u32_(now); w.u32_(p.echo ? p.echo + (now - p.echo_at) : 0); };
+		if (report)
+		{
+			wbuf w; hdr(w, 'o');
+			put_addr(w.b, p.addr);
+			w.u8_(u8(mine.size()));
+			for (auto &l : mine) { w.u8_(u8(l.slot)); w.u16_(u16(std::min(l.ping, 65535))); w.u16_(u16(std::min(l.jitter, 65535))); w.u8_(u8((l.relayed ? 1 : 0) | (l.v6 ? 2 : 0))); }
+			send_raw(p.addr, w.b);
+		}
 		if (m_phase == phase::lobby && slow)
 		{
 			wbuf w; hdr(w, 'l'); w.u8_(u8(m_nplayers)); w.u8_(u8(p.slot)); w.str(m_lobby_mods); send_raw(p.addr, w.b);
@@ -952,6 +1050,13 @@ void netplay::tick_client(u32 now)
 	m_last_tick = now;
 	if (slow) m_hello_t = now;
 	auto hdr = [&](wbuf &w, char t) { w.u8_(u8(t)); w.u8_(MAGIC); w.u32_(now); w.u32_(h.echo ? h.echo + (now - h.echo_at) : 0); };
+	if (m_slot >= 0 && now - m_report_t >= 1000)
+	{
+		m_report_t = now;
+		wbuf w; hdr(w, 'o');
+		put_addr(w.b, h.addr);
+		send_raw(h.addr, w.b);
+	}
 	// no answer through the code: go through the member the host's code names (N2.3)
 	if (m_slot < 0 && !m_relay_on && m_relay.port && now - m_join_t >= relay_after_ms) { m_relay_on = true; m_start_t = 0; m_hello_t = 0; }
 
