@@ -418,7 +418,7 @@ screen make_online(const online_state &st)
 	play.r = { 0.0f, 0.0f, 0.5f, 1.0f };
 	play.items = { button(on_host, "Host a game"), button(on_join, "Join a game"), header("CONNECTION"), button(on_address, "Address or code"),
 	               button(on_port, "UDP port"), slider(on_delay, "Delay", float(st.delay), 1, 10, 1),
-	               toggle(on_upnp, "Open the port (UPnP)", st.upnp), toggle(on_stun, "Find my code (STUN)", st.stun) };
+	               toggle(on_upnp, "Open the port (UPnP, PCP)", st.upnp), toggle(on_stun, "Find my code (STUN)", st.stun) };
 	panel help;
 	help.title = "How it works";
 	help.r = { 0.52f, 0.0f, 0.48f, 1.0f };
@@ -445,7 +445,7 @@ void update_online(screen &s, const online_state &st)
 	std::vector<item> items;
 	add_text(items, "The host picks the game and plays as player 1. Everybody needs the same ROMs.", px);
 	items.push_back(header("THE HOST"));
-	add_text(items, "Tells the others a code. The router's port is opened by UPnP when it allows it; if not, the host lets each player in by the player's own code.", px);
+	add_text(items, "Tells the others a code. The router's port is opened by UPnP, PCP or NAT-PMP when it allows it; if not, the host lets each player in by the player's own code.", px);
 	items.push_back(header("JOINING"));
 	add_text(items, "Type the host's code (or address). If no answer comes, send the host your code.", px);
 	items.push_back(header("STUN"));

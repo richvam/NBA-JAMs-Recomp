@@ -266,6 +266,70 @@ struct test_igd
 	std::vector<std::string> log() { std::lock_guard<std::mutex> l(mx); return actions; }
 };
 
+// ---------------------------------------------------------------- a test router for PCP / NAT-PMP
+// Answers on a UDP port as a router's port 5351 does. pcp: answers PCP MAP; otherwise it
+// answers PCP with NAT-PMP's "unsupported version" and takes NAT-PMP. Logs each request.
+struct test_pmp
+{
+	int sock;
+	bool pcp = true;
+	std::atomic<bool> quit{ false };
+	std::thread th;
+	std::vector<std::string> reqs;      // "PCP MAP port=7845 life=3600", "PMP MAP port=7845 life=0", "PMP ADDR"
+	std::mutex mx;
+	test_pmp() { sock = udp_bind(ip4(127, 0, 0, 1), 0); th = std::thread([this] { run(); }); }
+	~test_pmp() { quit = true; th.join(); close(sock); }
+	std::string target() const { return "127.0.0.1:" + std::to_string(local_of(sock).port); }
+	static u32 r32(const u8 *p) { return u32(p[0]) << 24 | u32(p[1]) << 16 | u32(p[2]) << 8 | p[3]; }
+	static void w32(u8 *p, u32 v) { p[0] = u8(v >> 24); p[1] = u8(v >> 16); p[2] = u8(v >> 8); p[3] = u8(v); }
+	void run()
+	{
+		while (!quit)
+		{
+			u8 b[1100]; net_addr from;
+			int n = recv_from(sock, from, b, sizeof b);
+			if (n <= 0) { sleep_ms(2); continue; }
+			std::string line;
+			std::vector<u8> out;
+			if (n >= 60 && b[0] == 2 && b[1] == 1)
+			{
+				u16 port = u16(b[40] << 8 | b[41]);
+				u32 life = r32(b + 4);
+				line = "PCP MAP port=" + std::to_string(port) + " life=" + std::to_string(life);
+				if (pcp)
+				{
+					out.assign(60, 0);
+					out[0] = 2; out[1] = 0x81; out[3] = 0;
+					w32(&out[4], life ? 7200 : 0);
+					std::memcpy(&out[24], b + 24, 12);   // the nonce
+					out[36] = 17;
+					out[40] = b[40]; out[41] = b[41]; out[42] = b[42]; out[43] = b[43];
+					out[54] = out[55] = 0xff;
+					out[56] = 203; out[57] = 0; out[58] = 113; out[59] = 9;
+				}
+				else { out.assign(8, 0); out[1] = 0x81; out[3] = 1; }   // version 0, unsupported version
+			}
+			else if (n >= 2 && b[0] == 0 && b[1] == 0 && !pcp)
+			{
+				line = "PMP ADDR";
+				out.assign(12, 0); out[1] = 128; out[8] = 198; out[9] = 51; out[10] = 100; out[11] = 77;
+			}
+			else if (n >= 12 && b[0] == 0 && b[1] == 1 && !pcp)
+			{
+				u16 port = u16(b[4] << 8 | b[5]);
+				u32 life = r32(b + 8);
+				line = "PMP MAP port=" + std::to_string(port) + " life=" + std::to_string(life);
+				out.assign(16, 0); out[1] = 129;
+				out[8] = b[4]; out[9] = b[5]; out[10] = b[6]; out[11] = b[7];
+				w32(&out[12], life ? 7200 : 0);
+			}
+			else line = "? " + std::to_string(n) + " bytes";
+			{ std::lock_guard<std::mutex> l(mx); reqs.push_back(line); }
+			if (!out.empty()) send_to(sock, from, out.data(), out.size());		}
+	}
+	std::vector<std::string> log() { std::lock_guard<std::mutex> l(mx); return reqs; }
+};
+
 static bool wait_state(upnp_mapper &m, int ms)
 {
 	for (int t = 0; t < ms && m.status() == upnp_mapper::state::working; t += 10) sleep_ms(10);
@@ -354,19 +418,69 @@ int main(int argc, char **argv)
 	{
 		test_igd r;
 		r.no_service = true;
+		int dead = udp_bind(ip4(127, 0, 0, 1), 0);
+		const std::string nobody = "127.0.0.1:" + std::to_string(local_of(dead).port);
 		upnp_mapper m;
 		m.ssdp_target = r.ssdp_target();
+		m.pmp_target = nobody;               // and no PCP or NAT-PMP either
 		m.start(7845);
-		wait_state(m, 6000);
+		wait_state(m, 9000);
 		CHECK(m.status() == upnp_mapper::state::failed && m.error().find("does not offer") != std::string::npos, "UPnP: a device without port mapping is reported, not used");
 		upnp_mapper none;
-		int dead = udp_bind(ip4(127, 0, 0, 1), 0);
-		none.ssdp_target = "127.0.0.1:" + std::to_string(local_of(dead).port);
+		none.ssdp_target = nobody;
+		none.pmp_target = nobody;
 		auto t0 = net_now_ms();
 		none.start(7845);
-		wait_state(none, 8000);
-		CHECK(none.status() == upnp_mapper::state::failed && none.error().find("no router") != std::string::npos && net_now_ms() - t0 < 5000,
-		      "UPnP: with no router answering it gives up within 5 seconds");
+		wait_state(none, 10000);
+		CHECK(none.status() == upnp_mapper::state::failed && none.error().find("no router") != std::string::npos && none.error().find("PCP or NAT-PMP") != std::string::npos && net_now_ms() - t0 < 6000,
+		      "with no router answering UPnP, PCP or NAT-PMP it gives up within 6 seconds");
+		close(dead);
+	}
+	// ---- PCP and NAT-PMP, when there is no UPnP ----
+	{
+		int dead = udp_bind(ip4(127, 0, 0, 1), 0);
+		const std::string nobody = "127.0.0.1:" + std::to_string(local_of(dead).port);
+		{
+			test_pmp r;
+			upnp_mapper m;
+			m.ssdp_target = nobody; m.pmp_target = r.target();
+			m.start(7845);
+			wait_state(m, 9000);
+			auto lg = r.log();
+			if (m.status() != upnp_mapper::state::mapped) { printf("  pcp: %s\n", m.error().c_str()); for (auto &l : lg) printf("  router: %s\n", l.c_str()); }
+			CHECK(m.status() == upnp_mapper::state::mapped && m.method() == "PCP" && m.external_ip() == "203.0.113.9" && !lg.empty() && lg[0] == "PCP MAP port=7845 life=3600",
+			      "PCP: a router without UPnP forwards UDP 7845 by PCP, and its public address is read");
+			m.stop();
+			lg = r.log();
+			CHECK(!lg.empty() && lg.back() == "PCP MAP port=7845 life=0", "PCP: the forward is removed (lifetime 0) when hosting stops");
+		}
+		{
+			test_pmp r;
+			r.pcp = false;
+			upnp_mapper m;
+			m.ssdp_target = nobody; m.pmp_target = r.target();
+			m.start(7845);
+			wait_state(m, 9000);
+			auto lg = r.log();
+			if (m.status() != upnp_mapper::state::mapped) { printf("  nat-pmp: %s\n", m.error().c_str()); for (auto &l : lg) printf("  router: %s\n", l.c_str()); }
+			bool asked = false;
+			for (auto &l : lg) asked = asked || l == "PMP MAP port=7845 life=3600";
+			CHECK(m.status() == upnp_mapper::state::mapped && m.method() == "NAT-PMP" && m.external_ip() == "198.51.100.77" && asked,
+			      "NAT-PMP: a router that answers PCP with \"unsupported version\" gets NAT-PMP, and its public address is read");
+			m.stop();
+			lg = r.log();
+			CHECK(!lg.empty() && lg.back() == "PMP MAP port=7845 life=0", "NAT-PMP: the forward is removed (lifetime 0) when hosting stops");
+		}
+		{
+			test_igd u;
+			test_pmp r;
+			upnp_mapper m;
+			m.ssdp_target = u.ssdp_target(); m.pmp_target = r.target();
+			m.start(7845);
+			wait_state(m, 9000);
+			CHECK(m.status() == upnp_mapper::state::mapped && m.method() == "UPnP" && r.log().empty(), "UPnP comes first: with a UPnP router PCP is not asked");
+			m.stop();
+		}
 		close(dead);
 	}
 	// ---- hole punching, every pair of routers ----

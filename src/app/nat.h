@@ -7,7 +7,8 @@
 //     own UDP socket. The packets go through that socket; see netplay::stun_begin.
 //   * UPnP IGD: asks the router to forward the host's UDP port and for its public address.
 //     Blocking HTTP on a worker thread; the mapping is removed when hosting stops.
-// NAT-PMP, PCP and IPv6 are not done.
+//   * PCP and NAT-PMP: the same forward from a router without UPnP (UDP to its port 5351).
+// IPv6 is not done.
 #pragma once
 #include "netplay.h"
 #include <atomic>
@@ -25,7 +26,12 @@ void stun_request(u8 out[20], const u8 txid[12]);
 bool stun_parse(const u8 *p, int n, const u8 txid[12], net_addr &mapped);   // a success response to txid
 std::vector<u8> stun_response(const u8 *req, int n, const net_addr &seen); // for tests: what a server answers
 
-// UPnP Internet Gateway Device port mapping
+// PCP and NAT-PMP
+u32 default_gateway();                                          // 0 when there is none
+std::vector<u8> pcp_map_request(u32 client_ip, u16 port, u32 lifetime, const u8 nonce[12]);
+std::vector<u8> pmp_map_request(u16 port, u32 lifetime);
+
+// The router's port forward: UPnP Internet Gateway Device first, then PCP, then NAT-PMP
 class upnp_mapper
 {
 public:
@@ -36,14 +42,18 @@ public:
 	state status() const { return m_state; }
 	std::string external_ip() const; // the router's public address, when mapped
 	std::string error() const;
+	std::string method() const;      // "UPnP", "PCP" or "NAT-PMP", once mapped
 	// For tests and unusual networks: where discovery is sent (default 239.255.255.250:1900).
 	// The environment variable NBA_UPNP_SSDP=<ip>:<port> sets it too.
 	std::string ssdp_target;
+	// Where PCP and NAT-PMP go (default: the default gateway, port 5351); NBA_PMP_GATEWAY too.
+	std::string pmp_target;
 private:
 	void run(u16 port);
+	void run_pmp(u16 port, const std::string &upnp_why);
 	std::thread m_thread;
 	std::atomic<state> m_state{ state::off };
 	std::atomic<bool> m_quit{ false };
 	mutable std::mutex m_mx;
-	std::string m_ext, m_err;
+	std::string m_ext, m_err, m_method;
 };

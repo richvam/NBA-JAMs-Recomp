@@ -751,7 +751,7 @@ Opus.
 places stopped at "Waiting for an answer"):** N2.1 is done for UPnP IGD: when hosting, the
 program finds the router (SSDP), asks it to forward the UDP port (lease 3600 s renewed every
 20 minutes, or permanent when the router only takes that), reads its public address, and
-removes the forward when the session ends. NAT-PMP and PCP are not done. N2.2 is done in
+removes the forward when the session ends. When no router answers UPnP, or it will not forward, PCP (RFC 6887) and then NAT-PMP (RFC 6886) are tried at the default gateway's port 5351 (found in the route table): the same forward, its public address, renewed at half its lifetime and removed (lifetime 0) at the end; the Online screen says which one opened the port. `nattest` has a test router for both (5 more checks: PCP, NAT-PMP after "unsupported version", removal for each, UPnP still first). N2.2 is done in
 part: STUN through the game's own socket gives each computer a **connection code** (public
 address and port as ten letters and digits); the player joins with the host's code, and if no
 answer comes the host lets them in by the player's code ("Let a player in"), which punches

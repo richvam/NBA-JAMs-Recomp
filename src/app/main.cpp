@@ -1816,7 +1816,7 @@ void app::net_menu_frame()
 	ui_show(m_online_scr);
 }
 
-// N2: when hosting, the router is asked to forward the port (UPnP); host and player both ask
+// N2: when hosting, the router is asked to forward the port (UPnP, else PCP or NAT-PMP); host and player both ask
 // a STUN server for the address and port the internet sees, which is their code.
 void app::net_traversal_start()
 {
@@ -1841,7 +1841,7 @@ std::string app::net_code_note(std::string &code)
 		int a, b, c, d;
 		if (sscanf(ip.c_str(), "%d.%d.%d.%d", &a, &b, &c, &d) == 4) ext = { u32(a) << 24 | u32(b) << 16 | u32(c) << 8 | u32(d), u16(m_cfg.net_port) };
 		if (ext.ip) m_net.also_public(ext.ip);
-		if (ext.ip && !net_ip_private(ext.ip)) { code = net_code(ext); return "Your router's port is open (UPnP): anyone can join with this code."; }
+		if (ext.ip && !net_ip_private(ext.ip)) { code = net_code(ext); return "Your router's port is open (" + m_upnp.method() + "): anyone can join with this code."; }
 	}
 	if (m_net.stun_status() == netplay::stun_state::found)
 	{
