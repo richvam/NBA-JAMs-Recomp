@@ -12,6 +12,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 ## Unreleased
 
 ### Added
+- Save states (off by default): turn on Settings, Program, "Save states" and an offline game's pause menu gets Save and Load with three slots per game. They are never available online.
 - Lua mods: a "Lua mods" menu, per-game settings in `mods.ini`, and two scripts: quarter
   length and no team-select timer.
 - Controller remapping: profiles per player and per game, button shortcuts, import and export.
@@ -129,6 +130,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - The README files describe the menus and the pause menu first; the F-keys are shortcuts.
 
 ### Fixed
+- `--pad-script` files saved with Windows line endings work (every `expect` line failed before).
 - A Lua script that read a ROM address out of range, or wrote to NVRAM, got a confusing error ("invalid option '%0'") instead of the message with the address.
 - With a controller in use, moving or resizing the window under a still mouse pointer no longer takes the focus away from the controller.
 

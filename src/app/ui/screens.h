@@ -72,12 +72,13 @@ struct settings_state
 	bool free_play = true, four_players = true, video_clips = true;
 	int country = 0;
 	bool news = true;
+	bool save_states = false;            // N1.4: Save and Load in the pause menu of an offline game
 	int pause_buttons = 0;               // what is held on a controller for the pause menu: index into pause_button_names()
 	bool menu_music = true, menu_sounds = true;   // in the menus, from the highlighted game's sound board (U6)
 	float menu_volume = 0.6f;
 };
 
-enum settings_id { st_shape = 1, st_scaling, st_shader, st_scanlines, st_sides, st_fullscreen, st_volume, st_free_play, st_players, st_country, st_clips, st_news, st_pause, st_menu_music, st_menu_sounds, st_menu_volume, st_tv };
+enum settings_id { st_shape = 1, st_scaling, st_shader, st_scanlines, st_sides, st_fullscreen, st_volume, st_free_play, st_players, st_country, st_clips, st_news, st_pause, st_menu_music, st_menu_sounds, st_menu_volume, st_tv, st_save_states };
 
 // The controller buttons held for half a second to open the pause menu (U5.1). There is no
 // "none": Esc and the Guide button always open it as well, so it can never be unbound.
@@ -223,9 +224,15 @@ struct pause_state
 	bool test = false;                   // the cabinet's TEST switch
 	int coins[4] = { 0, 0, 0, 0 };       // coins waiting to go in when the game resumes
 	int service = 0;
+	// save states (roadmap N1.4): shown only when they are on in the settings and the game
+	// is offline; slots[n] says what is in slot n ("" when it is empty)
+	bool states = false;
+	int slot = 0;
+	std::string slots[3];
 };
 
-enum pause_id { ps_resume = 1, ps_volume, ps_shot, ps_video, ps_controls, ps_mods, ps_help, ps_quit, ps_coin0 = 20, ps_service = 30, ps_test, ps_reset };
+enum pause_id { ps_resume = 1, ps_volume, ps_shot, ps_video, ps_controls, ps_mods, ps_help, ps_quit, ps_coin0 = 20, ps_service = 30, ps_test, ps_reset,
+                ps_slot = 40, ps_state_save, ps_state_load };
 
 screen make_pause(const pause_state &st);
 void update_pause(screen &s, const pause_state &st);

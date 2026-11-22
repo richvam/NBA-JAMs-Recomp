@@ -13,6 +13,8 @@ src/app/pad_script.h.
   c_join.pad     online, the other side: the host's address on the on-screen keyboard,
                  join, play, back on the game list when the host leaves
   e_deck.pad     the menus at 1280 x 800 (Steam Deck), then inside a TV's safe area
+  f_states.pad   save states (N1.4): with save_states=1 in the data folder's ini, Save in
+                 slot 1, play on, Load; the log says "as saved"
 
 run_audit.sh runs one under Xvfb (Linux build); run c_host and c_join at the same time,
 each with its own data folder. The scripts that need ROMs use NBA JAM, T.E. and Maximum

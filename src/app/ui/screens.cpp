@@ -176,10 +176,11 @@ screen make_settings(const settings_state &st)
 	prog.name = "Program";
 	panel p;
 	p.title = "Program";
-	p.r = { 0.1f, 0.0f, 0.8f, 0.62f };
+	p.r = { 0.1f, 0.0f, 0.8f, 0.9f };
 	p.items = { toggle(st_news, "Check for new versions", st.news), label("Asks the Releases page once at start."), label("Nothing is downloaded or installed."),
 	            header("PAUSE MENU IN A GAME"), picker(st_pause, "Hold on a controller", pause_button_names(), st.pause_buttons),
-	            label("Half a second. Esc and the Guide button"), label("open it too.") };
+	            label("Half a second. Esc and the Guide button"), label("open it too."),
+	            toggle(st_save_states, "Save states", st.save_states), label("Save and Load, three slots per game."), label("Offline games only.") };
 	prog.panels = { p };
 
 	s.tabs = { video, sound, game, prog };
@@ -194,7 +195,7 @@ void show_settings(screen &s, const settings_state &st)
 	auto sli = [&](int id, float v) { if (item *i = s.find(id)) i->value = std::clamp(v, i->min, i->max); };
 	if (item *i = s.find(st_sides)) i->choices = st.side_names;
 	pick(st_shape, st.shape); pick(st_scaling, st.scaling); pick(st_shader, st.shader); pick(st_sides, st.sides); pick(st_country, st.country); pick(st_pause, st.pause_buttons);
-	tog(st_fullscreen, st.fullscreen); tog(st_tv, st.tv_margins); tog(st_free_play, st.free_play); tog(st_players, st.four_players); tog(st_clips, st.video_clips); tog(st_news, st.news);
+	tog(st_fullscreen, st.fullscreen); tog(st_tv, st.tv_margins); tog(st_free_play, st.free_play); tog(st_players, st.four_players); tog(st_clips, st.video_clips); tog(st_news, st.news); tog(st_save_states, st.save_states);
 	sli(st_scanlines, st.scanlines); sli(st_volume, st.volume); sli(st_menu_volume, st.menu_volume);
 	tog(st_menu_music, st.menu_music); tog(st_menu_sounds, st.menu_sounds);
 }
@@ -206,7 +207,7 @@ void read_settings(const screen &s, settings_state &st)
 	auto tog = [&](int id, bool &v) { if (const item *i = m.find(id)) v = i->on; };
 	auto sli = [&](int id, float &v) { if (const item *i = m.find(id)) v = std::round(i->value * 10.0f) / 10.0f; };
 	pick(st_shape, st.shape); pick(st_scaling, st.scaling); pick(st_shader, st.shader); pick(st_sides, st.sides); pick(st_country, st.country); pick(st_pause, st.pause_buttons);
-	tog(st_fullscreen, st.fullscreen); tog(st_tv, st.tv_margins); tog(st_free_play, st.free_play); tog(st_players, st.four_players); tog(st_clips, st.video_clips); tog(st_news, st.news);
+	tog(st_fullscreen, st.fullscreen); tog(st_tv, st.tv_margins); tog(st_free_play, st.free_play); tog(st_players, st.four_players); tog(st_clips, st.video_clips); tog(st_news, st.news); tog(st_save_states, st.save_states);
 	sli(st_scanlines, st.scanlines); sli(st_volume, st.volume); sli(st_menu_volume, st.menu_volume);
 	tog(st_menu_music, st.menu_music); tog(st_menu_sounds, st.menu_sounds);
 }
@@ -702,6 +703,13 @@ screen make_pause(const pause_state &st)
 	cab.title = "Cabinet";
 	cab.r = { 0.52f, 0.24f, 0.48f, 0.76f };
 	cab.items = { button(ps_service, "Service credit"), toggle(ps_test, "TEST switch", st.test), button(ps_reset, "Reset the game") };
+	if (st.states && !st.online)
+	{
+		cab.items.push_back(header("SAVE STATE"));
+		cab.items.push_back(picker(ps_slot, "Slot", { "1", "2", "3" }, st.slot));
+		cab.items.push_back(button(ps_state_save, "Save"));
+		cab.items.push_back(button(ps_state_load, "Load"));
+	}
 	t.panels = { game, coins, cab };
 	s.tabs = { t };
 	s.fix_focus();
@@ -726,8 +734,16 @@ void update_pause(screen &s, const pause_state &st)
 	if (item *i = s.find(ps_service)) i->value_text = st.service ? "+" + std::to_string(st.service) : "";
 	if (item *i = s.find(ps_test)) i->on = st.test;
 	if (item *i = s.find(ps_volume)) i->value = st.volume;
+	const bool states = st.states && !st.online && s.find(ps_slot);
+	if (states)
+	{
+		const int n = std::clamp(st.slot, 0, 2);
+		const std::string &in = st.slots[n];
+		if (item *i = s.find(ps_slot)) i->choice = n;
+		if (item *i = s.find(ps_state_load)) { i->disabled = in.empty(); i->value_text = in.empty() ? "empty" : in; }
+	}
 	panel &cab = s.tabs[0].panels[2];
-	while (cab.items.size() > 3) cab.items.pop_back();
+	while (cab.items.size() > (states ? 7u : 3u)) cab.items.pop_back();
 	cab.items.push_back(label(""));
 	const int px = int(s.panel_rect(2).w) - 30;
 	if (st.online) add_text(cab.items, "Online, the game goes on while this menu is open. Greyed: offline only.", px, 5);

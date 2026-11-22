@@ -1,0 +1,42 @@
+# N1.4: save states from the pause menu (offline). The data folder's nbajam_recomp.ini has
+# save_states=1. The first game in the list, the pause menu, Save in slot 1, play on, the
+# pause menu again, Load slot 1. The log says "save state: slot 1 loaded, game state ...,
+# as saved" when the game state after the load is the one that was saved.
+wait 6000
+expect menu
+tap a
+wait 9000
+expect game
+wait 3000
+tap guide
+wait 500
+expect pause
+tap right
+tap down 6
+shot
+tap a
+wait 800
+shot
+tap b
+wait 500
+expect game
+wait 4000
+tap guide
+wait 500
+expect pause
+tap right
+tap down 7
+shot
+tap a
+wait 1000
+expect game
+shot
+wait 2000
+tap guide
+wait 500
+expect pause
+tap down 7
+tap a
+wait 1500
+expect menu
+quit

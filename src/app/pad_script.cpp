@@ -21,6 +21,7 @@ bool pad_script::load(const std::string &text, std::string &err)
 	while (std::getline(in, l))
 	{
 		ln++;
+		if (!l.empty() && l.back() == '\r') l.pop_back();          // a script saved on Windows
 		if (size_t h = l.find('#'); h != std::string::npos) l = l.substr(0, h);
 		std::istringstream w(l);
 		cmd c;
