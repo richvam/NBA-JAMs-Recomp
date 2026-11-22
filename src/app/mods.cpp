@@ -527,6 +527,8 @@ public:
 	}
 };
 
+#include "lua_state.ipp"
+
 static void budget_hook(lua_State *L, lua_Debug *)
 {
 	luaL_error(L, "script took too long (instruction budget exceeded)");
@@ -1180,4 +1182,73 @@ void mod_manager::stop()
 	m_mach = nullptr;
 	m_syms.clear();
 	m_syms_loaded = false;
+}
+
+// ---------------------------------------------------------------------------
+// save states (roadmap N1.2)
+// ---------------------------------------------------------------------------
+bool mod_manager::save_state(std::vector<u8> &out, std::string &err) const
+{
+	state_io s = state_io::saver(out);
+	s.mark("mods");
+	u32 frame = m_frame;
+	s(frame);
+	std::vector<press> pr = m_press;
+	s.vec(pr);
+	u32 seen[4]; int hold[4];
+	std::copy(m_seen, m_seen + 4, seen); std::copy(m_hold, m_hold + 4, hold);
+	s(seen); s(hold);
+	u32 n = u32(m_running.size());
+	s(n);
+	for (const running &r : m_running)
+	{
+		std::vector<char> name(r.mod->file.begin(), r.mod->file.end());
+		s.vec(name);
+		if (!lua_snap::save(r.L, s, err)) { err = r.mod->file + ": " + err; out.clear(); return false; }
+	}
+	s.mark("mods end");
+	return true;
+}
+
+bool mod_manager::load_state(const std::vector<u8> &in, std::string &err, const std::function<bool()> &between)
+{
+	state_io s = state_io::loader(in);
+	s.mark("mods");
+	u32 frame = 0;
+	s(frame);
+	std::vector<press> pr;
+	s.vec(pr);
+	u32 seen[4] = {}; int hold[4] = {};
+	s(seen); s(hold);
+	u32 n = 0;
+	s(n);
+	if (s.ok() && n != m_running.size()) s.fail("other scripts are running than when the state was saved");
+	std::vector<lua_snap::loader> ld;
+	for (u32 i = 0; i < n && s.ok(); i++)
+	{
+		std::vector<char> name;
+		s.vec(name);
+		if (s.ok() && std::string(name.begin(), name.end()) != m_running[i].mod->file)
+			s.fail("other scripts are running than when the state was saved");
+		ld.push_back({ m_running[i].L, {}, 0, {} });
+		lua_snap::io_objects(s, ld.back().objs);
+	}
+	s.mark("mods end");
+	if (s.ok() && !s.at_end()) s.fail("the scripts' state is longer than expected");
+	if (!s.ok()) { err = s.error(); return false; }
+	size_t ready = 0;
+	for (; ready < ld.size(); ready++)
+		if (!ld[ready].prepare()) { err = m_running[ready].mod->file + ": " + ld[ready].err; break; }
+	if (ready < ld.size() || (between && !between()))
+	{
+		for (size_t i = 0; i <= ready && i < ld.size(); i++) ld[i].abandon();
+		if (err.empty()) err = "the machine's state did not load";
+		return false;
+	}
+	for (auto &l : ld) l.commit();
+	m_frame = frame;
+	m_press = pr;
+	std::copy(seen, seen + 4, m_seen); std::copy(hold, hold + 4, m_hold);
+	m_draw.clear();
+	return true;
 }

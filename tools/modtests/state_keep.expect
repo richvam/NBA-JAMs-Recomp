@@ -1,0 +1,10 @@
+# state_keep.lua (roadmap N1.2): modtest saves the machine and the script after frame 1500,
+# plays to 2400, loads that state and plays 1501..2400 again; every frame and every message
+# of the script must be the same. Frames 3301 is enough for the second pass.
+game nbajamte nbajamse nbajam nbahangt nbamht
+frames 3301
+env STATE=1500:2400
+env PLAY=1
+once keep: frame 2400 count 2400
+once state: frames 1501 to 2400 the same after the load
+nolog state FAIL

@@ -52,6 +52,7 @@ tunit_machine::tunit_machine(tunit_roms roms, tunit_protection prot)
 	, m_prot(prot)
 {
 	m_roms.program.resize(0x100000, 0xff);
+	m_rom_orig = m_roms.program;   // save states keep only what scripts change (N1.2)
 #ifdef NBAJAM_LOWMEM
 	m_roms.gfx.resize(m_roms.gfx.size() + NBAJAM_GFX_GUARD, 0);   // in place, plus guard
 #else
@@ -350,6 +351,7 @@ void tunit_machine::io(state_io &s)
 	s.vec(m_ram); s.vec(m_nvram); s.vec(m_palram); s(m_pens);
 	s(m_in0); s(m_in1); s(m_in2); s(m_dsw); s(m_fake_sound_state); s(m_prot_queue); s(m_prot_index);
 	s.vec(m_frame); s(m_frames);
+	io_rom_patches(s, m_roms.program, m_rom_orig);
 	s.mark("end");
 }
 

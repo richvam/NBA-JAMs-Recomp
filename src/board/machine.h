@@ -31,6 +31,43 @@ inline u32 fnv1a(const void *d, size_t n, u32 h = 2166136261u)
 	return h;
 }
 
+// Save states (roadmap N1.2): the program ROM as Lua scripts changed it, as the runs of
+// bytes that differ from the ROM as loaded (orig). On load the ROM is put back to orig
+// and the runs written again.
+inline void io_rom_patches(state_io &s, std::vector<u8> &rom, const std::vector<u8> &orig)
+{
+	s.mark("rom patches");
+	u32 runs = 0;
+	if (s.saving())
+	{
+		std::vector<std::pair<u32, u32>> r;
+		for (size_t i = 0; i < rom.size();)
+		{
+			if (rom[i] == orig[i]) { i++; continue; }
+			size_t j = i;
+			while (j < rom.size() && rom[j] != orig[j]) j++;
+			r.push_back({ u32(i), u32(j - i) });
+			i = j;
+		}
+		runs = u32(r.size());
+		s(runs);
+		for (auto &p : r) { s(p.first); s(p.second); s.raw(&rom[p.first], p.second); }
+		return;
+	}
+	s(runs);
+	if (!s.ok()) return;
+	std::vector<u8> next = orig;
+	for (u32 k = 0; k < runs && s.ok(); k++)
+	{
+		u32 at = 0, n = 0;
+		s(at); s(n);
+		if (!s.ok() || size_t(at) + n > next.size()) { s.fail("a ROM patch is out of range"); return; }
+		s.raw(&next[at], n);
+	}
+	if (s.ok() && next.size() == rom.size()) std::copy(next.begin(), next.end(), rom.begin());   // same buffer: others keep pointers to it
+	else if (s.ok()) s.fail("the program ROM size differs");
+}
+
 class arcade_machine
 {
 public:
