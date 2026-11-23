@@ -12,6 +12,9 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 ## Unreleased
 
 ### Added
+- Settings, Video: "Widest view" limits Widescreen to 16:9 or 21:9 if the full width of a very wide
+  screen feels too zoomed out; the rest of the window gets sides. Shape there now also offers
+  Widescreen.
 - True widescreen on NBA Hangtime, Maximum Hangtime and NBA JAM (1993) too (F7, "Widescreen").
 - True widescreen on NBA JAM T.E. 4.0 and T.E. Special Edition: press F7 until it says
   "Widescreen" and, during play, the court, stands and crowd fill a wide window instead of
@@ -137,6 +140,11 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - The README files describe the menus and the pause menu first; the F-keys are shortcuts.
 
 ### Fixed
+- Widescreen: players, the ball, hoops, poles and padding near the sides are drawn whole instead
+  of missing or cut off where the original 4:3 screen ended.
+- Saving the Settings screen no longer switched the shape from Widescreen back to Original 4:3.
+- Widescreen: the end-of-quarter banner and other messages low on the screen stay whole in the
+  middle; only the players' names and turbo bars spread to the sides.
 - `--pad-script` files saved with Windows line endings work (every `expect` line failed before).
 - A Lua script that read a ROM address out of range, or wrote to NVRAM, got a confusing error ("invalid option '%0'") instead of the message with the address.
 - With a controller in use, moving or resizing the window under a still mouse pointer no longer takes the focus away from the controller.

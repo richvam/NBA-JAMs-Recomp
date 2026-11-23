@@ -271,6 +271,38 @@ the wide camera stops short of the game's), and the other 1993 revisions.
 | W5.2 | Sonnet | Menu: a "Maximum view width" setting (16:9, 21:9, widest available) for players who find the widest view too zoomed out for play. | Setting round-trips through the `.ini` |
 | W5.3 | Sonnet | Performance at 4K and 5120x1440 with the CRT shaders: full speed on integrated graphics, or the shader steps down and says so. | Frame time log |
 
+**Status:** W5.1 and W5.2 are done.
+* **W5.1:** the view is as wide as the window up to 1000 columns (the art allows about 1020 on
+  T.E.); a wider window gets the F8 sides around it. `widetest`, 6000 frames, all five games, at
+  711, 716, 720 and 1000 columns (the 2560x1080, 3440x1440, 3840x1600 and 5120x1440 shapes): the
+  hashes stay equal and every column of every frame of play is drawn, including the frames where
+  the game's camera was furthest left and right (T.E. -300 to +297, Hangtime -365 to +363);
+  `WIDETEST_PNG` saves those two frames as `<game>_<columns>_left_end.png` and `_right_end.png`.
+  At 1000 columns the end-of-quarter banner was torn apart by the W3.4 strips, so only rows above
+  48 (names and turbo bars) spread now; lower pieces stay together in the middle.
+* **W5.2:** Settings, Video, "Widest view": Window (the default), 16:9 (534 columns) or 21:9
+  (712). It is saved as `max_view_width=` in the `.ini`. The Shape picker there now offers
+  Widescreen too; before, saving the Settings screen reset Widescreen to Original 4:3. `uitest`
+  checks the widget both ways.
+* At 1000 columns the owner saw a hoop pole missing and courtside photographers sitting on the
+  court. Two causes: the game leaves out 3D objects (players, ball, poles, padding, shadows)
+  beyond its 400 columns and cuts those across its edge; and a copy of the game's command moved
+  past column 1023 wraps round to the other side. Now `wide_view` works out every object for the
+  wide camera: 3D ones whole (the game's projection, `Z/2 - Z/8 + GND_Y` rows, the scale table by
+  Z/16, shadows shimmering with PCNT's low bit), flat ones cut to the game's screen box rows
+  (SCRNTL/SCRNLR). It draws them itself, in list order, wherever the game's copy is missing, cut
+  or for another camera. A whole copy from the game with the same camera is kept. Every command
+  is cut at the view's edges as the game cuts at its own (start further into the image, skip the
+  same count at the row's end), so nothing wraps. To know which object a command draws, the
+  match takes the control word, palette, colour, width, an address inside the object's image and
+  its place (or the game's screen edge where it was cut): the crowd has mirrored twins and
+  repeated panels with the same image. Objects whose command has no go bit are hidden and not
+  drawn. At 400 columns all five games are exactly the game's own picture in every frame of play
+  (3000 frames each); at 1000 columns every column is drawn in all 4000 or so frames of play per
+  game. A hoop the game itself has removed from its list (Hangtime's far one) cannot be drawn.
+* Not checked: real monitors of those sizes, and the `.ini` round trip in the running app (only
+  read in the code).
+
 ## Phase W6: release
 
 | ID | Model | Task |

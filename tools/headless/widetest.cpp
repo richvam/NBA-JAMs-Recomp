@@ -128,12 +128,15 @@ int main(int argc, char **argv)
 		wide_symbols ws;
 		ws.display = display; ws.objlst = objlst;
 		ws.worldtlx = symbol(sym, "WORLDTLX"); ws.worldtly = symbol(sym, "WORLDTLY");
-		ws.gndx = symbol(sym, "gndx"); ws.gndpos_t = symbol(sym, "gndpos_t"); ws.dtype = symbol(sym, "dtype"); ws.dpage = symbol(sym, "dpage");
+		ws.gndx = symbol(sym, "gndx"); ws.gndpos_t = symbol(sym, "gndpos_t"); ws.dtype = symbol(sym, "dtype"); ws.dpage = symbol(sym, "dpage"); ws.pcnt = symbol(sym, "PCNT"); ws.scrntl = symbol(sym, "SCRNTL"); ws.scrnlr = symbol(sym, "SCRNLR");
 		std::unique_ptr<wide_view> view;
 		// the games wide_game_for knows: T.E. (W3.2), Hangtime and Maximum Hangtime (W4.2)
 		const wide_game *wg = wide_game_for(g.id);
 		if (wg && ws.complete()) view = std::make_unique<wide_view>(*c, ws, cols, *wg);
-		long play = 0, play_full = 0, play_same_cam = 0, same400 = 0, ref_frames = 0;
+		long own_total = 0, play = 0, play_full = 0, play_same_cam = 0, same400 = 0, ref_frames = 0;
+		// the wide view at the game camera's furthest left and right (the court's ends, W5.1)
+		int cam_lo = 1 << 30, cam_hi = -(1 << 30), lo_frame = 0, hi_frame = 0;
+		std::vector<u32> lo_pic, hi_pic;
 		std::vector<u16> ref_work(size_t(512) * 512, 0), ref_done(ref_work.size(), 0);
 		int ref_page = 0, ref_done_page = 0;
 		u32 const dpage = symbol(sym, "dpage");
@@ -179,9 +182,20 @@ int main(int argc, char **argv)
 				(was_wide ? to_wide : to_fixed)++;
 				if (switches.size() < 200) switches += (switches.empty() ? "" : " ") + std::string(was_wide ? "wide@" : "4:3@") + std::to_string(f);
 			}
+			if (view && view->show_wide() && getenv("WIDETEST_PNG") && (view->game_centre() < cam_lo || view->game_centre() > cam_hi))
+			{
+				const u32 *pens = c->pens();
+				std::vector<u32> v(size_t(view->columns()) * wide_view::HEIGHT);
+				for (int y = 0; y < wide_view::HEIGHT; y++)
+					for (int x = 0; x < view->columns(); x++)
+						v[size_t(y) * view->columns() + x] = pens[view->picture()[size_t(y) * view->pitch() + x] & 0x7fff];
+				if (view->game_centre() < cam_lo) { cam_lo = view->game_centre(); lo_pic = v; lo_frame = f; }
+				if (view->game_centre() > cam_hi) { cam_hi = view->game_centre(); hi_pic = v; hi_frame = f; }
+			}
 			if (view && view->is_wide() && view->floor_lines() > 0)
 			{
 				play++;
+				own_total += view->own_objects();
 				// every column of the view holds something drawn (no empty strip at a side)
 				int empty = 0;
 				for (int x = 0; x < view->columns(); x++)
@@ -200,6 +214,27 @@ int main(int argc, char **argv)
 					for (int y = 0; y < wide_view::HEIGHT && same; y++)
 						same = memcmp(&view->picture()[size_t(y) * view->pitch()], &ref_done[size_t(ref_done_page + y) * 512 + 56], 400 * sizeof(u16)) == 0;
 					if (same) same400++;
+					else if (const char *dd = getenv("WIDETEST_DIFF"))
+					{
+						// the first frame that differs: the view, the game's picture, and the differing pixels in red
+						static int written = 0;
+						if (!written++)
+						{
+							const u32 *pens = c->pens();
+							std::vector<u32> v(400 * size_t(wide_view::HEIGHT)), r(v.size()), m(v.size());
+							for (int y = 0; y < wide_view::HEIGHT; y++)
+								for (int x = 0; x < 400; x++)
+								{
+									u16 const a = view->picture()[size_t(y) * view->pitch() + x], b = ref_done[size_t(ref_done_page + y) * 512 + 56 + x];
+									size_t const i = size_t(y) * 400 + x;
+									v[i] = pens[a & 0x7fff]; r[i] = pens[b & 0x7fff]; m[i] = a == b ? (r[i] >> 2 & 0x3f3f3f) : 0xff0000;
+								}
+							std::string const stem = std::string(dd) + "/" + g.id + "_" + std::to_string(f);
+							write_png(stem + "_diff_view.png", 400, wide_view::HEIGHT, v);
+							write_png(stem + "_diff_game.png", 400, wide_view::HEIGHT, r);
+							write_png(stem + "_diff.png", 400, wide_view::HEIGHT, m);
+						}
+					}
 				}
 			}
 			bool same = true;
@@ -223,12 +258,19 @@ int main(int argc, char **argv)
 				}
 			}
 		}
+		if (view && !lo_pic.empty())
+		{
+			std::string const stem = std::string(getenv("WIDETEST_PNG")) + "/" + g.id + "_" + std::to_string(view->columns());
+			write_png(stem + "_left_end.png", view->columns(), wide_view::HEIGHT, lo_pic);
+			write_png(stem + "_right_end.png", view->columns(), wide_view::HEIGHT, hi_pic);
+			printf("     %s camera from %d (frame %d) to %d (frame %d) from mid-court\n", g.id, cam_lo, lo_frame, cam_hi, hi_frame);
+		}
 		bool ok = first_bad < 0 && pix_bad_frames == 0 && dmas > 0 && (!display || watched > 0) && view_bad < 0 && play_full == play && (cols != 400 || same400 == play_same_cam);
 		if (view)
 			printf("     %s switches: %ld to the wide view, %ld back to 4:3 (%s)\n", g.id, to_wide, to_fixed, switches.c_str());
 		if (view)
-			printf("     %s wide view %d columns: hashes %s, %ld frames in play, %ld with no empty column%s\n", g.id, cols,
-			       view_bad < 0 ? "equal" : ("differ from frame " + std::to_string(view_bad)).c_str(), play, play_full,
+			printf("     %s wide view %d columns: hashes %s, %ld frames in play, %ld with no empty column, %ld 3D objects drawn whole by the view%s\n", g.id, cols,
+			       view_bad < 0 ? "equal" : ("differ from frame " + std::to_string(view_bad)).c_str(), play, play_full, own_total,
 			       cols == 400 ? (", " + std::to_string(same400) + " of " + std::to_string(play_same_cam) + " with the game's camera the same as the game's own picture").c_str() : "");
 		printf("%s %s: %d frames, hashes %s, %ld blitter commands drawn again (%s), display routine %s\n",
 		       ok ? "ok  " : "FAIL", g.id, frames, first_bad < 0 ? "equal" : ("differ from frame " + std::to_string(first_bad)).c_str(), dmas,

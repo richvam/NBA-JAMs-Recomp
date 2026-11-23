@@ -34,6 +34,8 @@ const wide_game *wide_game_for(const char *game_id);
 struct wide_symbols
 {
 	u32 display = 0, objlst = 0, worldtlx = 0, worldtly = 0, gndx = 0, gndpos_t = 0, dtype = 0, dpage = 0;
+	u32 pcnt = 0;   // optional: the frame counter whose low bit shifts shadows by a pixel
+	u32 scrntl = 0, scrnlr = 0;   // optional: the game's screen box (Y:X); its rows bound flat objects
 	bool complete() const { return display && objlst && worldtlx && worldtly && gndx && gndpos_t && dtype && dpage; }
 };
 
@@ -63,24 +65,47 @@ public:
 	int render_centre() const { return m_done_rc; }
 	int game_centre() const { return m_done_gc; }
 	long frames() const { return m_frames; }
+	// 3D objects in the last frame that the wide view drew whole itself because the game left
+	// them out or cut them at its own screen edge
+	int own_objects() const { return m_done_own; }
 	// floor lines in the last frame, and how many of them reach both edges of the wide view
 	int floor_lines() const { return m_done_fl; }
 	int floor_full() const { return m_done_ff; }
 
 private:
-	struct flat_obj { u16 regs[18]; };
-	struct obj_shift { u16 ctrl, pal, cons; int shift; };   // per object on the list, in order
+	// per object on the list, in order: the keys of the game's command for it, how far that command
+	// moves, and for a 3D object (players, ball, hoops, poles) the whole object as the wide view
+	// draws it when the game's own copy is missing or cut (own: true), with its unclipped image
+	struct obj_shift
+	{
+		u16 ctrl, pal, cons;
+		int shift;
+		bool own = false;
+		u16 regs[18] = {};
+		u32 sag = 0;
+		u16 h = 0;
+		u16 w = 0;             // the image's width (the game keeps it in its command even when it cuts)
+		u32 img = 0, img_end = 0;   // the image data, in bits: the game's command starts inside it
+		bool known = false;    // where the game's own command for it starts, when not cut: gx, gy
+		int gx = 0, gy = 0;
+		bool exact = false;    // the game's copy, when whole, is exactly this (same camera)
+		bool skip = false;     // nothing of it is in the view: the game's copy is not drawn either
+	};
 	void frame_start();
 	void on_dma(const u16 *regs);
 	void draw_flat();
 	void blit(u16 *regs);
-	int shift_for(const u16 *regs);
-	int hud_shift(int centre) const;   // on-screen text at screen x `centre` (W3.4)
+	bool place_matches(const obj_shift &k, const u16 *regs) const;
+	bool draw_object(u16 *regs);     // the game's command for a list object: drawn, moved or replaced
+	void draw_skipped(size_t upto);  // 3D objects the game left out, up to list index `upto`
+	static constexpr int HUD_TOP = 48;   // screen rows above this hold the players' names and turbo bars
+	int hud_shift(int centre, int top) const;   // on-screen text at screen x `centre`, top row `top` (W3.4)
 	int gndpos(s32 gndx, int line) const;
 
 	arcade_machine &m;
 	wide_symbols s;
 	wide_game g;
+	int m_scr_top = 0, m_scr_bot = 253;   // the game's screen box rows this frame
 	int m_tly = 0;                 // the camera's top line this frame (Hangtime scrolls up and down)
 	int m_cols, m_left;            // the view is columns m_left .. m_left + m_cols - 1
 	std::vector<u16> m_work, m_done;
@@ -90,9 +115,9 @@ private:
 	s32 m_gndx = 0, m_rgndx = 0;   // the game's and the wide view's floor offset, 16:16
 	int m_floor_line = 0;          // floor lines seen this frame
 	int m_floor_full = 0, m_done_fl = 0, m_done_ff = 0;
+	int m_own = 0, m_done_own = 0;
 	bool m_floor_done = false;
 	int m_rc = 0, m_gc = 0, m_done_rc = 0, m_done_gc = 0;
-	std::vector<flat_obj> m_flat;
 	std::vector<obj_shift> m_objs;
 	size_t m_next = 0;
 	int m_base = 0;               // the game's 400 columns in the middle of the view
