@@ -160,6 +160,20 @@ widescreen and a 4:3 player stay in sync. Not measured yet: the Hangtime backdro
 
 **Gate:** advisor plays a full game at 16:9 and 21:9.
 
+**Status:** W3.1 is done, as the engine side of the W2.6 choice (the program draws the wide
+picture itself; the game is not patched). The blitter's command decode is split out of
+`dma_w` (`midway_video.cpp`), so `blit_to()` draws any command into a picture of the caller's,
+up to 1024 pixels wide (every x the blitter can address has its own column), with the board's
+own drawing code and without touching video RAM, interrupts or timing. The CPU can watch one
+address (`emu.h`: the call runs just before that instruction, to read the game's lists when
+`DISPLAY` starts); with no watch set it runs its usual loop. `arcade_machine` gets `watch_pc`,
+`observe_dma`, `wide_blit` and `pens`. Off by default: nothing calls them yet. Checks:
+`widetest` (needs the ROMs) plays 3000 frames of each game in two machines, one with every
+hook on, and finds every frame hash equal, the watch run (about 2300 times, 300 000 objects
+read, on the four games with a `DISPLAY` symbol) and every one of 290 000 to 430 000 blitter
+commands drawn the same in a 512- and a 1024-wide picture; `nettest` gives the same state hash
+as before (900 `bb96002f`) and `statetest` passes on all five games.
+
 ## Phase W4: the other games
 
 Sonnet ports, on the pattern W3 proved; Opus only where a game differs.

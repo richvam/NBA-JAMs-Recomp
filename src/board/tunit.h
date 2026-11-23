@@ -48,6 +48,10 @@ public:
 	u32 state_hash() const override { return fnv1a(m_ram.data(), m_ram.size() * 2); }
 	std::vector<u8> *program_rom() override { return &m_roms.program; }
 	u16 peek16(u32 a) override { return read16(a & ~15u, 0xffff); }
+	void watch_pc(u32 pc, std::function<void()> cb) override { m_maincpu.m_watch_pc = cb ? pc : ~offs_t(0); m_maincpu.m_watch_cb = std::move(cb); }
+	void observe_dma(std::function<void(const u16 *regs)> cb) override { m_video.on_dma = std::move(cb); }
+	void wide_blit(const u16 regs[18], u16 *target, int pitch) override { m_video.blit_to(regs, target, pitch); }
+	const u32 *pens() const override { return m_pens; }
 	void poke16(u32 a, u16 v) override { write16(a & ~15u, v, 0xffff); }
 	void set_sound_only(bool on) override { m_maincpu.set_input_line(INPUT_LINE_HALT, on ? ASSERT_LINE : CLEAR_LINE); }
 	void sound_command(u8 b) override { m_sound.reset_write(0); m_sound.write(b); }

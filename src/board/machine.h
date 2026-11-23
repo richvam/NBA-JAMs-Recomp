@@ -117,6 +117,20 @@ public:
 	// Menu sound (roadmap U6.1): the board's own sound board on its own. With sound_only on
 	// the main CPU is held, so only the bytes sent with sound_command() play.
 	virtual void set_sound_only(bool on) { (void)on; }
+
+	// Widescreen (roadmap W3.1): what the program needs to draw the picture wider itself.
+	// None of it changes the game, its timing or its state hash.
+	//   watch_pc     cb runs just before the main CPU executes the instruction at bit address
+	//                pc (for reading the game's lists when its display routine starts); an
+	//                empty cb removes the watch. One watch at a time.
+	//   observe_dma  cb sees each blitter command the game issues (its 18 registers)
+	//   wide_blit    draws one blitter command into a picture of the caller's (see
+	//                midtunit_video_device::blit_to)
+	//   pens         XRGB8888 for each of the 0x8000 palette entries
+	virtual void watch_pc(u32 pc, std::function<void()> cb) { (void)pc; (void)cb; }
+	virtual void observe_dma(std::function<void(const u16 *regs)> cb) { (void)cb; }
+	virtual void wide_blit(const u16 regs[18], u16 *target, int pitch) { (void)regs; (void)target; (void)pitch; }
+	virtual const u32 *pens() const { return nullptr; }
 	virtual void sound_command(u8 byte) { (void)byte; }
 	std::function<void(u8)> on_sound_command;           // each byte the main CPU sends the sound board
 };
