@@ -209,6 +209,14 @@ In the app on Windows (owner's PC, 2560 x 1440 window): team select and initials
 the tip-off fills the window at 533 columns. Not checked: a whole game to the final stats in the
 app, 21:9 and 32:9 monitors.
 
+W3.4 is done. Screen-relative pieces (`B_SCRNREL`: names, turbo bars, the shot clock) and the
+game's extra queue (messages, arrows) are placed by the game's four 100-column player strips:
+each strip moves as a whole so that its centre keeps its share of the width (`hud_shift`), so one
+player's pieces keep their spacing; pieces centred on 150 to 249 (the free-play sign, centred
+messages) do not move. The scoreboard is part of the arena and moves with it. Checked on
+`widetest` pictures at 533 and 700 columns (tip-off, play near a basket); the hashes stay equal.
+Not checked: every message the game shows, and 32:9.
+
 ## Phase W4: the other games
 
 Sonnet ports, on the pattern W3 proved; Opus only where a game differs.

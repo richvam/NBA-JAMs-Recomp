@@ -109,9 +109,9 @@ VIDEO (shaders)
     Widescreen   NBA JAM T.E. 4.0 and T.E. Special Edition only: during play you
                  see more of the court, as wide as your window (up to about
                  2.5 times as wide as tall), nothing stretched. Menus, team
-                 select, halftime and other fixed screens stay 4:3. The score
-                 and names stay in the middle part for now. On the other games
-                 F7 skips it.
+                 select, halftime and other fixed screens stay 4:3. The
+                 players' names and turbo bars spread out to the sides. On the
+                 other games F7 skips it.
     Stretch      fills the whole window; the picture is distorted
   Sides (F8): what is shown around a 4:3 picture on a wider screen: black, the
   picture itself blurred and dimmed, or an overlay (border) from the overlays\
