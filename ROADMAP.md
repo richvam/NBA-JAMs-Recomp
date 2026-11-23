@@ -238,6 +238,22 @@ Sonnet ports, on the pattern W3 proved; Opus only where a game differs.
 
 Check for each: the W3.2 and W3.3 checks on that game.
 
+**Status:** W4.1, W4.2 and W4.3 are done. T.E. SE 5.02 shares T.E.'s code and was already
+checked with W3. Hangtime and Maximum Hangtime needed no engine change on the Wolf Unit (the
+W3.1 hooks are on both boards). `wide_game_for` holds what differs per game, taken from their
+sources (`WORLD.EQU`, `NDSP1.ASM`):
+* the court picture is 1762 x 144, line 0 at screen row 110;
+* the floor table is 184 entries and has a different slope (DIVSLP);
+* the 3D projection is PRJX2Z;
+* the camera goes to ±375, so the wide view to ±575;
+* the camera also scrolls up and down, so a floor line is named by its screen row, and the
+  game's text objects (`M_CHARGEN`) are not drawn flat.
+The symbol files of the two Hangtime revisions and the two Maximum Hangtime revisions have
+every name needed. Checks (`widetest`, 3000 frames, `nbahangt`, `nbamht`): at 400 columns 982 of
+982 frames of play are exactly the game's own picture; at 533 and 700 columns the hashes stay
+equal and every column of all 982 frames is drawn. Only the revisions in the owner's ROM sets
+were run (one each). Not checked: the outdoor court (a power-up), and NBA JAM 1993 (W4.4).
+
 ## Phase W5: ultrawide
 
 | ID | Model | Task | Check |

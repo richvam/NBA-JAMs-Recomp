@@ -4,7 +4,7 @@
 // Shape (F7):
 //   original    4:3, as the arcade tube showed it, centred
 //   widescreen  true widescreen (more court, not a stretched picture) in play on the games
-//               that draw it (T.E. 4.0 and Special Edition, W3); fixed screens and the other
+//               that draw it (T.E., Hangtime, Maximum Hangtime: W3, W4); fixed screens and the other
 //               games: 4:3 centred
 //   stretch     the picture is stretched to the whole window, whatever its shape
 // The target shape always comes from the window, never from a fixed list of ratios.

@@ -147,7 +147,10 @@ int main(int argc, char **argv)
 		ws.worldtly = symbol(f, "WORLDTLY"); ws.gndx = symbol(f, "gndx"); ws.gndpos_t = symbol(f, "gndpos_t");
 		ws.dtype = symbol(f, "dtype"); ws.dpage = symbol(f, "dpage");
 		if (!ws.complete()) { fprintf(stderr, "%s: WIDE: no symbols in %s\n", role.c_str(), f.c_str()); return 1; }
-		wide = std::make_unique<wide_view>(*m, ws, atoi(wc));
+		const wide_game *wg = wide_game_for(id.c_str());
+		if (!wg) { fprintf(stderr, "%s: WIDE: no wide view for %s
+", role.c_str(), id.c_str()); return 1; }
+		wide = std::make_unique<wide_view>(*m, ws, atoi(wc), *wg);
 		fprintf(stderr, "%s: drawing the wide view, %d columns\n", role.c_str(), wide->columns());
 	}
 	fprintf(stderr, "%s: slot %d, players %d, start\n", role.c_str(), np.local_slot(), np.players());

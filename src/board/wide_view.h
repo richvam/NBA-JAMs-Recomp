@@ -17,6 +17,20 @@
 #include "machine.h"
 #include <vector>
 
+// What differs between the games that have the wide view (from their sources):
+// the court picture, the floor table, the 3D projection and how far the art and the camera go.
+struct wide_game
+{
+	int gndi_w, gndi_h, gndi_y;   // court picture width and lines, its top line on the screen
+	int gnd_h;                    // gndpos_t entries (court lines + 40 above)
+	int gzbase;                   // GZBASE, the nearest Z of the floor
+	bool hangtime;                // Hangtime's floor slope and projection (WORLD.EQU), else T.E.'s
+	int art_left, art_right;      // the arena art, from mid-court
+	int game_edge;                // the furthest the game's own view goes from mid-court
+};
+// T.E. 4.0 and Special Edition; Hangtime and Maximum Hangtime. nullptr: no wide view.
+const wide_game *wide_game_for(const char *game_id);
+
 struct wide_symbols
 {
 	u32 display = 0, objlst = 0, worldtlx = 0, worldtly = 0, gndx = 0, gndpos_t = 0, dtype = 0, dpage = 0;
@@ -27,14 +41,9 @@ class wide_view
 {
 public:
 	static constexpr int PITCH = 1024, ROWS = 512, LEFT = 56 /* the board's pad */, HEIGHT = 254;
-	// the art covers mid-court -512 .. +675 (W2.3)
-	static constexpr int ART_LEFT = -512, ART_RIGHT = 675;
-	// and the game itself never shows more than 510 from mid-court (its camera stops at ±310,
-	// MAX_VIEW1): further out the floor lines would read past the court picture
-	static constexpr int GAME_EDGE = 510;
 
 	// columns: the wide view's width, 400 to 1000 (an even number)
-	wide_view(arcade_machine &m, const wide_symbols &s, int columns);
+	wide_view(arcade_machine &m, const wide_symbols &s, int columns, const wide_game &game = *wide_game_for("nbajamte"));
 	~wide_view();                  // unhooks itself from the machine
 	wide_view(const wide_view &) = delete;
 	wide_view &operator=(const wide_view &) = delete;
@@ -67,10 +76,12 @@ private:
 	void blit(u16 *regs);
 	int shift_for(const u16 *regs);
 	int hud_shift(int centre) const;   // on-screen text at screen x `centre` (W3.4)
-	static int gndpos(s32 gndx, int line);
+	int gndpos(s32 gndx, int line) const;
 
 	arcade_machine &m;
 	wide_symbols s;
+	wide_game g;
+	int m_tly = 0;                 // the camera's top line this frame (Hangtime scrolls up and down)
 	int m_cols, m_left;            // the view is columns m_left .. m_left + m_cols - 1
 	std::vector<u16> m_work, m_done;
 	int m_page = 0, m_done_page = 0;
