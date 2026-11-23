@@ -84,7 +84,7 @@ CONTROLS
   F4   picture: Sharp -> Smooth -> Scanlines -> CRT -> Curved CRT
   F5   scaling: Fit -> Smooth -> Integer
   F6   scanline strength
-  F7   shape: Original 4:3 -> Widescreen (not NBA JAM 1993) -> Stretch
+  F7   shape: Original 4:3 -> Widescreen -> Stretch
   F8   around the 4:3 picture on a wide screen: black -> blurred picture -> overlays
   F11  fullscreen (or Alt+Enter)
   F12  screenshot (PNG in the screenshots\ folder; Print Screen works too)
@@ -106,8 +106,7 @@ VIDEO (shaders)
                  the program tells you when they are large
   Shape (F7):
     Original 4:3 as the arcade monitor showed it
-    Widescreen   T.E. 4.0, T.E. Special Edition, Hangtime and Maximum Hangtime
-                 (not NBA JAM 1993 yet): during play you
+    Widescreen   all five games: during play you
                  see more of the court, as wide as your window (up to about
                  2.5 times as wide as tall), nothing stretched. Menus, team
                  select, halftime and other fixed screens stay 4:3. The

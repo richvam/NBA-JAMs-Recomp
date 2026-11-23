@@ -71,7 +71,12 @@ static u32 symbol(const std::string &file, const std::string &name)
 	{
 		std::istringstream w(l);
 		std::string n, eq, v;
-		if (w >> n >> eq >> v && n == name && eq == "=" && v.rfind("0x", 0) == 0) return u32(strtoul(v.c_str(), nullptr, 16));
+		if (!(w >> n >> eq >> v) || n != name || eq != "=") continue;
+		if (v.rfind("0x", 0) == 0) return u32(strtoul(v.c_str(), nullptr, 16));
+		// NAME = { addr = 0x..., pattern = {...} }: the address (the app also checks the pattern
+		// against the ROM; these tests only run the owner's revisions the files were made from)
+		size_t const a = l.find("addr = 0x");
+		if (v == "{" && a != std::string::npos) return u32(strtoul(l.c_str() + a + 7, nullptr, 16));
 	}
 	return 0;
 }

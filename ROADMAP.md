@@ -252,7 +252,16 @@ The symbol files of the two Hangtime revisions and the two Maximum Hangtime revi
 every name needed. Checks (`widetest`, 3000 frames, `nbahangt`, `nbamht`): at 400 columns 982 of
 982 frames of play are exactly the game's own picture; at 533 and 700 columns the hashes stay
 equal and every column of all 982 frames is drawn. Only the revisions in the owner's ROM sets
-were run (one each). Not checked: the outdoor court (a power-up), and NBA JAM 1993 (W4.4).
+were run (one each). Not checked: the outdoor court (a power-up).
+
+W4.4 is done. There are no NBA JAM 1993 sources, but its symbol file matches its display code to
+T.E.'s by pattern (the same 178-entry floor table and court size, at 6 bits a pixel), and it runs
+on T.E.'s profile. The test tools now read symbols written as `{ addr = ..., pattern = ... }`,
+as 1993's are; the app always could. Checks (`widetest`, 3000 frames): the first floor line
+lands on court row 0, as on T.E.; at 400 columns 1109 of 1109 frames of play are exactly the game's
+own picture; at 533 and 700 columns the hashes stay equal and every column is drawn. Not
+checked: the 3D projection against 1993's own code (it only matters at the court's ends, where
+the wide camera stops short of the game's), and the other 1993 revisions.
 
 ## Phase W5: ultrawide
 

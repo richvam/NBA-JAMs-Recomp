@@ -12,7 +12,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 ## Unreleased
 
 ### Added
-- True widescreen on NBA Hangtime and Maximum Hangtime too (F7, "Widescreen").
+- True widescreen on NBA Hangtime, Maximum Hangtime and NBA JAM (1993) too (F7, "Widescreen").
 - True widescreen on NBA JAM T.E. 4.0 and T.E. Special Edition: press F7 until it says
   "Widescreen" and, during play, the court, stands and crowd fill a wide window instead of
   sides being added. Nothing is stretched and the game itself is not changed. Menus, team
@@ -171,8 +171,6 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
   has to be off online.
 
 ### Known issues
-- True widescreen is not on NBA JAM (1993) yet: there you get the 4:3 picture with sides
-  (black, blurred or your own image, F8) or stretched (F7).
 - "No team select timer" removes the countdown on one of the two screens it looks for on
   T.E. and T.E. Special Edition.
 - Long mod descriptions are cut off in the Lua mods list.

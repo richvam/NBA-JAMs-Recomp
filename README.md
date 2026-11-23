@@ -118,7 +118,7 @@ The keyboard also has shortcuts for what is in those menus:
 | F4 | picture: sharp, smooth, scanlines, CRT, curved CRT |
 | F5 | scaling: Fit (fills the height, crisp pixels), Smooth (the same, filtered), Integer (whole-number size, may leave borders) |
 | F6 | scanline strength |
-| F7 | shape: Original 4:3, Widescreen, or Stretch (fills the window, distorts the picture). Widescreen is true widescreen on NBA JAM T.E. 4.0, T.E. Special Edition, NBA Hangtime and Maximum Hangtime: during play you see more of the court, as wide as the window, nothing stretched; fixed screens stay 4:3, and the players' names and turbo bars spread out to the sides. NBA JAM (1993) does not have it yet, and F7 skips it there. |
+| F7 | shape: Original 4:3, Widescreen, or Stretch (fills the window, distorts the picture). Widescreen is true widescreen on all five games: during play you see more of the court, as wide as the window, nothing stretched; fixed screens stay 4:3, and the players' names and turbo bars spread out to the sides. It needs the game's symbol file in `mods/sym` (included); without it F7 skips Widescreen. |
 | F8 | around the 4:3 picture on a wider screen: black, the picture blurred and dimmed, then each overlay in the `overlays` folder (see [Overlays](#overlays-and-borders)) |
 | F11 or Alt+Enter | fullscreen |
 | F12 or Print Screen | screenshot, saved in `screenshots` |

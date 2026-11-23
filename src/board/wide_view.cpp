@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <cstring>
 #include <string>
+#include <cstdio>
+#include <cstdlib>
 
 namespace {
 // object fields (bit offsets, DISP.EQU)
@@ -23,7 +25,8 @@ enum { R_LRSKIP, R_COMMAND, R_OFFSETLO, R_OFFSETHI, R_XSTART, R_YSTART, R_WIDTH,
 int bits_per_pixel(u16 ctrl) { int b = (ctrl >> 12) & 7; return b ? b : 8; }
 }
 
-// T.E.: NDSP1.ASM GNDI_Y 116, PLYR.EQU GZBASE 894, the art and camera limits measured in W2.3
+// T.E. (and NBA JAM 1993, whose display code its symbol file matches to T.E.'s by pattern;
+// its court is the same 1277 x 138, at 6 bits a pixel): NDSP1.ASM GNDI_Y 116, PLYR.EQU GZBASE 894, the art and camera limits measured in W2.3
 // (backdrop mid-court -512 to +675, camera to +-310 so the view to +-510).
 // Hangtime and Maximum Hangtime: WORLD.EQU (GNDI_W 1762, GNDI_H 144, GNDI_Y 254-144,
 // GND_H GNDI_H+40, GZBASE CZMIN-40*8/3, MAX_VIEW1 375 so the view to +-575).
@@ -32,7 +35,7 @@ const wide_game *wide_game_for(const char *id)
 	static const wide_game te{1277, 138, 116, 178, 894, false, -512, 675, 510};
 	static const wide_game ht{1762, 144, 110, 184, 894, true, -575, 575, 575};
 	std::string const g = id ? id : "";
-	if (g == "nbajamte" || g == "nbajamse") return &te;
+	if (g == "nbajamte" || g == "nbajamse" || g == "nbajam") return &te;
 	if (g == "nbahangt" || g == "nbamht") return &ht;
 	return nullptr;
 }
