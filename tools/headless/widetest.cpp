@@ -92,14 +92,32 @@ int main(int argc, char **argv)
 		if (!cat.available(g, why)) { if (!want.empty()) printf("SKIP %s: %s\n", g.id, why.c_str()); continue; }
 		auto a = cat.create(g, err), b = cat.create(g, err), c = cat.create(g, err);
 		if (!a || !b || !c) { printf("FAIL %s: %s\n", g.id, err.c_str()); fail++; continue; }
+		char fp[16];
+		std::vector<u8> *prog = b->program_rom();     // named as the Lua mods name it (mods.cpp)
+		snprintf(fp, sizeof fp, "%08x", prog ? crc32_of(prog->data(), prog->size()) : 0u);
+		// WIDETEST_QUARTER=<seconds>: shorter quarters, so a run reaches halftime and the final
+		// stats sooner. As mods/quarter_length.lua does: the clock starts from the constant in
+		// "movi QRTRTIME,a0" (09E0 0000 0300, 3:00 as min<<24 | tens<<16 | secs<<8), changed in
+		// each machine's copy of the program ROM (never in a file).
+		if (const char *q = getenv("WIDETEST_QUARTER"))
+		{
+			int const sec = std::clamp(atoi(q), 10, 540);
+			u16 const hi = u16((sec / 60) << 8 | (sec % 60) / 10), lo = u16((sec % 10) << 8);
+			int patched = 0;
+			for (auto *mach : { a.get(), b.get(), c.get() })
+				if (std::vector<u8> *r = mach->program_rom())
+					for (size_t i = 0; i + 6 <= r->size(); i += 2)
+						if ((*r)[i] == 0xE0 && (*r)[i + 1] == 0x09 && (*r)[i + 2] == 0 && (*r)[i + 3] == 0 && (*r)[i + 4] == 0 && (*r)[i + 5] == 0x03)
+						{
+							(*r)[i + 2] = u8(lo); (*r)[i + 3] = u8(lo >> 8); (*r)[i + 4] = u8(hi); (*r)[i + 5] = u8(hi >> 8);
+							patched++;
+						}
+			printf("     %s quarters of %d:%02d (%d places in the ROMs)\n", g.id, sec / 60, sec % 60, patched);
+		}
 		dip_settings d;
 		a->set_dips(d); a->reset();
 		b->set_dips(d); b->reset();
 		c->set_dips(d); c->reset();
-
-		char fp[16];
-		std::vector<u8> *prog = b->program_rom();     // named as the Lua mods name it (mods.cpp)
-		snprintf(fp, sizeof fp, "%08x", prog ? crc32_of(prog->data(), prog->size()) : 0u);
 		std::string sym = symdir + "/" + g.id + "_" + fp + ".lua";
 		u32 display = symbol(sym, "DISPLAY"), objlst = symbol(sym, "OBJLST");
 		wide_symbols ws;
@@ -115,6 +133,9 @@ int main(int argc, char **argv)
 		int ref_page = 0, ref_done_page = 0;
 		u32 const dpage = symbol(sym, "dpage");
 		int view_bad = -1;
+		long to_wide = 0, to_fixed = 0;
+		bool was_wide = false;
+		std::string switches;
 
 		long watched = 0, objects = 0;
 		if (display && objlst)
@@ -146,6 +167,13 @@ int main(int argc, char **argv)
 			u32 const ha = frame_hash(*a);
 			if (first_bad < 0 && ha != frame_hash(*b)) first_bad = f;
 			if (view_bad < 0 && ha != frame_hash(*c)) view_bad = f;
+			// screen switching (W3.3): every change between play (wide) and a fixed screen (4:3)
+			if (view && view->show_wide() != was_wide)
+			{
+				was_wide = view->show_wide();
+				(was_wide ? to_wide : to_fixed)++;
+				if (switches.size() < 200) switches += (switches.empty() ? "" : " ") + std::string(was_wide ? "wide@" : "4:3@") + std::to_string(f);
+			}
 			if (view && view->is_wide() && view->floor_lines() > 0)
 			{
 				play++;
@@ -191,6 +219,8 @@ int main(int argc, char **argv)
 			}
 		}
 		bool ok = first_bad < 0 && pix_bad_frames == 0 && dmas > 0 && (!display || watched > 0) && view_bad < 0 && play_full == play && (cols != 400 || same400 == play_same_cam);
+		if (view)
+			printf("     %s switches: %ld to the wide view, %ld back to 4:3 (%s)\n", g.id, to_wide, to_fixed, switches.c_str());
 		if (view)
 			printf("     %s wide view %d columns: hashes %s, %ld frames in play, %ld with no empty column%s\n", g.id, cols,
 			       view_bad < 0 ? "equal" : ("differ from frame " + std::to_string(view_bad)).c_str(), play, play_full,

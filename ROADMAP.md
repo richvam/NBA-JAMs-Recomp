@@ -193,6 +193,22 @@ is exactly the game's own picture of the same display pass in all 1108 frames. H
 Maximum Hangtime have a wider court and are W4.2. Not checked: a full game, the end of every
 quarter, overtime, and how it looks on a real wide screen.
 
+W3.3 is done. With the shape set to Widescreen (F7 offers it only on T.E. 4.0 and Special
+Edition, when their symbol file is there), the app makes a `wide_view` as wide as the window's
+shape (400 to 1000 columns) and shows it during play; fixed screens show the game's own 400
+columns, 4:3 with the W1.5 side fill. The wide view is shown only after 30 frames in play in a
+row (`show_wide`): at every tip-off the game is in play for 10 frames, on a fixed screen for 25,
+then in play again, and showing those 10 would flash the shape. Back to 4:3 at once when play
+stops. Each frame is presented at its own shape, so no frame is stretched. A window resize
+remakes the view at the new width. Checks: `widetest`, 30 000 frames (attract mode, a scripted
+one-player game through halftime and the third quarter) on T.E. 4.0 and Special Edition: the game state is the same as without the wide view, all
+about 12 000 frames of play are drawn edge to edge, and the view changes 18 times each way with
+no short flash; with `WIDETEST_QUARTER=30` (30-second quarters) a whole game and the attract mode
+after it give 25 changes each way, all clean.
+In the app on Windows (owner's PC, 2560 x 1440 window): team select and initials stay 4:3 and
+the tip-off fills the window at 533 columns. Not checked: a whole game to the final stats in the
+app, 21:9 and 32:9 monitors.
+
 ## Phase W4: the other games
 
 Sonnet ports, on the pattern W3 proved; Opus only where a game differs.

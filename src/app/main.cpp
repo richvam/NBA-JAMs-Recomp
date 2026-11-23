@@ -24,6 +24,7 @@
 #include "mod_draw.h"
 #include "controls.h"
 #include "shaders.h"
+#include "wide_view.h"
 
 #define SDL_MAIN_HANDLED
 #include <SDL.h>
@@ -108,7 +109,7 @@ static void save_config(const std::string &path, config &c)
 	std::ofstream f(path);
 	f << "# NBA JAM Recomp - configuration\n[general]\n# news=1 asks github.com once at start for the latest release (only to tell you; nothing is downloaded)\nnews=" << c.news << "\n# pause_buttons: held half a second on a controller for the pause menu (Esc and Guide always work): start+back or l3+r3\npause_buttons=" << (c.pause_buttons == 1 ? "l3+r3" : "start+back") << "\n# save_states=1 adds Save and Load (three slots per game) to the pause menu of an offline game\nsave_states=" << c.save_states << "\n# the menus play the highlighted game's own music and sounds, from its ROMs\nmenu_music=" << c.menu_music << "\nmenu_sounds=" << c.menu_sounds << "\nmenu_volume=" << c.menu_volume << "\n\n[video]\n# scale: size of the window in multiples of 400x300; 0 = chosen from the screen size\nscale=" << c.scale << "\nfullscreen=" << c.fullscreen << "\n# tv_margins=1 keeps the menus 5% in from each edge, for TVs that cut the edges off\ntv_margins=" << c.tv_margins
 	  << "\n# shader: 0 sharp, 1 smooth, 2 scanlines, 3 CRT, 4 curved CRT\nshader=" << c.shader
-	  << "\n# view: original (4:3) or stretch (fills the window, distorted). A true widescreen view does not exist yet.\nview=" << view_shape_id(c.shape)
+	  << "\n# view: original (4:3), widescreen (more of the court in play; T.E. 4.0 and Special Edition only, 4:3 on the other games) or stretch (fills the window, distorted).\nview=" << view_shape_id(c.shape)
 	  << "\n# scaling: integer (whole multiples of the game's lines), fit (fills the height, crisp pixels), smooth (fills the height, filtered)\nscaling=" << view_scaling_id(c.scaling) << "\n# side_fill: around a 4:3 picture on a wider screen: black, blur (the picture, blurred and dimmed), overlay (an image from overlays/ in the data folder)\nside_fill=" << (c.side_fill == 1 ? "blur" : c.side_fill == 2 ? "overlay" : "black") << "\noverlay=" << c.overlay << "\n# overlay_opacity: 0.1 to 1, for overlays with a transparent opening\noverlay_opacity=" << c.overlay_opacity << "\nscanline_strength=" << c.scan_strength
 	  << "\n# opengl=0 uses the basic SDL renderer (no shaders)\nopengl=" << c.use_opengl
 	  << "\n\n[audio]\nvolume=" << c.volume
@@ -208,7 +209,6 @@ static void load_config(const std::string &path, config &c)
 		}
 	}
 	if (!have_view && old_aspect >= 0) c.shape = view_shape_from_old_aspect(old_aspect);
-	if (c.shape == view_shape::widescreen) c.shape = view_shape::original;   // no game has a wide view yet: say 4:3, show 4:3
 }
 
 // ---------------------------------------------------------------------------
@@ -313,7 +313,7 @@ private:
 	// where the picture goes: the game uses the player's settings, menus are always 4:3 and fitted
 	view_rect view_for(int win_w, int win_h, int w, int h, bool game) const
 	{
-		if (game) return compute_view(win_w, win_h, w, h, m_cfg.shape, m_cfg.scaling);
+		if (game) return compute_view(win_w, win_h, w, h, m_cfg.shape, m_cfg.scaling, m_presenting_wide);
 		return menu_view(win_w, win_h, w, h, m_cfg.tv_margins);
 	}
 	void say_view(bool scaling_changed);
@@ -369,6 +369,14 @@ private:
 	bool m_menu_clear = false;
 	std::unique_ptr<game_catalog> m_cat;
 	std::unique_ptr<arcade_machine> m_mach;
+	// true widescreen (roadmap W3): the wide gameplay picture of the running game, when it has
+	// one (Tournament Edition 4.0 and Special Edition) and the shape is Widescreen
+	std::unique_ptr<wide_view> m_wide;
+	bool m_wide_possible = false;      // the running game can draw it (its symbols are there)
+	bool m_presenting_wide = false;    // the picture being presented is the wide one
+	int wide_columns() const;          // the view width that fills the window's shape
+	void update_wide();                // makes, remakes or drops m_wide to match shape and window
+	bool wide_symbols_of(wide_symbols &ws);
 	screen m_screen = screen::menu;
 	int m_cur_game = -1;
 	int m_sel = 0;
@@ -678,11 +686,11 @@ void app::poll_events()
 				}
 				if (k == SDLK_F7)
 				{
-					// Widescreen is only offered on a game that really draws a wider picture (W3).
-					// None does yet, so F7 goes between Original 4:3 and Stretch; calling a 4:3
-					// picture "Widescreen" would be a lie.
-					const bool wide_view = false;
-					if (m_cfg.shape == view_shape::original) m_cfg.shape = wide_view ? view_shape::widescreen : view_shape::stretch;
+					// Widescreen is only offered on a game that really draws a wider picture (W3):
+					// Tournament Edition 4.0 and Special Edition. On the others F7 goes between
+					// Original 4:3 and Stretch; calling a 4:3 picture "Widescreen" would be a lie.
+					const bool wide_ok = m_wide_possible;
+					if (m_cfg.shape == view_shape::original) m_cfg.shape = wide_ok ? view_shape::widescreen : view_shape::stretch;
 					else if (m_cfg.shape == view_shape::widescreen) m_cfg.shape = view_shape::stretch;
 					else m_cfg.shape = view_shape::original;
 					say_view(false);
@@ -826,11 +834,43 @@ cabinet_inputs app::menu_inputs()
 	return in;
 }
 
+bool app::wide_symbols_of(wide_symbols &ws)
+{
+	const auto &sy = m_mods.symbols();
+	auto get = [&](const char *n) { auto i = sy.find(n); return i == sy.end() ? 0u : i->second; };
+	ws.display = get("DISPLAY"); ws.objlst = get("OBJLST"); ws.worldtlx = get("WORLDTLX"); ws.worldtly = get("WORLDTLY");
+	ws.gndx = get("gndx"); ws.gndpos_t = get("gndpos_t"); ws.dtype = get("dtype"); ws.dpage = get("dpage");
+	return ws.complete();
+}
+
+int app::wide_columns() const
+{
+	int ww = 0, wh = 0;
+	if (m_gl.ok()) m_gl.drawable_size(ww, wh);
+	else if (m_ren) SDL_GetRendererOutputSize(m_ren, &ww, &wh);
+	if (ww <= 0 || wh <= 0) return 400;
+	// 400 columns fill a 4:3 shape; the window's shape needs this many
+	int cols = int(std::lround(400.0 * (double(ww) / wh) / kOriginalAspect / 2.0)) * 2;
+	return std::clamp(cols, 400, 1000);
+}
+
+void app::update_wide()
+{
+	if (!m_mach || !m_wide_possible || m_cfg.shape != view_shape::widescreen) { m_wide.reset(); return; }
+	int const cols = wide_columns();
+	if (m_wide && m_wide->columns() == cols) return;
+	wide_symbols ws;
+	if (!wide_symbols_of(ws)) { m_wide_possible = false; m_wide.reset(); return; }
+	m_wide.reset();
+	m_wide = std::make_unique<wide_view>(*m_mach, ws, cols);
+}
+
 bool app::start_game(int index, bool net_client)
 {
 	const game_info &g = game_list()[size_t(index)];
 	std::string err;
 	SDL_SetWindowTitle(m_win, (std::string("NBA JAM Recomp - loading ") + g.title + "...").c_str());
+	m_wide.reset();          // it watches the machine being replaced
 	m_mach = m_cat->create(g, err);
 	if (!m_mach)
 	{
@@ -847,6 +887,14 @@ bool app::start_game(int index, bool net_client)
 	// Lua mods patch the ROM / hook frames; they also count in the netplay fingerprint
 	m_mods.set_netplay(m_net_game);
 	m_mods.start(g.id, *m_mach);
+	{
+		// true widescreen: Tournament Edition 4.0 and Special Edition, with their symbol files
+		m_wide.reset();
+		wide_symbols ws;
+		std::string const id = g.id;
+		m_wide_possible = (id == "nbajamte" || id == "nbajamse") && wide_symbols_of(ws);
+	}
+	bool const wide_missing = m_cfg.shape == view_shape::widescreen && !m_wide_possible;
 	m_join = audio_join();
 	m_mach->reset();
 	m_cur_game = index;
@@ -856,7 +904,8 @@ bool app::start_game(int index, bool net_client)
 	if (m_msound) m_msound->silence();
 	SDL_SetWindowTitle(m_win, (std::string("NBA JAM Recomp - ") + g.title + (m_net_game ? "   [ONLINE]" : "   [Esc: pause menu  F1: help]")).c_str());
 	SDL_ClearQueuedAudio(m_audio);
-	if (!m_net_game) message("Press F1 to see the controls", 3000);
+	if (wide_missing) message("Widescreen is not available for this game: 4:3", 4000);
+	else if (!m_net_game) message("Press F1 to see the controls", 3000);
 	if (m_mods.active_count() > 0)
 	{
 		std::string log;
@@ -873,6 +922,9 @@ bool app::start_game(int index, bool net_client)
 
 void app::stop_game()
 {
+	m_wide.reset();
+	m_wide_possible = false;
+	m_presenting_wide = false;
 	// a netplay client never overwrites its own NVRAM with the host's
 	bool save = !(m_net_game && m_net.role() == netplay::mode::client);
 	if (m_mach && m_cur_game >= 0 && save)
@@ -917,7 +969,7 @@ void app::draw_overlay(canvas &cv)
 		line("F4   video: sharp/smooth/scanl./CRT", 0xffa0e0ff);
 		line("F5   scaling: integer/fit/smooth", 0xffa0e0ff);
 		line("F6   scanline strength", 0xffa0e0ff);
-		line("F7   shape: original 4:3 / stretch", 0xffa0e0ff);
+		line(m_wide_possible ? "F7   shape: 4:3 / widescreen / stretch" : "F7   shape: original 4:3 / stretch", 0xffa0e0ff);
 		line("F8   sides: black / blur / overlays", 0xffa0e0ff);
 		line("F11  fullscreen            - / +  volume", 0xffa0e0ff);
 		line("F12  screenshot            9  service credit", 0xffa0e0ff);
@@ -2019,6 +2071,8 @@ void app::net_lobby_frame()
 			m_net.client_ready(false, why);
 			m_mods.net_restore();
 			m_net.poll();
+			m_wide.reset();
+			m_wide_possible = false;
 			m_mach.reset();
 			m_net_game = false;
 			m_net.stop(why.c_str());
@@ -2094,9 +2148,24 @@ bool app::game_frame()
 	if (m_menu_back || pause_shortcut()) { open_pause(); return false; }
 	bool ran = step_game(false);
 	if (m_screen != screen::game) return ran;
+	update_wide();
 	int w = m_mach->width(), h = m_mach->height();
+	// in play, with Widescreen: the wide picture; on fixed screens the game's own 4:3 picture
+	m_presenting_wide = m_wide && m_wide->show_wide() && m_mach->pens();
+	if (m_presenting_wide) w = m_wide->columns();
 	canvas cv(w, h);
-	std::memcpy(cv.px.data(), m_mach->frame(), size_t(w) * h * 4);
+	if (m_presenting_wide)
+	{
+		const u32 *pens = m_mach->pens();
+		for (int y = 0; y < h && y < wide_view::HEIGHT; y++)
+		{
+			const u16 *src = m_wide->picture() + size_t(y) * m_wide->pitch();
+			u32 *dst = &cv.px[size_t(y) * w];
+			for (int x = 0; x < w; x++) dst[x] = pens[src[x] & 0x7fff] | 0xff000000u;
+		}
+	}
+	else
+		std::memcpy(cv.px.data(), m_mach->frame(), size_t(w) * h * 4);
 	if (m_shot) save_screenshot(cv.px.data(), w, h);      // the game picture, without the overlay
 	draw_mod_overlay(cv, m_mods.draws());                  // nba.text / rect / line (1.6)
 	draw_overlay(cv);
