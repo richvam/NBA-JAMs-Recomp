@@ -149,6 +149,7 @@ void wide_view::frame_start()
 		// where the game's own command for this object goes: its keys, and how far it moves
 		obj_shift k{ctrl, r16(o + OPAL), r16(o + OCONST), m_off};
 		k.w = u16(w);
+		k.ofs = r16(o + OFSET);
 		k.img = r32(o + OSAG);
 		k.img_end = k.img + u32(w) * u32(h) * u32(bits_per_pixel(ctrl));
 		int q = -1;                    // quick perspective: the gndpos_t entry
@@ -362,7 +363,8 @@ bool wide_view::draw_object(u16 *regs)
 			draw_skipped(i);
 			m_next = i + 1;
 			if (k.skip) return true;   // nothing of it is in the view
-			bool const whole = at == k.sag && (regs[R_HEIGHT] & 0x3ff) == k.h;
+			// whole: not cut at the top or left (start), bottom (height) or right (end skip)
+			bool const whole = at == k.sag && (regs[R_HEIGHT] & 0x3ff) == k.h && regs[R_LRSKIP] == k.ofs;
 			if (k.own && !(whole && k.exact))
 			{
 				m_own += !whole;

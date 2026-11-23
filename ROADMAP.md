@@ -325,6 +325,18 @@ the wide camera stops short of the game's), and the other 1993 revisions.
 
 **Gate:** advisor sign-off.
 
+**Status:** W6.1 is done: README.md has a Widescreen section (how to turn it on, the width per
+screen shape, what stays 4:3, Widest view, the shader step-down and `frame_time_log`), and the
+package README.txt has the same in its Video part (it also lost an old line saying F7 skips
+Widescreen on some games, and gained its missing "Look (F4)" heading). W6.2: the pictures are made
+from the owner's ROMs, so they are not attached to a pull request or kept in the repository (rule
+of the project); they were sent to the owner. One contact sheet per game, from a `widetest` frame
+of play (frame 3000) at the widths of 1920x1080 / 2560x1440 / 3840x2160 (534 columns),
+2560x1080 (712), 3440x1440 (716), 3840x1600 (720) and 5120x1440 (1000), each laid out as Original
+4:3 (with black sides), Widescreen and Stretch in the window's shape. The layout is drawn by
+`tools/w6_sheet.py` with plain scaling, as `compute_view` places the picture, not through the
+OpenGL presenter (which `viewtest --fills` and `--shaders` cover with a test pattern).
+
 ## Part 1 risks
 
 * **True widescreen is a change to each game, not to the scaler.** The ROM-only games
