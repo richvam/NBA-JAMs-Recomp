@@ -61,6 +61,7 @@ struct config
 	int shader = 3;               // 0 sharp, 1 smooth, 2 scanlines, 3 CRT, 4 CRT curved
 	view_scaling scaling = view_scaling::fit;     // F5: integer, fit, smooth (view.h)
 	float scan_strength = 0.6f;
+	int max_wide = 0;             // the widest true widescreen view (W5.2): 0 as wide as the window, 1 16:9, 2 21:9
 	int side_fill = 0;            // F8: around a 4:3 picture on a wider screen: 0 black, 1 blurred picture, 2 an overlay
 	std::string overlay;          // name of the chosen overlay (overlays/ in the data folder)
 	float overlay_opacity = 1.0f; // of overlays with a transparent opening
@@ -110,7 +111,7 @@ static void save_config(const std::string &path, config &c)
 	f << "# NBA JAM Recomp - configuration\n[general]\n# news=1 asks github.com once at start for the latest release (only to tell you; nothing is downloaded)\nnews=" << c.news << "\n# pause_buttons: held half a second on a controller for the pause menu (Esc and Guide always work): start+back or l3+r3\npause_buttons=" << (c.pause_buttons == 1 ? "l3+r3" : "start+back") << "\n# save_states=1 adds Save and Load (three slots per game) to the pause menu of an offline game\nsave_states=" << c.save_states << "\n# the menus play the highlighted game's own music and sounds, from its ROMs\nmenu_music=" << c.menu_music << "\nmenu_sounds=" << c.menu_sounds << "\nmenu_volume=" << c.menu_volume << "\n\n[video]\n# scale: size of the window in multiples of 400x300; 0 = chosen from the screen size\nscale=" << c.scale << "\nfullscreen=" << c.fullscreen << "\n# tv_margins=1 keeps the menus 5% in from each edge, for TVs that cut the edges off\ntv_margins=" << c.tv_margins
 	  << "\n# shader: 0 sharp, 1 smooth, 2 scanlines, 3 CRT, 4 curved CRT\nshader=" << c.shader
 	  << "\n# view: original (4:3), widescreen (more of the court in play; all five games) or stretch (fills the window, distorted).\nview=" << view_shape_id(c.shape)
-	  << "\n# scaling: integer (whole multiples of the game's lines), fit (fills the height, crisp pixels), smooth (fills the height, filtered)\nscaling=" << view_scaling_id(c.scaling) << "\n# side_fill: around a 4:3 picture on a wider screen: black, blur (the picture, blurred and dimmed), overlay (an image from overlays/ in the data folder)\nside_fill=" << (c.side_fill == 1 ? "blur" : c.side_fill == 2 ? "overlay" : "black") << "\noverlay=" << c.overlay << "\n# overlay_opacity: 0.1 to 1, for overlays with a transparent opening\noverlay_opacity=" << c.overlay_opacity << "\nscanline_strength=" << c.scan_strength
+	  << "\n# scaling: integer (whole multiples of the game's lines), fit (fills the height, crisp pixels), smooth (fills the height, filtered)\nscaling=" << view_scaling_id(c.scaling) << "\n# max_view_width: the widest the Widescreen view gets: widest (as wide as the window, up to 1000 columns), 16:9 or 21:9; a wider window gets sides\nmax_view_width=" << (c.max_wide == 1 ? "16:9" : c.max_wide == 2 ? "21:9" : "widest") << "\n# side_fill: around a 4:3 picture on a wider screen: black, blur (the picture, blurred and dimmed), overlay (an image from overlays/ in the data folder)\nside_fill=" << (c.side_fill == 1 ? "blur" : c.side_fill == 2 ? "overlay" : "black") << "\noverlay=" << c.overlay << "\n# overlay_opacity: 0.1 to 1, for overlays with a transparent opening\noverlay_opacity=" << c.overlay_opacity << "\nscanline_strength=" << c.scan_strength
 	  << "\n# opengl=0 uses the basic SDL renderer (no shaders)\nopengl=" << c.use_opengl
 	  << "\n\n[audio]\nvolume=" << c.volume
 	  << "\n\n[network]\nport=" << c.net_port << "\ninput_delay=" << c.net_delay << "\nupnp=" << c.net_upnp << "\nstun=" << c.net_stun << "\nstun_server=" << c.net_stun_server << "\nlast_host=" << c.net_host << "\nrecent_hosts=" << [&] { std::string r; for (auto &h : c.net_recent) r += (r.empty() ? "" : ",") + h; return r; }()
@@ -153,6 +154,7 @@ static void load_config(const std::string &path, config &c)
 		else if (k == "scale") c.scale = std::clamp(atoi(v.c_str()), 0, 8);
 		else if (k == "fullscreen") c.fullscreen = atoi(v.c_str()) != 0;
 		else if (k == "tv_margins") c.tv_margins = atoi(v.c_str()) != 0;
+		else if (k == "max_view_width") c.max_wide = v == "16:9" ? 1 : v == "21:9" ? 2 : 0;
 		else if (k == "smooth") c.smooth = atoi(v.c_str()) != 0;
 		else if (k == "scanlines") c.scanlines = atoi(v.c_str()) != 0;
 		else if (k == "shader") c.shader = std::clamp(atoi(v.c_str()), 0, kNumShaders - 1);
@@ -851,7 +853,9 @@ int app::wide_columns() const
 	if (ww <= 0 || wh <= 0) return 400;
 	// 400 columns fill a 4:3 shape; the window's shape needs this many
 	int cols = int(std::lround(400.0 * (double(ww) / wh) / kOriginalAspect / 2.0)) * 2;
-	return std::clamp(cols, 400, 1000);
+	// the player's limit (W5.2): 16:9 is 533 columns, 21:9 (64:27) is 711
+	int const cap = m_cfg.max_wide == 1 ? 534 : m_cfg.max_wide == 2 ? 712 : 1000;
+	return std::clamp(cols, 400, cap);
 }
 
 void app::update_wide()
@@ -1241,7 +1245,8 @@ void app::menu_frame()
 ui::settings_state app::settings_now()
 {
 	ui::settings_state st;
-	st.shape = m_cfg.shape == view_shape::stretch ? 1 : 0;
+	st.shape = m_cfg.shape == view_shape::stretch ? 2 : m_cfg.shape == view_shape::widescreen ? 1 : 0;
+	st.max_wide = m_cfg.max_wide;
 	st.scaling = int(m_cfg.scaling);
 	st.shader = m_cfg.shader;
 	for (int i = 0; i < kNumShaders; i++) st.shaders.push_back(shader_name(i));
@@ -1265,7 +1270,8 @@ ui::settings_state app::settings_now()
 void app::apply_settings(const ui::settings_state &want)
 {
 	const ui::settings_state had = settings_now();
-	m_cfg.shape = want.shape ? view_shape::stretch : view_shape::original;
+	m_cfg.shape = want.shape == 2 ? view_shape::stretch : want.shape == 1 ? view_shape::widescreen : view_shape::original;
+	m_cfg.max_wide = std::clamp(want.max_wide, 0, 2);
 	m_cfg.scaling = view_scaling(std::clamp(want.scaling, 0, 2));
 	m_cfg.shader = std::clamp(want.shader, 0, kNumShaders - 1);
 	m_cfg.scan_strength = std::clamp(want.scanlines, 0.2f, 1.0f);

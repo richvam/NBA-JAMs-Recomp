@@ -134,7 +134,8 @@ screen make_settings(const settings_state &st)
 	v.title = "Picture";
 	v.r = { 0.1f, 0.0f, 0.8f, 0.62f };
 	v.items = {
-		picker(st_shape, "Shape", { "Original 4:3", "Stretch" }, st.shape),
+		picker(st_shape, "Shape", { "Original 4:3", "Widescreen", "Stretch" }, st.shape),
+		picker(st_max_wide, "Widest view", { "Window", "16:9", "21:9" }, st.max_wide),
 		picker(st_scaling, "Scaling", { "Integer", "Fit", "Smooth" }, st.scaling),
 		picker(st_shader, "Look", st.shaders, st.shader),
 		slider(st_scanlines, "Scanlines", st.scanlines, 0.2f, 1.0f, 0.2f),
@@ -194,7 +195,7 @@ void show_settings(screen &s, const settings_state &st)
 	auto tog = [&](int id, bool v) { if (item *i = s.find(id)) i->on = v; };
 	auto sli = [&](int id, float v) { if (item *i = s.find(id)) i->value = std::clamp(v, i->min, i->max); };
 	if (item *i = s.find(st_sides)) i->choices = st.side_names;
-	pick(st_shape, st.shape); pick(st_scaling, st.scaling); pick(st_shader, st.shader); pick(st_sides, st.sides); pick(st_country, st.country); pick(st_pause, st.pause_buttons);
+	pick(st_shape, st.shape); pick(st_max_wide, st.max_wide); pick(st_scaling, st.scaling); pick(st_shader, st.shader); pick(st_sides, st.sides); pick(st_country, st.country); pick(st_pause, st.pause_buttons);
 	tog(st_fullscreen, st.fullscreen); tog(st_tv, st.tv_margins); tog(st_free_play, st.free_play); tog(st_players, st.four_players); tog(st_clips, st.video_clips); tog(st_news, st.news); tog(st_save_states, st.save_states);
 	sli(st_scanlines, st.scanlines); sli(st_volume, st.volume); sli(st_menu_volume, st.menu_volume);
 	tog(st_menu_music, st.menu_music); tog(st_menu_sounds, st.menu_sounds);
@@ -206,7 +207,7 @@ void read_settings(const screen &s, settings_state &st)
 	auto pick = [&](int id, int &v) { if (const item *i = m.find(id)) v = i->choice; };
 	auto tog = [&](int id, bool &v) { if (const item *i = m.find(id)) v = i->on; };
 	auto sli = [&](int id, float &v) { if (const item *i = m.find(id)) v = std::round(i->value * 10.0f) / 10.0f; };
-	pick(st_shape, st.shape); pick(st_scaling, st.scaling); pick(st_shader, st.shader); pick(st_sides, st.sides); pick(st_country, st.country); pick(st_pause, st.pause_buttons);
+	pick(st_shape, st.shape); pick(st_max_wide, st.max_wide); pick(st_scaling, st.scaling); pick(st_shader, st.shader); pick(st_sides, st.sides); pick(st_country, st.country); pick(st_pause, st.pause_buttons);
 	tog(st_fullscreen, st.fullscreen); tog(st_tv, st.tv_margins); tog(st_free_play, st.free_play); tog(st_players, st.four_players); tog(st_clips, st.video_clips); tog(st_news, st.news); tog(st_save_states, st.save_states);
 	sli(st_scanlines, st.scanlines); sli(st_volume, st.volume); sli(st_menu_volume, st.menu_volume);
 	tog(st_menu_music, st.menu_music); tog(st_menu_sounds, st.menu_sounds);

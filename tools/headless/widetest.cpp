@@ -134,6 +134,9 @@ int main(int argc, char **argv)
 		const wide_game *wg = wide_game_for(g.id);
 		if (wg && ws.complete()) view = std::make_unique<wide_view>(*c, ws, cols, *wg);
 		long play = 0, play_full = 0, play_same_cam = 0, same400 = 0, ref_frames = 0;
+		// the wide view at the game camera's furthest left and right (the court's ends, W5.1)
+		int cam_lo = 1 << 30, cam_hi = -(1 << 30), lo_frame = 0, hi_frame = 0;
+		std::vector<u32> lo_pic, hi_pic;
 		std::vector<u16> ref_work(size_t(512) * 512, 0), ref_done(ref_work.size(), 0);
 		int ref_page = 0, ref_done_page = 0;
 		u32 const dpage = symbol(sym, "dpage");
@@ -179,6 +182,16 @@ int main(int argc, char **argv)
 				(was_wide ? to_wide : to_fixed)++;
 				if (switches.size() < 200) switches += (switches.empty() ? "" : " ") + std::string(was_wide ? "wide@" : "4:3@") + std::to_string(f);
 			}
+			if (view && view->show_wide() && getenv("WIDETEST_PNG") && (view->game_centre() < cam_lo || view->game_centre() > cam_hi))
+			{
+				const u32 *pens = c->pens();
+				std::vector<u32> v(size_t(view->columns()) * wide_view::HEIGHT);
+				for (int y = 0; y < wide_view::HEIGHT; y++)
+					for (int x = 0; x < view->columns(); x++)
+						v[size_t(y) * view->columns() + x] = pens[view->picture()[size_t(y) * view->pitch() + x] & 0x7fff];
+				if (view->game_centre() < cam_lo) { cam_lo = view->game_centre(); lo_pic = v; lo_frame = f; }
+				if (view->game_centre() > cam_hi) { cam_hi = view->game_centre(); hi_pic = v; hi_frame = f; }
+			}
 			if (view && view->is_wide() && view->floor_lines() > 0)
 			{
 				play++;
@@ -222,6 +235,13 @@ int main(int argc, char **argv)
 					write_png(stem + "_view.png", view->columns(), wide_view::HEIGHT, v);
 				}
 			}
+		}
+		if (view && !lo_pic.empty())
+		{
+			std::string const stem = std::string(getenv("WIDETEST_PNG")) + "/" + g.id + "_" + std::to_string(view->columns());
+			write_png(stem + "_left_end.png", view->columns(), wide_view::HEIGHT, lo_pic);
+			write_png(stem + "_right_end.png", view->columns(), wide_view::HEIGHT, hi_pic);
+			printf("     %s camera from %d (frame %d) to %d (frame %d) from mid-court\n", g.id, cam_lo, lo_frame, cam_hi, hi_frame);
 		}
 		bool ok = first_bad < 0 && pix_bad_frames == 0 && dmas > 0 && (!display || watched > 0) && view_bad < 0 && play_full == play && (cols != 400 || same400 == play_same_cam);
 		if (view)

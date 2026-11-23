@@ -709,7 +709,11 @@ int main(int argc, char **argv)
 		se.cur_tab = 0; se.cur_panel = 0; se.fix_focus();
 		result ch = se.handle(ev(act::right));
 		read_settings(se, back2);
-		CHECK(ch.what == result::changed && ch.id == st_shape && back2.shape == 0, "settings: changing a widget reports it and the new value is read back");
+		CHECK(ch.what == result::changed && ch.id == st_shape && back2.shape == 2, "settings: changing a widget reports it and the new value is read back");
+		ss.max_wide = 2;
+		show_settings(se, ss);
+		read_settings(se, back2);
+		CHECK(back2.max_wide == 2, "settings: the widest view (W5.2) goes to its widget and back");
 		CHECK(se.tabs.size() == 4 && se.tabs[0].name == "Video" && se.tabs[1].name == "Sound" && se.tabs[2].name == "Game", "settings: Video, Sound, Game and Program tabs");
 
 		// pictures

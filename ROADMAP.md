@@ -271,6 +271,22 @@ the wide camera stops short of the game's), and the other 1993 revisions.
 | W5.2 | Sonnet | Menu: a "Maximum view width" setting (16:9, 21:9, widest available) for players who find the widest view too zoomed out for play. | Setting round-trips through the `.ini` |
 | W5.3 | Sonnet | Performance at 4K and 5120x1440 with the CRT shaders: full speed on integrated graphics, or the shader steps down and says so. | Frame time log |
 
+**Status:** W5.1 and W5.2 are done.
+* **W5.1:** the view is as wide as the window up to 1000 columns (the art allows about 1020 on
+  T.E.); a wider window gets the F8 sides around it. `widetest`, 6000 frames, all five games, at
+  711, 716, 720 and 1000 columns (the 2560x1080, 3440x1440, 3840x1600 and 5120x1440 shapes): the
+  hashes stay equal and every column of every frame of play is drawn, including the frames where
+  the game's camera was furthest left and right (T.E. -300 to +297, Hangtime -365 to +363);
+  `WIDETEST_PNG` saves those two frames as `<game>_<columns>_left_end.png` and `_right_end.png`.
+  At 1000 columns the end-of-quarter banner was torn apart by the W3.4 strips, so only rows above
+  48 (names and turbo bars) spread now; lower pieces stay together in the middle.
+* **W5.2:** Settings, Video, "Widest view": Window (the default), 16:9 (534 columns) or 21:9
+  (712). It is saved as `max_view_width=` in the `.ini`. The Shape picker there now offers
+  Widescreen too; before, saving the Settings screen reset Widescreen to Original 4:3. `uitest`
+  checks the widget both ways.
+* Not checked: real monitors of those sizes, and the `.ini` round trip in the running app (only
+  read in the code).
+
 ## Phase W6: release
 
 | ID | Model | Task |

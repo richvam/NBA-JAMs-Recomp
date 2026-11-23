@@ -59,7 +59,8 @@ void draw_picker_name(canvas &cv, const screen &s, const theme &th, const picker
 // ---------------------------------------------------------------- settings (U3.2)
 struct settings_state
 {
-	int shape = 0;                       // 0 original 4:3, 1 stretch
+	int shape = 0;                       // 0 original 4:3, 1 widescreen, 2 stretch
+	int max_wide = 0;                    // the widest Widescreen view: 0 widest, 1 16:9, 2 21:9 (W5.2)
 	int scaling = 1;                     // 0 integer, 1 fit, 2 smooth
 	int shader = 3;
 	std::vector<std::string> shaders;
@@ -78,7 +79,7 @@ struct settings_state
 	float menu_volume = 0.6f;
 };
 
-enum settings_id { st_shape = 1, st_scaling, st_shader, st_scanlines, st_sides, st_fullscreen, st_volume, st_free_play, st_players, st_country, st_clips, st_news, st_pause, st_menu_music, st_menu_sounds, st_menu_volume, st_tv, st_save_states };
+enum settings_id { st_shape = 1, st_scaling, st_shader, st_scanlines, st_sides, st_fullscreen, st_volume, st_free_play, st_players, st_country, st_clips, st_news, st_pause, st_menu_music, st_menu_sounds, st_menu_volume, st_tv, st_save_states, st_max_wide };
 
 // The controller buttons held for half a second to open the pause menu (U5.1). There is no
 // "none": Esc and the Guide button always open it as well, so it can never be unbound.
