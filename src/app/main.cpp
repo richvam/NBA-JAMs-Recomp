@@ -25,6 +25,7 @@
 #include "controls.h"
 #include "shaders.h"
 #include "wide_view.h"
+#include "frame_guard.h"
 
 #define SDL_MAIN_HANDLED
 #include <SDL.h>
@@ -61,6 +62,7 @@ struct config
 	int shader = 3;               // 0 sharp, 1 smooth, 2 scanlines, 3 CRT, 4 CRT curved
 	view_scaling scaling = view_scaling::fit;     // F5: integer, fit, smooth (view.h)
 	float scan_strength = 0.6f;
+	bool frame_log = false;       // frame_time_log=1: one line per 120 game frames in frame_times.log (W5.3)
 	int max_wide = 0;             // the widest true widescreen view (W5.2): 0 as wide as the window, 1 16:9, 2 21:9
 	int side_fill = 0;            // F8: around a 4:3 picture on a wider screen: 0 black, 1 blurred picture, 2 an overlay
 	std::string overlay;          // name of the chosen overlay (overlays/ in the data folder)
@@ -111,7 +113,7 @@ static void save_config(const std::string &path, config &c)
 	f << "# NBA JAM Recomp - configuration\n[general]\n# news=1 asks github.com once at start for the latest release (only to tell you; nothing is downloaded)\nnews=" << c.news << "\n# pause_buttons: held half a second on a controller for the pause menu (Esc and Guide always work): start+back or l3+r3\npause_buttons=" << (c.pause_buttons == 1 ? "l3+r3" : "start+back") << "\n# save_states=1 adds Save and Load (three slots per game) to the pause menu of an offline game\nsave_states=" << c.save_states << "\n# the menus play the highlighted game's own music and sounds, from its ROMs\nmenu_music=" << c.menu_music << "\nmenu_sounds=" << c.menu_sounds << "\nmenu_volume=" << c.menu_volume << "\n\n[video]\n# scale: size of the window in multiples of 400x300; 0 = chosen from the screen size\nscale=" << c.scale << "\nfullscreen=" << c.fullscreen << "\n# tv_margins=1 keeps the menus 5% in from each edge, for TVs that cut the edges off\ntv_margins=" << c.tv_margins
 	  << "\n# shader: 0 sharp, 1 smooth, 2 scanlines, 3 CRT, 4 curved CRT\nshader=" << c.shader
 	  << "\n# view: original (4:3), widescreen (more of the court in play; all five games) or stretch (fills the window, distorted).\nview=" << view_shape_id(c.shape)
-	  << "\n# scaling: integer (whole multiples of the game's lines), fit (fills the height, crisp pixels), smooth (fills the height, filtered)\nscaling=" << view_scaling_id(c.scaling) << "\n# max_view_width: the widest the Widescreen view gets: widest (as wide as the window, up to 1000 columns), 16:9 or 21:9; a wider window gets sides\nmax_view_width=" << (c.max_wide == 1 ? "16:9" : c.max_wide == 2 ? "21:9" : "widest") << "\n# side_fill: around a 4:3 picture on a wider screen: black, blur (the picture, blurred and dimmed), overlay (an image from overlays/ in the data folder)\nside_fill=" << (c.side_fill == 1 ? "blur" : c.side_fill == 2 ? "overlay" : "black") << "\noverlay=" << c.overlay << "\n# overlay_opacity: 0.1 to 1, for overlays with a transparent opening\noverlay_opacity=" << c.overlay_opacity << "\nscanline_strength=" << c.scan_strength
+	  << "\n# scaling: integer (whole multiples of the game's lines), fit (fills the height, crisp pixels), smooth (fills the height, filtered)\nscaling=" << view_scaling_id(c.scaling) << "\n# frame_time_log=1 writes how long each 120 game frames took to draw to frame_times.log in the data folder\nframe_time_log=" << c.frame_log << "\n# max_view_width: the widest the Widescreen view gets: widest (as wide as the window, up to 1000 columns), 16:9 or 21:9; a wider window gets sides\nmax_view_width=" << (c.max_wide == 1 ? "16:9" : c.max_wide == 2 ? "21:9" : "widest") << "\n# side_fill: around a 4:3 picture on a wider screen: black, blur (the picture, blurred and dimmed), overlay (an image from overlays/ in the data folder)\nside_fill=" << (c.side_fill == 1 ? "blur" : c.side_fill == 2 ? "overlay" : "black") << "\noverlay=" << c.overlay << "\n# overlay_opacity: 0.1 to 1, for overlays with a transparent opening\noverlay_opacity=" << c.overlay_opacity << "\nscanline_strength=" << c.scan_strength
 	  << "\n# opengl=0 uses the basic SDL renderer (no shaders)\nopengl=" << c.use_opengl
 	  << "\n\n[audio]\nvolume=" << c.volume
 	  << "\n\n[network]\nport=" << c.net_port << "\ninput_delay=" << c.net_delay << "\nupnp=" << c.net_upnp << "\nstun=" << c.net_stun << "\nstun_server=" << c.net_stun_server << "\nlast_host=" << c.net_host << "\nrecent_hosts=" << [&] { std::string r; for (auto &h : c.net_recent) r += (r.empty() ? "" : ",") + h; return r; }()
@@ -154,6 +156,7 @@ static void load_config(const std::string &path, config &c)
 		else if (k == "scale") c.scale = std::clamp(atoi(v.c_str()), 0, 8);
 		else if (k == "fullscreen") c.fullscreen = atoi(v.c_str()) != 0;
 		else if (k == "tv_margins") c.tv_margins = atoi(v.c_str()) != 0;
+		else if (k == "frame_time_log") c.frame_log = atoi(v.c_str()) != 0;
 		else if (k == "max_view_width") c.max_wide = v == "16:9" ? 1 : v == "21:9" ? 2 : 0;
 		else if (k == "smooth") c.smooth = atoi(v.c_str()) != 0;
 		else if (k == "scanlines") c.scanlines = atoi(v.c_str()) != 0;
@@ -374,6 +377,8 @@ private:
 	// true widescreen (roadmap W3): the wide gameplay picture of the running game, when it has
 	// one (Tournament Edition 4.0 and Special Edition) and the shape is Widescreen
 	std::unique_ptr<wide_view> m_wide;
+	frame_guard m_guard;               // steps the shader down when drawing is too slow (W5.3)
+	void guard_frame(double ms, int ww, int wh, int used);
 	bool m_wide_possible = false;      // the running game can draw it (its symbols are there)
 	bool m_presenting_wide = false;    // the picture being presented is the wide one
 	int wide_columns() const;          // the view width that fills the window's shape
@@ -530,6 +535,22 @@ void app::next_side_fill()
 	message(none ? "Sides: black (no images in overlays/)" : "Sides: black", none ? 5000 : 3000);
 }
 
+void app::guard_frame(double ms, int ww, int wh, int used)
+{
+	bool stepped = false;
+	if (!m_guard.add(ms, ww, wh, used, stepped)) return;
+	if (stepped)
+		message(std::string("Video: ") + shader_name(used) + " is too slow at " + std::to_string(ww) + "x" + std::to_string(wh) +
+		        " (" + std::to_string(int(m_guard.last_avg + 0.5)) + " ms a frame): using " + shader_name(m_guard.cap), 6000);
+	if (m_cfg.frame_log)
+		if (FILE *f = fopen(path_join(m_base, "frame_times.log").c_str(), "a"))
+		{
+			fprintf(f, "%dx%d %s: GPU %.2f ms average, %.2f ms longest, over %d frames%s\n", ww, wh, shader_name(used), m_guard.last_avg, m_guard.last_max,
+			        frame_guard::kWindow, stepped ? (std::string(" -> stepped down to ") + shader_name(m_guard.cap)).c_str() : "");
+			fclose(f);
+		}
+}
+
 void app::present(const u32 *pixels, int w, int h, bool game)
 {
 	int shader = game ? m_cfg.shader : 0;
@@ -538,7 +559,15 @@ void app::present(const u32 *pixels, int w, int h, bool game)
 	{
 		int ww, wh;
 		m_gl.drawable_size(ww, wh);
-		m_gl.present(pixels, w, h, shader, view_for(ww, wh, w, h, game), m_cfg.scan_strength, true, m_cfg.side_fill);
+		if (!game)
+		{
+			m_gl.present(pixels, w, h, shader, view_for(ww, wh, w, h, game), m_cfg.scan_strength, true, m_cfg.side_fill);
+			return;
+		}
+		// a game frame: timed, and drawn with the shader the guard allows (W5.3)
+		int const used = m_guard.shader(shader);
+		m_gl.present(pixels, w, h, used, view_for(ww, wh, w, h, game), m_cfg.scan_strength, true, m_cfg.side_fill);
+		if (m_gl.gpu_timing() && m_gl.gpu_ms() >= 0) guard_frame(m_gl.gpu_ms(), ww, wh, used);
 		return;
 	}
 	bool smooth = shader == 1 || (game && m_cfg.scaling == view_scaling::smooth);
@@ -675,6 +704,7 @@ void app::poll_events()
 				if (k == SDLK_F4)
 				{
 					m_cfg.shader = (m_cfg.shader + 1) % kNumShaders;
+					m_guard.reset();    // the player's choice: measured again from it
 					message(std::string("Video: ") + shader_name(m_cfg.shader) + (m_gl.ok() ? "" : " (no OpenGL: approximate)"));
 				}
 				if (k == SDLK_F5)
@@ -1273,6 +1303,7 @@ void app::apply_settings(const ui::settings_state &want)
 	m_cfg.shape = want.shape == 2 ? view_shape::stretch : want.shape == 1 ? view_shape::widescreen : view_shape::original;
 	m_cfg.max_wide = std::clamp(want.max_wide, 0, 2);
 	m_cfg.scaling = view_scaling(std::clamp(want.scaling, 0, 2));
+	if (want.shader != had.shader) m_guard.reset();
 	m_cfg.shader = std::clamp(want.shader, 0, kNumShaders - 1);
 	m_cfg.scan_strength = std::clamp(want.scanlines, 0.2f, 1.0f);
 	m_cfg.volume = std::clamp(want.volume, 0.0f, 1.0f);

@@ -31,6 +31,7 @@
 // round in 4:3, colour bars, and a centre cross.
 #include "view.h"
 #include "overlay.h"
+#include "frame_guard.h"
 #include <filesystem>
 #include <fstream>
 #include <cmath>
@@ -79,9 +80,32 @@ static void small_screens()
 		}
 }
 
+// W5.3: the shader guard steps down only after two slow windows in a row, one step at a time,
+// and starts again from the player's choice on a new window size
+static void guard_checks()
+{
+	frame_guard g;
+	bool stepped = false;
+	int windows = 0;
+	for (int i = 0; i < frame_guard::kWindow * 3; i++) windows += g.add(8.0, 3840, 2160, g.shader(4), stepped) ? 1 : 0;
+	check(windows == 3 && g.shader(4) == 4 && !stepped, "guard: 8 ms a frame keeps Curved CRT");
+	for (int i = 0; i < frame_guard::kWindow; i++) g.add(15.0, 3840, 2160, g.shader(4), stepped);
+	check(g.shader(4) == 4, "guard: one slow window is not enough");
+	bool any = false;
+	for (int i = 0; i < frame_guard::kWindow; i++) { g.add(15.0, 3840, 2160, g.shader(4), stepped); any = any || stepped; }
+	check(any && g.shader(4) == 3, "guard: two slow windows in a row step down one shader");
+	for (int i = 0; i < frame_guard::kWindow * 2; i++) g.add(15.0, 3840, 2160, g.shader(4), stepped);
+	check(g.shader(4) == 2, "guard: still slow steps down again");
+	for (int i = 0; i < frame_guard::kWindow * 2; i++) g.add(15.0, 3840, 2160, g.shader(0), stepped);
+	check(g.shader(0) == 0, "guard: Sharp is never stepped below");
+	g.add(5.0, 1920, 1080, g.shader(4), stepped);
+	check(g.shader(4) == 4, "guard: a new window size starts again from the player's choice");
+}
+
 static int rects()
 {
 	small_screens();
+	guard_checks();
 	printf("%-11s %-11s %-8s %-22s %s\n", "window", "shape", "scaling", "picture (x,y wxh)", "unused");
 	for (auto &sz : kSizes)
 		for (view_shape sh : kShapes)
@@ -174,6 +198,7 @@ static int rects()
 
 #ifndef VIEWTEST_NO_GL
 #include "gl_present.h"
+#include "shaders.h"
 #include "ui/gallery.h"
 #include "png_read.h"
 #include "miniz.h"
@@ -220,6 +245,41 @@ static bool write_png(const std::string &path, const std::vector<uint8_t> &rgb, 
 // side: 0 black, 1 blur, 2 an opaque 16:9 image (behind the game), 3 a 16:9 border with a
 // transparent opening (over the game). The images are made here and go through the PNG
 // writer and reader.
+static bool time_shaders(int W, int H)
+{
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+	SDL_Window *win = SDL_CreateWindow("viewtest", 0, 0, W, H, SDL_WINDOW_OPENGL | SDL_WINDOW_BORDERLESS);
+	if (!win) { printf("window %dx%d: %s\n", W, H, SDL_GetError()); return false; }
+	gl_presenter gl;
+	std::string err;
+	if (!gl.init(win, err)) { printf("OpenGL: %s\n", err.c_str()); SDL_DestroyWindow(win); return false; }
+	int ww, wh;
+	gl.drawable_size(ww, wh);
+	// a picture as wide as the window's shape, as Widescreen gives (400 to 1000 columns)
+	int const cols = std::clamp(int(400.0 * (double(ww) / wh) / (4.0 / 3.0) / 2.0 + 0.5) * 2, 400, 1000);
+	std::vector<uint32_t> px(size_t(cols) * kH);
+	for (size_t i = 0; i < px.size(); i++) px[i] = 0xff000000u | uint32_t(i * 2654435761u >> 8);
+	view_rect r = compute_view(ww, wh, cols, kH, view_shape::widescreen, view_scaling::fit, true);
+	for (int s = 0; s < kNumShaders; s++)
+	{
+		for (int i = 0; i < 10; i++) gl.present(px.data(), cols, kH, s, r, 0.6f, true, 1);
+		std::vector<uint8_t> rgb; int cw, ch;
+		gl.capture(rgb, cw, ch);   // waits for the GPU
+		Uint64 const t0 = SDL_GetPerformanceCounter();
+		int const n = 300;
+		for (int i = 0; i < n; i++) gl.present(px.data(), cols, kH, s, r, 0.6f, true, 1);
+		gl.capture(rgb, cw, ch);
+		double const ms = double(SDL_GetPerformanceCounter() - t0) * 1000.0 / double(SDL_GetPerformanceFrequency()) / n;
+		printf("timing %dx%d, %d columns, shader %d: %.2f ms a frame, GPU %s\n", ww, wh, cols, s, ms,
+		       gl.gpu_timing() ? (std::to_string(gl.gpu_ms()) + " ms" + (gl.gpu_ms() > frame_guard::kBudgetMs ? " (over the budget: the app steps down)" : "")).c_str() : "time not available (no timer queries)");
+	}
+	gl.shutdown();
+	SDL_DestroyWindow(win);
+	return true;
+}
+
 static bool shoot(int W, int H, view_shape sh, view_scaling sc, int shader, const std::string &out, int side = 0)
 {
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
@@ -443,6 +503,13 @@ int main(int argc, char **argv)
 	{
 		static const int sz[][2] = { { 1024, 768 }, { 1920, 1080 }, { 3440, 1440 }, { 5120, 1440 } };
 		for (auto &z : sz) ok = shoot_gallery(z[0], z[1], std::string(argv[2]) + "/gallery_" + std::to_string(z[0]) + "x" + std::to_string(z[1]) + ".png") && ok;
+	}
+	else if (argc == 2 && !strcmp(argv[1], "--timing"))
+	{
+		// W5.3: how long a game frame takes to draw and show with each shader, at the sizes of
+		// big screens (300 frames each, Widescreen at 16:9 sizes and 4:3 otherwise)
+		static const int sizes[][2] = { { 1920, 1080 }, { 2560, 1440 }, { 3840, 2160 }, { 5120, 1440 } };
+		for (auto &z : sizes) ok = time_shaders(z[0], z[1]) && ok;
 	}
 	else if (argc == 3 && !strcmp(argv[1], "--fills"))
 	{

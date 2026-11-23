@@ -12,6 +12,9 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 ## Unreleased
 
 ### Added
+- If the graphics card cannot draw the chosen look (F4) fast enough, the program switches to the next
+  cheaper one on its own and says so. `frame_time_log=1` in `nbajam_recomp.ini` writes how long
+  the picture takes to `frame_times.log`.
 - Settings, Video: "Widest view" limits Widescreen to 16:9 or 21:9 if the full width of a very wide
   screen feels too zoomed out; the rest of the window gets sides. Shape there now also offers
   Widescreen.

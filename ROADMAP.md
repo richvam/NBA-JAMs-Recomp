@@ -302,6 +302,19 @@ the wide camera stops short of the game's), and the other 1993 revisions.
   game. A hoop the game itself has removed from its list (Hangtime's far one) cannot be drawn.
 * Not checked: real monitors of those sizes, and the `.ini` round trip in the running app (only
   read in the code).
+* **W5.3:** the presenter times each game frame's picture on the GPU with timer queries
+  (`GL_TIME_ELAPSED`), which leave out any wait for the screen's refresh, so a driver that forces
+  vsync does not look slow. `frame_guard.h`: when the average over 120 frames is above 12 ms twice
+  in a row, the look steps down one step (Curved CRT, CRT, Scanlines, Smooth, Sharp) and the
+  player is told. A window resize or choosing a look starts again from the choice. Without timer
+  queries the guard is off. `frame_time_log=1` writes one line per 120 frames to
+  `frame_times.log`. Checks: `viewtest --rects` tests the guard's rules (6 checks). On the owner's
+  PC (2560 x 1440 fullscreen, Widescreen, T.E. in play, every look for about 12 s, 48 windows):
+  0.03 to 0.11 ms of GPU time a frame, Curved CRT and CRT the most, no step down.
+  `viewtest --timing` measures every look at 1080p, 1440p, 4K and 5120 x 1440. Under WSL's software
+  OpenGL it shows only the whole frame (15 to 92 ms): software rendering works at the swap, so its
+  GPU times mean nothing. Not checked: a real 4K or 5120 x 1440 monitor and integrated graphics.
+  By pixel count those would be about 0.25 ms on the owner's card.
 
 ## Phase W6: release
 

@@ -46,6 +46,23 @@ typedef void GLvoid;
 #define GL_BLEND 0x0BE2
 #define GL_SRC_ALPHA 0x0302
 #define GL_ONE_MINUS_SRC_ALPHA 0x0303
+#define GL_TIME_ELAPSED 0x88BF
+#define GL_QUERY_RESULT 0x8866
+#define GL_QUERY_RESULT_AVAILABLE 0x8867
+typedef unsigned long long GLuint64;
+// timer queries (GL 3.3 / ARB_timer_query); optional: without them the shader guard is off
+typedef void (APIENTRY *PFN_glGenQueries)(GLsizei, GLuint *);
+typedef void (APIENTRY *PFN_glDeleteQueries)(GLsizei, const GLuint *);
+typedef void (APIENTRY *PFN_glBeginQuery)(GLenum, GLuint);
+typedef void (APIENTRY *PFN_glEndQuery)(GLenum);
+typedef void (APIENTRY *PFN_glGetQueryObjectiv)(GLuint, GLenum, GLint *);
+typedef void (APIENTRY *PFN_glGetQueryObjectui64v)(GLuint, GLenum, GLuint64 *);
+static PFN_glGenQueries q_gen;
+static PFN_glDeleteQueries q_del;
+static PFN_glBeginQuery q_begin;
+static PFN_glEndQuery q_end;
+static PFN_glGetQueryObjectiv q_geti;
+static PFN_glGetQueryObjectui64v q_get64;
 
 #define GLFUNCS \
 	F(void, glGenTextures, (GLsizei, GLuint *)) \
@@ -125,6 +142,19 @@ bool gl_presenter::init(SDL_Window *win, std::string &err)
 	SDL_GL_MakeCurrent(win, m_ctx);
 	if (!load_gl(err)) { shutdown(); return false; }
 	SDL_GL_SetSwapInterval(0);      // the game paces itself (~54.7 Hz)
+	q_gen = (PFN_glGenQueries)SDL_GL_GetProcAddress("glGenQueries");
+	q_del = (PFN_glDeleteQueries)SDL_GL_GetProcAddress("glDeleteQueries");
+	q_begin = (PFN_glBeginQuery)SDL_GL_GetProcAddress("glBeginQuery");
+	q_end = (PFN_glEndQuery)SDL_GL_GetProcAddress("glEndQuery");
+	q_geti = (PFN_glGetQueryObjectiv)SDL_GL_GetProcAddress("glGetQueryObjectiv");
+	q_get64 = (PFN_glGetQueryObjectui64v)SDL_GL_GetProcAddress("glGetQueryObjectui64v");
+	m_timing = q_gen && q_del && q_begin && q_end && q_geti && q_get64 &&
+	           (SDL_GL_ExtensionSupported("GL_ARB_timer_query") || SDL_GL_ExtensionSupported("GL_EXT_timer_query"));
+	if (m_timing)
+	{
+		q_gen(4, m_query);
+		p_glGetError();
+	}
 
 	// desktop GL 2.1 takes GLSL 1.10; GLES/ANGLE contexts take GLSL ES 1.00
 	const char *versions[2] = { "#version 110\n", "#version 100\n" };
@@ -173,6 +203,8 @@ void gl_presenter::shutdown()
 {
 	if (m_ctx)
 	{
+		if (m_timing && q_del) q_del(4, m_query);
+		m_timing = false;
 		if (p_glDeleteProgram) for (int i = 0; i < m_nprog; i++) p_glDeleteProgram(m_prog[i]);
 		if (m_tex && p_glDeleteTextures) p_glDeleteTextures(1, &m_tex);
 		if (m_bezel && p_glDeleteTextures) p_glDeleteTextures(1, &m_bezel);
@@ -218,6 +250,24 @@ void gl_presenter::present(const uint32_t *px, int w, int h, int shader, const v
 	int ww, wh;
 	SDL_GL_GetDrawableSize(m_win, &ww, &wh);
 	int x = view.x, y = view.y, dw = view.w, dh = view.h;
+	// GPU time: read the oldest query that is ready (never waiting for one), start this frame's
+	if (m_timing)
+	{
+		for (int i = 1; i <= 4; i++)
+		{
+			int const k = (m_qi + i) % 4;
+			if (!m_query_used[k]) continue;
+			GLint ready = 0;
+			q_geti(m_query[k], GL_QUERY_RESULT_AVAILABLE, &ready);
+			if (!ready) continue;
+			GLuint64 ns = 0;
+			q_get64(m_query[k], GL_QUERY_RESULT, &ns);
+			m_gpu_ms = double(ns) / 1e6;
+			m_query_used[k] = false;
+		}
+		if (m_query_used[m_qi]) m_timing_skip = true;   // all four still in flight: skip timing this frame
+		else { q_begin(GL_TIME_ELAPSED, m_query[m_qi]); m_timing_skip = false; }
+	}
 	p_glViewport(0, 0, ww, wh);
 	p_glClearColor(0, 0, 0, 1);
 	p_glClear(GL_COLOR_BUFFER_BIT);
@@ -266,6 +316,12 @@ void gl_presenter::present(const uint32_t *px, int w, int h, int shader, const v
 	p_glEnableVertexAttribArray(1);
 	p_glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 	if (side_fill == 2 && m_bezel && m_ov_alpha) draw_overlay(ww, wh);     // a border with an opening goes over it
+	if (m_timing && !m_timing_skip)
+	{
+		q_end(GL_TIME_ELAPSED);
+		m_query_used[m_qi] = true;
+		m_qi = (m_qi + 1) % 4;
+	}
 	if (swap_now) SDL_GL_SwapWindow(m_win);
 }
 

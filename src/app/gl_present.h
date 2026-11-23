@@ -31,7 +31,18 @@ public:
 	bool capture(std::vector<uint8_t> &rgb, int &w, int &h);
 	void swap();
 	void drawable_size(int &w, int &h) const;
+	// The GPU time of the last frame whose timing is ready, in ms, measured with timer queries
+	// (GL_TIME_ELAPSED: the drawing only, not a wait for the screen's refresh). -1 while none is
+	// ready; gpu_timing() is false when the driver has no timer queries (W5.3).
+	double gpu_ms() const { return m_gpu_ms; }
+	bool gpu_timing() const { return m_timing; }
 private:
+	bool m_timing = false;
+	unsigned m_query[4] = {};
+	bool m_query_used[4] = {};
+	int m_qi = 0;
+	double m_gpu_ms = -1;
+	bool m_timing_skip = false;
 	bool m_ok = false;
 	SDL_Window *m_win = nullptr;
 	SDL_GLContext m_ctx = nullptr;
