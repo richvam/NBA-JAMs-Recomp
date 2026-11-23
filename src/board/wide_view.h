@@ -66,6 +66,7 @@ private:
 	void draw_flat();
 	void blit(u16 *regs);
 	int shift_for(const u16 *regs);
+	int hud_shift(int centre) const;   // on-screen text at screen x `centre` (W3.4)
 	static int gndpos(s32 gndx, int line);
 
 	arcade_machine &m;

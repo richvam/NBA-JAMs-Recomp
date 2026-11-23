@@ -116,7 +116,7 @@ void wide_view::frame_start()
 		obj_shift k{ctrl, r16(o + OPAL), r16(o + OCONST), m_off};
 		int q = -1;                    // quick perspective: the gndpos_t entry
 		if (flags & M_SCRNREL)
-			k.shift = m_base;          // score, clock: kept on the game's 400 columns (W3.4 places them)
+			k.shift = hud_shift(s16(r16(o + OXPOS)) + (ctrl & M_FLIPH ? 0 : w / 2));   // names, turbo bars, messages
 		else if (flags & M_3DQ)
 		{
 			q = int((s32(r32(o + ODATA_P)) - s32(s.gndpos_t)) / 16);
@@ -202,7 +202,22 @@ int wide_view::shift_for(const u16 *regs)
 			return k.shift;
 		}
 	}
-	return m_base;
+	// the game's extra queue (messages, arrows): placed like the on-screen text
+	int const x = int(regs[R_XSTART] & 0x3ff) - LEFT, w = regs[R_WIDTH] & 0x3ff;
+	return hud_shift(regs[R_COMMAND] & M_FLIPH ? x - w / 2 : x + w / 2);
+}
+
+// On-screen text and bars (W3.4). The game lays them out for four players across its 400
+// columns: each player's name, turbo bar and messages sit in their own 100-column strip. Each
+// strip moves as a whole so that its centre keeps its place across the wide view: player 1 and 4
+// go towards the edges, 2 and 3 a little, and what is centred stays centred. Pieces of one
+// player's display keep their spacing.
+int wide_view::hud_shift(int centre) const
+{
+	// the middle (150 to 249: the free-play sign, shot clock, centred messages) does not move
+	int const x = std::clamp(centre, 0, 399);
+	int const c = x < 100 ? 50 : x < 150 ? 150 : x < 250 ? 200 : x < 300 ? 250 : 350;
+	return m_base + (c - 200) * (m_cols - 400) / 400;
 }
 
 void wide_view::on_dma(const u16 *in)

@@ -15,8 +15,9 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - True widescreen on NBA JAM T.E. 4.0 and T.E. Special Edition: press F7 until it says
   "Widescreen" and, during play, the court, stands and crowd fill a wide window instead of
   sides being added. Nothing is stretched and the game itself is not changed. Menus, team
-  select, halftime and other fixed screens stay 4:3; the score and names stay in the middle
-  for now.
+  select, halftime and other fixed screens stay 4:3.
+- Widescreen: the players' names, turbo bars and the shot clock spread out to the sides of
+  the wide picture, each player's at their own side; centred signs stay in the middle.
 - Save states (off by default): turn on Settings, Program, "Save states" and an offline game's pause menu gets Save and Load with three slots per game. They are never available online.
 - Lua mods: a "Lua mods" menu, per-game settings in `mods.ini`, and two scripts: quarter
   length and no team-select timer.
