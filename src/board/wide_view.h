@@ -99,7 +99,7 @@ private:
 	bool draw_object(u16 *regs);     // the game's command for a list object: drawn, moved or replaced
 	void draw_skipped(size_t upto);  // 3D objects the game left out, up to list index `upto`
 	static constexpr int HUD_TOP = 48;   // screen rows above this hold the players' names and turbo bars
-	int hud_shift(int centre, int top) const;   // on-screen text at screen x `centre`, top row `top` (W3.4)
+	int hud_shift(int centre, int bottom) const;   // on-screen text at screen x `centre`, lowest row `bottom` (W3.4)
 	int gndpos(s32 gndx, int line) const;
 
 	arcade_machine &m;

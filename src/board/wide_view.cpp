@@ -153,7 +153,7 @@ void wide_view::frame_start()
 		k.img_end = k.img + u32(w) * u32(h) * u32(bits_per_pixel(ctrl));
 		int q = -1;                    // quick perspective: the gndpos_t entry
 		if (flags & M_SCRNREL)
-			k.shift = hud_shift(s16(r16(o + OXPOS)) + (ctrl & M_FLIPH ? 0 : w / 2), s16(r16(o + OYPOS)));   // names, turbo bars, messages
+			k.shift = hud_shift(s16(r16(o + OXPOS)) + (ctrl & M_FLIPH ? 0 : w / 2), s16(r16(o + OYPOS)) + (ctrl & M_FLIPV ? 0 : h - 1));   // names, turbo bars, messages
 		else if (flags & M_3DQ)
 		{
 			q = int((s32(r32(o + ODATA_P)) - s32(s.gndpos_t)) / 16);
@@ -376,7 +376,8 @@ bool wide_view::draw_object(u16 *regs)
 	}
 	// the game's extra queue (messages, arrows): placed like the on-screen text
 	int const x = int(regs[R_XSTART] & 0x3ff) - LEFT, w = regs[R_WIDTH] & 0x3ff;
-	regs[R_XSTART] = u16(regs[R_XSTART] + hud_shift(regs[R_COMMAND] & M_FLIPH ? x - w / 2 : x + w / 2, int(regs[R_YSTART] & 0x1ff) - m_page));
+	regs[R_XSTART] = u16(regs[R_XSTART] + hud_shift(regs[R_COMMAND] & M_FLIPH ? x - w / 2 : x + w / 2,
+	                                                         int(regs[R_YSTART] & 0x1ff) - m_page + (regs[R_COMMAND] & M_FLIPV ? 0 : (regs[R_HEIGHT] & 0x3ff) - 1)));
 	blit(regs);
 	return false;
 }
@@ -396,12 +397,13 @@ void wide_view::draw_skipped(size_t upto)
 // columns: each player's name, turbo bar and messages sit in their own 100-column strip. Each
 // strip moves as a whole so that its centre keeps its place across the wide view: player 1 and 4
 // go towards the edges, 2 and 3 a little, and what is centred stays centred. Pieces of one
-// player's display keep their spacing. Only the top rows (names and turbo bars, above row
-// HUD_TOP) spread: lower down the game draws banners and messages from many pieces across the
-// whole 400 columns (the end-of-quarter banner), which must stay together in the middle.
-int wide_view::hud_shift(int centre, int top) const
+// player's display keep their spacing. Only pieces wholly in the top rows (names and turbo
+// bars, above row HUD_TOP) spread: anything reaching lower (popup boxes and their text, the
+// end-of-quarter banner, messages) is drawn from many pieces that must stay together, so it
+// stays in the middle.
+int wide_view::hud_shift(int centre, int bottom) const
 {
-	if (top >= HUD_TOP) return m_base;
+	if (bottom >= HUD_TOP) return m_base;
 	// the middle (150 to 249: the free-play sign, shot clock, centred messages) does not move
 	int const x = std::clamp(centre, 0, 399);
 	int const c = x < 100 ? 50 : x < 150 ? 150 : x < 250 ? 200 : x < 300 ? 250 : 350;

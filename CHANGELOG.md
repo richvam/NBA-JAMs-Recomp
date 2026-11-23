@@ -140,6 +140,8 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - The README files describe the menus and the pause menu first; the F-keys are shortcuts.
 
 ### Fixed
+- Widescreen: popup boxes (the controls help at the tip-off) moved to the side while their text
+  stayed in the middle. Only names and turbo bars along the top spread out now.
 - Widescreen: players, the ball, hoops, poles and padding near the sides are drawn whole instead
   of missing or cut off where the original 4:3 screen ended.
 - Saving the Settings screen no longer switched the shape from Widescreen back to Original 4:3.
