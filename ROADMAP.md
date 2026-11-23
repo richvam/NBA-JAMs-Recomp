@@ -135,6 +135,19 @@ Opus. No code ships from this phase; the output is a design note in the pull req
 **Gate:** advisor approves the design note before W3 starts. This is the decision the
 rest of Part 1 rests on.
 
+**Status:** W2.1 to W2.6 are written in `docs/WIDESCREEN.md`, waiting for the owner's approval
+(the gate). The camera (`WORLDTLX`) is game logic: collisions are checked only from it to +400
+(`COLL2.ASM`), so a widescreen must keep it and only draw wider. The arena backdrop spans
+mid-court -512 to +675 (measured in a CPU game), exactly enough for a 4:3 view at the game's
+furthest camera (+-310), so a wide view needs its own render centre that stops short of the
+ends: 16:9 to -246..+409, 21:9 to -162..+325, 32:9 nearly fixed; the art allows 1187 columns
+at most. The court floor `COURT` is a 1277 x 138 trapezoid (899 to 1277 pixels wide), the same
+in NBA JAM 1993 at 6 bits per pixel. `dtype` tells gameplay (3D) from fixed screens (2D, kept
+4:3). Recommended engine approach: the program draws the wide picture from the game's own
+object lists, read-only, with the existing blitter code, instead of patching the games, so a
+widescreen and a 4:3 player stay in sync. Not measured yet: the Hangtime backdrop and floor
+(W4.2) and the NBA JAM 1993 backdrop (W4.4).
+
 ## Phase W3: true widescreen on T.E. 4.0
 
 | ID | Model | Task | Check |
