@@ -993,15 +993,19 @@ protected:
 	template <typename T> device_state_entry &state_add(int, const std::string &, T &) { return m_dummy_state; }
 	device_state_entry &state_add(int, const char *, u32) { return m_dummy_state; }
 	template <typename T, typename G, typename S> device_state_entry &state_add(int, const char *, G &&, S &&) { return m_dummy_state; }
-	void debugger_instruction_hook(offs_t pc) { if (m_trace && !m_trace_stop && !(pc >= m_skip_lo && pc <= m_skip_hi) && !(pc >= m_skip2_lo && pc <= m_skip2_hi)) { m_trace[m_trace_pos++ & 4095] = pc; if (pc < m_trace_lo || m_trace_pos >= m_trace_max) m_trace_stop = true; } }
+	void debugger_instruction_hook(offs_t pc) { if (pc == m_watch_pc && m_watch_cb) m_watch_cb(); if (m_trace && !m_trace_stop && !(pc >= m_skip_lo && pc <= m_skip_hi) && !(pc >= m_skip2_lo && pc <= m_skip2_hi)) { m_trace[m_trace_pos++ & 4095] = pc; if (pc < m_trace_lo || m_trace_pos >= m_trace_max) m_trace_stop = true; } }
 	void debugger_wait_hook() {}
 	void debugger_exception_hook(int) {}
-	bool debugger_enabled() const { return m_trace != nullptr; }
+	bool debugger_enabled() const { return m_trace != nullptr || m_watch_cb != nullptr; }
 	bool machine_debug_flags() const { return false; }
 
 	int *m_icountptr = nullptr;
 public:
 	offs_t *m_trace = nullptr;
+	// widescreen (roadmap W3.1): called when the CPU is about to run the instruction at
+	// m_watch_pc. Only used to read memory; with none set the CPU runs its usual loop.
+	offs_t m_watch_pc = ~offs_t(0);
+	std::function<void()> m_watch_cb;
 	u32 m_trace_pos = 0; bool m_trace_stop = false; offs_t m_trace_lo = 0; offs_t m_skip_lo = 1, m_skip_hi = 0, m_skip2_lo = 1, m_skip2_hi = 0; u32 m_trace_max = 0xffffffff;
 protected:
 	int m_input_state[40] = {};

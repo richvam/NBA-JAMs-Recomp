@@ -39,6 +39,15 @@ public:
 
 	enum op_type_t { PIXEL_SKIP = 0, PIXEL_COLOR = 1, PIXEL_COPY = 2 };
 
+	// Widescreen (roadmap W3.1). blit_to() draws one blitter command, given as its 18
+	// registers, into another picture with the same code the board uses: 16-bit pixels
+	// (palette and colour), `pitch` pixels a row, at least 512 rows. With a pitch of 1024
+	// every x the blitter can address (0 to 1023) has its own column. It changes nothing in
+	// the board: no video RAM, no interrupt, no timing, no counter.
+	// on_dma, when set, sees every command the game issues (its 18 registers), before it is drawn.
+	void blit_to(const u16 regs[18], u16 *target, int pitch);
+	std::function<void(const u16 *regs)> on_dma;
+
 	// counters for diagnostics
 	u64 m_dma_count = 0;
 
@@ -64,6 +73,10 @@ private:
 	static constexpr u32 YPOSMASK = 0x1ff;
 
 	template <int BitsPerPixel, bool XFlip, bool Skip, bool Scale, op_type_t Zero, op_type_t NonZero> void dma_draw();
+	bool dma_decode(const u16 *regs, int &command, int &bpp);   // m_dma_state from the registers; false: nothing to draw
+	int dma_run(int command, int bpp);                          // draws m_dma_state into m_target, returns the pixel count
+	u16 *m_target = nullptr;       // where dma_draw writes: video RAM, or a blit_to() picture
+	int m_pitch = 512;
 	void dma_draw_none() {}
 	typedef void (midtunit_video_device::*draw_func)();
 	draw_func m_dma_draw_skip_scale[8 * 32];

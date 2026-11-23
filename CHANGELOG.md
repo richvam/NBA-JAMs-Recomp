@@ -149,6 +149,9 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
   is only the way round when two players cannot reach each other.
 - For developers: how the games draw, and the plan for true widescreen, are written down in
   `docs/WIDESCREEN.md`; the program does not show more of the court yet.
+- For developers: the emulator can draw the game's blitter commands into a wider picture and
+  watch the game's display routine, without changing the game (`widetest` checks it). Nothing
+  uses it yet.
 - An online game does not start while a Lua mod that writes memory or runs every frame is
   switched on, because the players could not be kept in sync. Mods that only patch the game
   at load still work if every player has the same ones on. "Quarter length" is affected and

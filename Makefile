@@ -110,6 +110,11 @@ $(BUILD)/statebench: tools/headless/statebench.cpp src/app/games.cpp src/app/rom
 	$(CXX) $(CXXFLAGS) $(APP_INC) $< src/app/games.cpp src/app/romload.cpp $(BUILD)/miniz.o $(BUILD)/libcore.a -o $@
 .PHONY: win linux-app
 
+# widetest: the widescreen engine hooks change nothing (W3.1); needs the ROMs
+$(BUILD)/widetest: tools/headless/widetest.cpp src/app/games.cpp src/app/romload.cpp $(BUILD)/libcore.a $(BUILD)/miniz.o
+	$(CXX) $(CXXFLAGS) $(APP_INC) $< src/app/games.cpp src/app/romload.cpp $(BUILD)/miniz.o $(BUILD)/libcore.a -o $@
+.PHONY: win linux-app
+
 print-version:
 	@echo $(APP_VERSION)
 .PHONY: print-version

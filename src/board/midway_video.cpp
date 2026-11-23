@@ -21,6 +21,8 @@ void midtunit_video_device::start(const u8 *gfxrom, size_t gfxrom_size)
 #endif
 
 	m_local_videoram = std::make_unique<u16[]>(0x100000 / 2);
+	m_target = m_local_videoram.get();
+	m_pitch = 512;
 	std::fill_n(m_local_videoram.get(), 0x100000 / 2, 0);
 	m_dma_timer = m_machine.timer_alloc([this](s32) {
 		m_dma_register[DMA_COMMAND] &= ~0x8000; // tell the cpu we're done
@@ -211,7 +213,7 @@ void midtunit_video_device::dma_draw()
 			width = (m_dma_state.width - m_dma_state.endskip) << 8;
 
 		// determine destination pointer
-		d = &m_local_videoram[sy * 512];
+		d = &m_target[sy * m_pitch];
 
 		// loop until we draw the entire width
 		while (ix < width)
@@ -351,13 +353,38 @@ void midtunit_video_device::dma_w(offs_t offset, u16 data, u16 mem_mask)
 	if (regnum != DMA_COMMAND)
 		return;
 
-	int const command = m_dma_register[DMA_COMMAND];
 	if (dma_irq_cb) dma_irq_cb(CLEAR_LINE);
-	if (!(command & 0x8000))
+	if (!(m_dma_register[DMA_COMMAND] & 0x8000))
 		return;
 	m_dma_count++;
+	if (on_dma) on_dma(m_dma_register);
 
-	int const bpp = (command >> 12) & 7;
+	int command = 0, bpp = 0;
+	if (dma_decode(m_dma_register, command, bpp))
+		pixels = dma_run(command, bpp);
+	m_dma_timer->adjust(attotime::from_nsec(41 * pixels));
+}
+
+void midtunit_video_device::blit_to(const u16 regs[18], u16 *target, int pitch)
+{
+	if (!(regs[DMA_COMMAND] & 0x8000) || !target) return;
+	const dma_state saved = m_dma_state;
+	u16 *const t = m_target;
+	int const p = m_pitch;
+	m_target = target;
+	m_pitch = pitch;
+	int command = 0, bpp = 0;
+	if (dma_decode(regs, command, bpp))
+		dma_run(command, bpp);
+	m_dma_state = saved;
+	m_target = t;
+	m_pitch = p;
+}
+
+bool midtunit_video_device::dma_decode(const u16 *m_dma_register, int &command, int &bpp)
+{
+	command = m_dma_register[DMA_COMMAND];
+	bpp = (command >> 12) & 7;
 	m_dma_state.xpos = m_dma_register[DMA_XSTART] & XPOSMASK;
 	m_dma_state.ypos = m_dma_register[DMA_YSTART] & YPOSMASK;
 	m_dma_state.width = m_dma_register[DMA_WIDTH] & 0x3ff;
@@ -384,10 +411,10 @@ void midtunit_video_device::dma_w(offs_t offset, u16 data, u16 mem_mask)
 	if (gfxoffset < 0x10000000)
 		m_dma_state.offset = gfxoffset;
 	else
-		goto skipdma;
+		return false;
 #ifdef NBAJAM_LOWMEM
 	if ((gfxoffset >> 3) >= m_gfxrom_size)
-		goto skipdma;
+		return false;
 #endif
 
 	if (command & 0x40)
@@ -400,7 +427,12 @@ void midtunit_video_device::dma_w(offs_t offset, u16 data, u16 mem_mask)
 		m_dma_state.startskip = 0;
 		m_dma_state.endskip = m_dma_register[DMA_LRSKIP];
 	}
+	return true;
+}
 
+int midtunit_video_device::dma_run(int command, int bpp)
+{
+	int pixels = 0;
 	if (m_dma_state.xstep == 0x100 && m_dma_state.ystep == 0x100)
 	{
 		if (command & 0x80)
@@ -420,9 +452,7 @@ void midtunit_video_device::dma_w(offs_t offset, u16 data, u16 mem_mask)
 		else
 			pixels = 0;
 	}
-
-skipdma:
-	m_dma_timer->adjust(attotime::from_nsec(41 * pixels));
+	return pixels;
 }
 
 void midtunit_video_device::scanline_update(screen_device &screen, bitmap_ind16 &bitmap, int scanline, const tms340x0_device::display_params *params)
