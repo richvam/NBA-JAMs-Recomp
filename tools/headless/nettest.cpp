@@ -3,11 +3,19 @@
 // settings: MODS_ON=<file,file> (default: every script) and MODOPT=<file>:<id>=<index>. The host
 // sends its set with the game start; the client runs exactly that set (roadmap 1.7) or stops
 // with exit code 3 and names the file that differs.
+// WIDE=<columns> (roadmap W3.5): this peer also draws the wide gameplay picture (wide_view, T.E.
+// games), with the symbol file from WIDE_SYMS=<dir>, as the app does with Widescreen on. The two
+// peers must stay in sync whatever each one shows.
 // usage: nettest <base> <game> host <port> <frames> <delay> [loss]
 //        nettest <base> <game> client <ip> <port> <frames> [loss]
 #include "games.h"
 #include "netplay.h"
 #include "mods.h"
+#include "romload.h"
+#include "wide_view.h"
+#include <fstream>
+#include <memory>
+#include <sstream>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -25,6 +33,20 @@ static cabinet_inputs::player script(int slot, u32 f)
 	p.coin = g >= 60u + u32(slot) * 8 && g < 64u + u32(slot) * 8;
 	p.start = g >= 120u + u32(slot) * 8 && g < 126u + u32(slot) * 8;
 	return p;
+}
+
+// "  NAME = 0x01234567," from a symbol file
+static u32 symbol(const std::string &file, const std::string &name)
+{
+	std::ifstream in(file);
+	std::string l;
+	while (std::getline(in, l))
+	{
+		std::istringstream w(l);
+		std::string n, eq, v;
+		if (w >> n >> eq >> v && n == name && eq == "=" && v.rfind("0x", 0) == 0) return u32(strtoul(v.c_str(), nullptr, 16));
+	}
+	return 0;
 }
 
 static void sleep_ms(int ms) { std::this_thread::sleep_for(std::chrono::milliseconds(ms)); }
@@ -112,6 +134,22 @@ int main(int argc, char **argv)
 		m->reset();
 		np.client_ready(true, "");
 	}
+	std::unique_ptr<wide_view> wide;
+	long wide_frames = 0;
+	if (const char *wc = getenv("WIDE"))
+	{
+		std::vector<u8> *prog = m->program_rom();
+		char fp[16];
+		snprintf(fp, sizeof fp, "%08x", prog ? crc32_of(prog->data(), prog->size()) : 0u);
+		std::string const f = std::string(getenv("WIDE_SYMS") ? getenv("WIDE_SYMS") : "mods/sym") + "/" + id + "_" + fp + ".lua";
+		wide_symbols ws;
+		ws.display = symbol(f, "DISPLAY"); ws.objlst = symbol(f, "OBJLST"); ws.worldtlx = symbol(f, "WORLDTLX");
+		ws.worldtly = symbol(f, "WORLDTLY"); ws.gndx = symbol(f, "gndx"); ws.gndpos_t = symbol(f, "gndpos_t");
+		ws.dtype = symbol(f, "dtype"); ws.dpage = symbol(f, "dpage");
+		if (!ws.complete()) { fprintf(stderr, "%s: WIDE: no symbols in %s\n", role.c_str(), f.c_str()); return 1; }
+		wide = std::make_unique<wide_view>(*m, ws, atoi(wc));
+		fprintf(stderr, "%s: drawing the wide view, %d columns\n", role.c_str(), wide->columns());
+	}
 	fprintf(stderr, "%s: slot %d, players %d, start\n", role.c_str(), np.local_slot(), np.players());
 	u32 stalls = 0;
 	auto tstart = net_now_ms();
@@ -138,6 +176,7 @@ int main(int argc, char **argv)
 		m->run_frame();
 		std::vector<float> a; m->take_audio(a);
 		mods.frame();
+		if (wide && wide->show_wide()) wide_frames++;
 		u32 h = m->state_hash();
 		if (np.frame() % 300 == 0) printf("%u %08x\n", np.frame(), h);
 		np.frame_done(h);
@@ -146,6 +185,7 @@ int main(int argc, char **argv)
 	auto te = net_now_ms();
 	while (net_now_ms() - te < 1500) { np.poll(); sleep_ms(2); }
 	fprintf(stderr, "%s: done %d frames in %u ms, stall polls %u, desync=%d ping=%d\n", role.c_str(), frames, net_now_ms() - tstart, stalls, np.desynced(), np.ping_ms());
+	if (wide) fprintf(stderr, "%s: the wide view was shown in %ld frames\n", role.c_str(), wide_frames);
 	np.stop();
 	return np.desynced() ? 2 : 0;
 }

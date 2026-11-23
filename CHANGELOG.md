@@ -141,6 +141,8 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - With a controller in use, moving or resizing the window under a still mouse pointer no longer takes the focus away from the controller.
 
 ### Online
+- Widescreen and 4:3 players can play each other online: each player's choice only changes
+  their own picture, never the game.
 - Hosting opens the router's port by PCP or NAT-PMP too, when the router has no UPnP.
 - IPv6: a computer with a public IPv6 address adds it to its code (the code gets longer), and a
   player who has IPv6 too connects over it, with no router in the way. An IPv6 address can be

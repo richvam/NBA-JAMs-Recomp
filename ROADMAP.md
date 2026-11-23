@@ -217,6 +217,14 @@ messages) do not move. The scoreboard is part of the arena and moves with it. Ch
 `widetest` pictures at 533 and 700 columns (tip-off, play near a basket); the hashes stay equal.
 Not checked: every message the game shows, and 32:9.
 
+W3.5 is done: W2.2 held. The wide view only reads the game, so it is not part of the game state,
+the fingerprint or the lobby, and each player picks their own shape. `nettest` with
+`WIDE=<columns>` has a peer draw the wide view as it plays. 10 000 frames on the loopback, delay 4:
+T.E. 4:3 host and 4:3 client, a 533-column host and 4:3 client, a 700-column host and 533-column
+client, and on SE a 4:3 host and 1000-column client. All finished with desync=0, and every peer
+ended on the same state hash as the all-4:3 game (T.E. `486f6c98` at frame 9900). The wide peers
+showed the wide view in about 8 600 frames each. Not checked: two machines over the internet.
+
 ## Phase W4: the other games
 
 Sonnet ports, on the pattern W3 proved; Opus only where a game differs.
