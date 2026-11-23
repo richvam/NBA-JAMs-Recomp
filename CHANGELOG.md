@@ -152,6 +152,10 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - For developers: the emulator can draw the game's blitter commands into a wider picture and
   watch the game's display routine, without changing the game (`widetest` checks it). Nothing
   uses it yet.
+- For developers: a wide picture of Tournament Edition 4.0 gameplay can be drawn off-screen at
+  any width from 400 to 1000 columns: the court floor, the stands and the courtside crowd
+  continue to the sides, and players, the ball and the hoops keep their place. The game is not
+  changed. The program does not show it yet; `widetest` checks it and can save pictures.
 - An online game does not start while a Lua mod that writes memory or runs every frame is
   switched on, because the players could not be kept in sync. Mods that only patch the game
   at load still work if every player has the same ones on. "Quarter length" is affected and

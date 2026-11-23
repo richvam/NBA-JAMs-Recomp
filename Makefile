@@ -6,7 +6,7 @@ CORE_SRC = src/emu/emu.cpp \
   src/mame/cpu/m6809/m6809.cpp src/mame/cpu/m6809/6x09dasm.cpp \
   src/mame/cpu/adsp2100/adsp2100.cpp src/mame/cpu/adsp2100/2100dasm.cpp \
   src/mame/sound/okiadpcm.cpp src/mame/ymfm/ymfm_opm.cpp src/mame/ymfm/ymfm_misc.cpp src/mame/ymfm/ymfm_adpcm.cpp src/mame/ymfm/ymfm_ssg.cpp \
-  src/board/midway_video.cpp src/board/williams_adpcm.cpp src/board/tunit.cpp src/board/dcs.cpp src/board/wunit.cpp
+  src/board/midway_video.cpp src/board/williams_adpcm.cpp src/board/tunit.cpp src/board/dcs.cpp src/board/wunit.cpp src/board/wide_view.cpp
 BUILD ?= build/linux
 
 # Program version (R1.2): taken from the nearest v* git tag, "dev-<commit>" before the first tag, "dev" outside git.
