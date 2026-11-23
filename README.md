@@ -128,6 +128,18 @@ The keyboard also has shortcuts for what is in those menus:
 
 ### Overlays and borders
 
+### Widescreen
+
+Press F7 until it says "Widescreen" (or choose it in Settings, Video, Shape). During play every game shows more of the court, as wide as your window, with nothing stretched. The game itself is not changed, so a widescreen player and a 4:3 player can play each other online.
+
+| Window shape | Example | What you get |
+|---|---|---|
+| 16:9 | 1920x1080, 2560x1440, 3840x2160 | 534 game columns instead of 400 |
+| 21:9 | 2560x1080, 3440x1440, 3840x1600 | about 712 to 720 columns |
+| 32:9 | 5120x1440 | 1000 columns (the widest), thin sides |
+
+Menus, team select, halftime, the final stats and other fixed screens stay 4:3. The players' names and turbo bars move out towards the sides; popups and messages stay in the middle. At the ends of the court the wide view stops short of the game's own camera, because the arena art ends there. "Widest view" in Settings, Video (Window, 16:9 or 21:9; `max_view_width` in the ini) limits how wide it gets. If your graphics card cannot draw the chosen look (F4) fast enough, the program switches to a cheaper one by itself and says so; `frame_time_log=1` in the ini writes the timings to `frame_times.log`.
+
 On a screen wider than 4:3, Settings (Video, "Sides of a 4:3 picture") or F8 puts a picture around the game, as RetroArch's overlays do.
 Two come with the program (`cabinet_purple`, `tube_shadow`). To use your own, put a PNG in
 the `overlays` folder (next to the program in the portable download; About shows the data

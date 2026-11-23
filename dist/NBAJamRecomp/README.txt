@@ -106,22 +106,33 @@ VIDEO (shaders)
                  the program tells you when they are large
   Shape (F7):
     Original 4:3 as the arcade monitor showed it
-    Widescreen   all five games: during play you
-                 see more of the court, as wide as your window (up to about
-                 2.5 times as wide as tall), nothing stretched. Menus, team
-                 select, halftime and other fixed screens stay 4:3. The
-                 players' names and turbo bars spread out to the sides. On the
-                 other games F7 skips it.
+    Widescreen   all five games: during play you see more of the court, as
+                 wide as your window, nothing stretched: 16:9, 21:9 and wider
+                 up to 1000 game columns (2.5 times the 400 of the arcade; a
+                 32:9 screen gets thin sides). Menus, team select, halftime
+                 and other fixed screens stay 4:3. The players' names and
+                 turbo bars spread out to the sides; popups and messages stay
+                 in the middle. It needs the game's symbol file in mods\sym
+                 (included); without it F7 skips Widescreen.
     Stretch      fills the whole window; the picture is distorted
+  Widest view (Settings, Video): Window (default), 16:9 or 21:9. Limits how
+  wide Widescreen gets, for a very wide screen that feels too zoomed out; the
+  rest of the window gets sides. In the .ini: max_view_width=widest, 16:9 or
+  21:9.
   Sides (F8): what is shown around a 4:3 picture on a wider screen: black, the
   picture itself blurred and dimmed, or an overlay (border) from the overlays\
   folder, as in RetroArch. Two are included; overlays\README.txt explains how to
   add your own PNGs or RetroArch border overlays (.cfg + .png).
+  Look (F4):
     Sharp        clean pixels at any size
     Smooth       bilinear filtering
     Scanlines    dark gaps between lines; F6 changes the strength
     CRT          gaussian beam per line, RGB aperture mask and gamma
     Curved CRT   the same with tube curvature and vignette
+  If the graphics card cannot draw the chosen look fast enough, the program
+  switches to the next cheaper one by itself and says so (until the window
+  size or the look is changed). frame_time_log=1 in the .ini writes how long
+  each picture took to frame_times.log, for a report.
   Without OpenGL 2.1 a basic mode is used (opengl=0 in the .ini forces
   it).
 

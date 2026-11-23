@@ -84,6 +84,7 @@ private:
 		u16 regs[18] = {};
 		u32 sag = 0;
 		u16 h = 0;
+		u16 ofs = 0;           // the object's own end skip (OFSET): more in the game's command means cut on the right
 		u16 w = 0;             // the image's width (the game keeps it in its command even when it cuts)
 		u32 img = 0, img_end = 0;   // the image data, in bits: the game's command starts inside it
 		bool known = false;    // where the game's own command for it starts, when not cut: gx, gy
