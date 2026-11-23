@@ -284,6 +284,22 @@ the wide camera stops short of the game's), and the other 1993 revisions.
   (712). It is saved as `max_view_width=` in the `.ini`. The Shape picker there now offers
   Widescreen too; before, saving the Settings screen reset Widescreen to Original 4:3. `uitest`
   checks the widget both ways.
+* At 1000 columns the owner saw a hoop pole missing and courtside photographers sitting on the
+  court. Two causes: the game leaves out 3D objects (players, ball, poles, padding, shadows)
+  beyond its 400 columns and cuts those across its edge; and a copy of the game's command moved
+  past column 1023 wraps round to the other side. Now `wide_view` works out every object for the
+  wide camera: 3D ones whole (the game's projection, `Z/2 - Z/8 + GND_Y` rows, the scale table by
+  Z/16, shadows shimmering with PCNT's low bit), flat ones cut to the game's screen box rows
+  (SCRNTL/SCRNLR). It draws them itself, in list order, wherever the game's copy is missing, cut
+  or for another camera. A whole copy from the game with the same camera is kept. Every command
+  is cut at the view's edges as the game cuts at its own (start further into the image, skip the
+  same count at the row's end), so nothing wraps. To know which object a command draws, the
+  match takes the control word, palette, colour, width, an address inside the object's image and
+  its place (or the game's screen edge where it was cut): the crowd has mirrored twins and
+  repeated panels with the same image. Objects whose command has no go bit are hidden and not
+  drawn. At 400 columns all five games are exactly the game's own picture in every frame of play
+  (3000 frames each); at 1000 columns every column is drawn in all 4000 or so frames of play per
+  game. A hoop the game itself has removed from its list (Hangtime's far one) cannot be drawn.
 * Not checked: real monitors of those sizes, and the `.ini` round trip in the running app (only
   read in the code).
 

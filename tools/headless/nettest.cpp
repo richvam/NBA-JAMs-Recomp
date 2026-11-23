@@ -150,7 +150,7 @@ int main(int argc, char **argv)
 		wide_symbols ws;
 		ws.display = symbol(f, "DISPLAY"); ws.objlst = symbol(f, "OBJLST"); ws.worldtlx = symbol(f, "WORLDTLX");
 		ws.worldtly = symbol(f, "WORLDTLY"); ws.gndx = symbol(f, "gndx"); ws.gndpos_t = symbol(f, "gndpos_t");
-		ws.dtype = symbol(f, "dtype"); ws.dpage = symbol(f, "dpage");
+		ws.dtype = symbol(f, "dtype"); ws.dpage = symbol(f, "dpage"); ws.pcnt = symbol(f, "PCNT"); ws.scrntl = symbol(f, "SCRNTL"); ws.scrnlr = symbol(f, "SCRNLR");
 		if (!ws.complete()) { fprintf(stderr, "%s: WIDE: no symbols in %s\n", role.c_str(), f.c_str()); return 1; }
 		const wide_game *wg = wide_game_for(id.c_str());
 		if (!wg) { fprintf(stderr, "%s: WIDE: no wide view for %s

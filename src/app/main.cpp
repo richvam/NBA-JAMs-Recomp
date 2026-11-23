@@ -841,7 +841,7 @@ bool app::wide_symbols_of(wide_symbols &ws)
 	const auto &sy = m_mods.symbols();
 	auto get = [&](const char *n) { auto i = sy.find(n); return i == sy.end() ? 0u : i->second; };
 	ws.display = get("DISPLAY"); ws.objlst = get("OBJLST"); ws.worldtlx = get("WORLDTLX"); ws.worldtly = get("WORLDTLY");
-	ws.gndx = get("gndx"); ws.gndpos_t = get("gndpos_t"); ws.dtype = get("dtype"); ws.dpage = get("dpage");
+	ws.gndx = get("gndx"); ws.gndpos_t = get("gndpos_t"); ws.dtype = get("dtype"); ws.dpage = get("dpage"); ws.pcnt = get("PCNT"); ws.scrntl = get("SCRNTL"); ws.scrnlr = get("SCRNLR");
 	return ws.complete();
 }
 
