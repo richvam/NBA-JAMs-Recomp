@@ -11,13 +11,27 @@
 // Checked: every frame's hash (main RAM, picture, sound) is the same in both machines; the
 // watch ran; and the two copies hold the same pixels in the columns both have (0 to 511),
 // so the wide picture draws exactly what the board draws. Exit status 0 when all pass.
+// With WIDETEST_PNG=<dir>, at four frames it writes the board's picture (<game>_<frame>_board.png)
+// and that frame's commands drawn into the 1024 x 512 picture (<game>_<frame>_wide.png): both
+// video pages, the 56-pixel pad, and black where nothing was drawn this frame.
 #include "games.h"
 #include "romload.h"
+#include "miniz.h"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
 #include <sstream>
+
+static void write_png(const std::string &path, int w, int h, const std::vector<u32> &px)
+{
+	std::vector<u8> rgb(size_t(w) * h * 3);
+	for (size_t i = 0; i < size_t(w) * h; i++) { rgb[i * 3] = u8(px[i] >> 16); rgb[i * 3 + 1] = u8(px[i] >> 8); rgb[i * 3 + 2] = u8(px[i]); }
+	size_t len = 0;
+	void *png = tdefl_write_image_to_png_file_in_memory(rgb.data(), w, h, 3, &len);
+	if (FILE *f = fopen(path.c_str(), "wb")) { fwrite(png, 1, len, f); fclose(f); }
+	mz_free(png);
+}
 
 static cabinet_inputs inputs_for(int f)
 {
@@ -94,15 +108,27 @@ int main(int argc, char **argv)
 			b->wide_blit(regs, wide.data(), 1024);
 		});
 
+		const char *pngdir = getenv("WIDETEST_PNG");
+		auto shot = [&](int f) { return pngdir && (f == 600 || f == 1500 || f == frames * 3 / 4 || f == frames); };
 		int first_bad = -1, pix_bad_frames = 0;
 		for (int f = 1; f <= frames; f++)
 		{
+			if (shot(f)) { std::fill(narrow.begin(), narrow.end(), 0); std::fill(wide.begin(), wide.end(), 0); }
 			a->set_inputs(inputs_for(f)); a->run_frame();
 			b->set_inputs(inputs_for(f)); b->run_frame();
 			if (first_bad < 0 && frame_hash(*a) != frame_hash(*b)) first_bad = f;
 			bool same = true;
 			for (int y = 0; y < 512 && same; y++) same = memcmp(&narrow[size_t(y) * 512], &wide[size_t(y) * 1024], 512 * sizeof(u16)) == 0;
 			if (!same) pix_bad_frames++;
+			if (shot(f))
+			{
+				std::string stem = std::string(pngdir) + "/" + g.id + "_" + std::to_string(f);
+				std::vector<u32> board(a->frame(), a->frame() + size_t(a->width()) * a->height()), w(size_t(1024) * 512);
+				write_png(stem + "_board.png", a->width(), a->height(), board);
+				const u32 *pens = b->pens();
+				for (size_t i = 0; i < w.size(); i++) w[i] = pens ? pens[wide[i] & 0x7fff] : 0;
+				write_png(stem + "_wide.png", 1024, 512, w);
+			}
 		}
 		bool ok = first_bad < 0 && pix_bad_frames == 0 && dmas > 0 && (!display || watched > 0);
 		printf("%s %s: %d frames, hashes %s, %ld blitter commands drawn again (%s), display routine %s\n",
