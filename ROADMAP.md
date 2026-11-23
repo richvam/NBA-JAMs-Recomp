@@ -153,7 +153,7 @@ widescreen and a 4:3 player stay in sync. Not measured yet: the Hangtime backdro
 | ID | Model | Task | Check |
 |---|---|---|---|
 | W3.1 | Opus | Engine: variable visible width in `src/board/midway_video.cpp` and `tunit.cpp` per the W2.6 choice, off by default. With it off, output is bit-for-bit what it is today. | Frame hashes of a 4:3 headless run unchanged |
-| W3.2 | Opus | Game patches for T.E. 4.0, applied in memory at load (never to files): clip window, culling, scroll limits, background fill. The view width is a parameter, not a fixed 16:9. | Headless tip-off at 533 columns: court drawn edge to edge, no garbage columns, players round |
+| W3.2 | Opus | The wide gameplay picture for T.E. 4.0, drawn by the program from the game's lists (the W2.6 choice; no game patches): floor, background, culling, the wide camera's limits. The view width is a parameter, not a fixed 16:9. | Headless tip-off at 533 columns: court drawn edge to edge, no garbage columns, players round |
 | W3.3 | Opus | Screen switching: gameplay uses the wide view; fixed screens return to 400 columns centred with the W1.5 side fill. No flicker or one-frame stretch on the change. | Scripted run through attract, team select, game, halftime, stats |
 | W3.4 | Sonnet | HUD: score, clock, turbo bars, player arrows and messages keep their place relative to the screen edges or centre as designed in W2. | Screenshot at 16:9 and 21:9 |
 | W3.5 | Opus | Netplay: if W2.2 held, prove a 4:3 peer and a 16:9 peer stay in sync and keep widescreen out of the fingerprint. If not, add the view width to the fingerprint and the lobby. | `nettest`, 10 000 frames, equal hashes |
@@ -173,6 +173,25 @@ hook on, and finds every frame hash equal, the watch run (about 2300 times, 300 
 read, on the four games with a `DISPLAY` symbol) and every one of 290 000 to 430 000 blitter
 commands drawn the same in a 512- and a 1024-wide picture; `nettest` gives the same state hash
 as before (900 `bb96002f`) and `statetest` passes on all five games.
+
+W3.2 is done for the drawing; the program does not show the picture yet (W3.3). `src/board/wide_view.cpp`
+draws the wide gameplay picture of Tournament Edition 4.0 at any width from 400 to 1000 columns,
+read-only, when the game's `DISPLAY` starts and from the blitter commands it issues:
+* each floor line is drawn again as wide as the view from the same line of the court picture,
+  with the floor's perspective worked out for the wide camera (`gndpos_t`, as `gnd_dodma` does);
+* flat objects (the stands, banners, courtside crowd and tables) are drawn whole from the object
+  list, cut at the top as the game cuts them, so their parts past the 400 columns appear;
+* every other command (players, ball, hoops, shadows) is matched to its object in list order and
+  moved by that object's own depth (the game's 3D projection worked out for both cameras);
+* the wide camera follows the game's and stops where the game's own view would stop
+  (±510 from mid-court, and the backdrop's −512 to +675): at 16:9 it stays within ±244.
+Score, clock and messages stay on the game's 400 columns in the middle (W3.4 places them).
+Checks (`widetest`, needs the ROMs, 3000 frames, T.E. 4.0 and T.E. Special Edition): the machine
+drawing the wide view gives the same frame hashes as the plain one at 400, 533 and 700 columns;
+in all 1108 frames of play every column of the view holds a drawn pixel; at 400 columns the view
+is exactly the game's own picture of the same display pass in all 1108 frames. Hangtime and
+Maximum Hangtime have a wider court and are W4.2. Not checked: a full game, the end of every
+quarter, overtime, and how it looks on a real wide screen.
 
 ## Phase W4: the other games
 
