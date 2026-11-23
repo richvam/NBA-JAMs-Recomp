@@ -109,7 +109,7 @@ static void save_config(const std::string &path, config &c)
 	std::ofstream f(path);
 	f << "# NBA JAM Recomp - configuration\n[general]\n# news=1 asks github.com once at start for the latest release (only to tell you; nothing is downloaded)\nnews=" << c.news << "\n# pause_buttons: held half a second on a controller for the pause menu (Esc and Guide always work): start+back or l3+r3\npause_buttons=" << (c.pause_buttons == 1 ? "l3+r3" : "start+back") << "\n# save_states=1 adds Save and Load (three slots per game) to the pause menu of an offline game\nsave_states=" << c.save_states << "\n# the menus play the highlighted game's own music and sounds, from its ROMs\nmenu_music=" << c.menu_music << "\nmenu_sounds=" << c.menu_sounds << "\nmenu_volume=" << c.menu_volume << "\n\n[video]\n# scale: size of the window in multiples of 400x300; 0 = chosen from the screen size\nscale=" << c.scale << "\nfullscreen=" << c.fullscreen << "\n# tv_margins=1 keeps the menus 5% in from each edge, for TVs that cut the edges off\ntv_margins=" << c.tv_margins
 	  << "\n# shader: 0 sharp, 1 smooth, 2 scanlines, 3 CRT, 4 curved CRT\nshader=" << c.shader
-	  << "\n# view: original (4:3), widescreen (more of the court in play; T.E. 4.0 and Special Edition only, 4:3 on the other games) or stretch (fills the window, distorted).\nview=" << view_shape_id(c.shape)
+	  << "\n# view: original (4:3), widescreen (more of the court in play; T.E., Hangtime and Maximum Hangtime; 4:3 on NBA JAM 1993) or stretch (fills the window, distorted).\nview=" << view_shape_id(c.shape)
 	  << "\n# scaling: integer (whole multiples of the game's lines), fit (fills the height, crisp pixels), smooth (fills the height, filtered)\nscaling=" << view_scaling_id(c.scaling) << "\n# side_fill: around a 4:3 picture on a wider screen: black, blur (the picture, blurred and dimmed), overlay (an image from overlays/ in the data folder)\nside_fill=" << (c.side_fill == 1 ? "blur" : c.side_fill == 2 ? "overlay" : "black") << "\noverlay=" << c.overlay << "\n# overlay_opacity: 0.1 to 1, for overlays with a transparent opening\noverlay_opacity=" << c.overlay_opacity << "\nscanline_strength=" << c.scan_strength
 	  << "\n# opengl=0 uses the basic SDL renderer (no shaders)\nopengl=" << c.use_opengl
 	  << "\n\n[audio]\nvolume=" << c.volume
@@ -862,7 +862,9 @@ void app::update_wide()
 	wide_symbols ws;
 	if (!wide_symbols_of(ws)) { m_wide_possible = false; m_wide.reset(); return; }
 	m_wide.reset();
-	m_wide = std::make_unique<wide_view>(*m_mach, ws, cols);
+	const wide_game *wg = m_cur_game >= 0 ? wide_game_for(game_list()[size_t(m_cur_game)].id) : nullptr;
+	if (!wg) { m_wide_possible = false; return; }
+	m_wide = std::make_unique<wide_view>(*m_mach, ws, cols, *wg);
 }
 
 bool app::start_game(int index, bool net_client)
@@ -888,11 +890,11 @@ bool app::start_game(int index, bool net_client)
 	m_mods.set_netplay(m_net_game);
 	m_mods.start(g.id, *m_mach);
 	{
-		// true widescreen: Tournament Edition 4.0 and Special Edition, with their symbol files
+		// true widescreen: the T.E. and Hangtime games (wide_game_for), with their symbol files
 		m_wide.reset();
 		wide_symbols ws;
 		std::string const id = g.id;
-		m_wide_possible = (id == "nbajamte" || id == "nbajamse") && wide_symbols_of(ws);
+		m_wide_possible = wide_game_for(id.c_str()) && wide_symbols_of(ws);
 	}
 	bool const wide_missing = m_cfg.shape == view_shape::widescreen && !m_wide_possible;
 	m_join = audio_join();

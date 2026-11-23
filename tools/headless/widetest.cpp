@@ -125,9 +125,9 @@ int main(int argc, char **argv)
 		ws.worldtlx = symbol(sym, "WORLDTLX"); ws.worldtly = symbol(sym, "WORLDTLY");
 		ws.gndx = symbol(sym, "gndx"); ws.gndpos_t = symbol(sym, "gndpos_t"); ws.dtype = symbol(sym, "dtype"); ws.dpage = symbol(sym, "dpage");
 		std::unique_ptr<wide_view> view;
-		// the wide view knows the Tournament Edition court (W3.2); Hangtime's is W4.2
-		bool const te = std::string(g.id) == "nbajamte" || std::string(g.id) == "nbajamse";
-		if (te && ws.complete()) view = std::make_unique<wide_view>(*c, ws, cols);
+		// the games wide_game_for knows: T.E. (W3.2), Hangtime and Maximum Hangtime (W4.2)
+		const wide_game *wg = wide_game_for(g.id);
+		if (wg && ws.complete()) view = std::make_unique<wide_view>(*c, ws, cols, *wg);
 		long play = 0, play_full = 0, play_same_cam = 0, same400 = 0, ref_frames = 0;
 		std::vector<u16> ref_work(size_t(512) * 512, 0), ref_done(ref_work.size(), 0);
 		int ref_page = 0, ref_done_page = 0;

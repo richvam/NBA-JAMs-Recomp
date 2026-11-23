@@ -4,6 +4,7 @@
 #include "wide_view.h"
 #include <algorithm>
 #include <cstring>
+#include <string>
 
 namespace {
 // object fields (bit offsets, DISP.EQU)
@@ -11,19 +12,33 @@ constexpr u32 OXVAL = 0x80, OXPOS = 0x90, OYPOS = 0xb0, OZPOS = 0xd0, OFLAGS = 0
               OSAG = 0x110, OSIZEX = 0x130, OSIZEY = 0x140, OPAL = 0x150, OCONST = 0x160, ODATA_P = 0x1c0,
               OXANI = 0x1e0, OMISC = 0x210;
 // OFLAGS and OCTRL bits
+constexpr u16 M_CHARGEN = 0x4000;   // Hangtime: a text object drawn its own way
 constexpr u16 M_FLIPH = 0x10, M_FLIPV = 0x20, M_3DQ = 0x40, M_ZEROCOMP = 0x80, M_3D = 0x100, M_SCRNREL = 0x2000;
-// the court floor (NDSP1.ASM gnd_dodma, Tournament Edition): COURT is GNDI_W x GNDI_H pixels, a
-// line is drawn 400 wide from GNDI_W/2-200 plus gndpos_t[40 + line]; gndpos_t has GND_H entries
-constexpr int GNDI_W = 1277, GNDI_H = 138, FLOOR_FIRST = 40, GND_H = GNDI_H + 40;
-constexpr int GZBASE = 894;   // PLYR.EQU
+// the court floor (NDSP1.ASM gnd_dodma): the court picture is gndi_w x gndi_h pixels, a line is
+// drawn 400 wide from gndi_w/2-200 plus gndpos_t[40 + line], line 0 at screen y gndi_y - WORLDTLY
+constexpr int FLOOR_FIRST = 40;
 // blitter registers (midway_video.h)
 enum { R_LRSKIP, R_COMMAND, R_OFFSETLO, R_OFFSETHI, R_XSTART, R_YSTART, R_WIDTH, R_HEIGHT, R_PALETTE, R_COLOR,
        R_SCALE_X, R_SCALE_Y, R_TOPCLIP, R_BOTCLIP, R_UNKNOWN_E, R_CONFIG, R_LEFTCLIP, R_RIGHTCLIP };
 int bits_per_pixel(u16 ctrl) { int b = (ctrl >> 12) & 7; return b ? b : 8; }
 }
 
-wide_view::wide_view(arcade_machine &mach, const wide_symbols &sym, int columns)
-	: m(mach), s(sym), m_cols(std::clamp(columns & ~1, 400, 1000)), m_left(((PITCH - m_cols) / 2) & ~1),
+// T.E.: NDSP1.ASM GNDI_Y 116, PLYR.EQU GZBASE 894, the art and camera limits measured in W2.3
+// (backdrop mid-court -512 to +675, camera to +-310 so the view to +-510).
+// Hangtime and Maximum Hangtime: WORLD.EQU (GNDI_W 1762, GNDI_H 144, GNDI_Y 254-144,
+// GND_H GNDI_H+40, GZBASE CZMIN-40*8/3, MAX_VIEW1 375 so the view to +-575).
+const wide_game *wide_game_for(const char *id)
+{
+	static const wide_game te{1277, 138, 116, 178, 894, false, -512, 675, 510};
+	static const wide_game ht{1762, 144, 110, 184, 894, true, -575, 575, 575};
+	std::string const g = id ? id : "";
+	if (g == "nbajamte" || g == "nbajamse") return &te;
+	if (g == "nbahangt" || g == "nbamht") return &ht;
+	return nullptr;
+}
+
+wide_view::wide_view(arcade_machine &mach, const wide_symbols &sym, int columns, const wide_game &game)
+	: m(mach), s(sym), g(game), m_cols(std::clamp(columns & ~1, 400, 1000)), m_left(((PITCH - m_cols) / 2) & ~1),
 	  m_work(size_t(PITCH) * ROWS, 0), m_done(size_t(PITCH) * ROWS, 0)
 {
 	m.watch_pc(s.display, [this]() { frame_start(); });
@@ -36,10 +51,11 @@ wide_view::~wide_view()
 	m.observe_dma(nullptr);
 }
 
-// gnd_dodma: gndpos_t[i] = (gndx + i * (gndx / 0x120)) >> 16, gndx 16:16
-int wide_view::gndpos(s32 gndx, int line)
+// gnd_dodma: gndpos_t[i] = (gndx + i * step) >> 16, gndx 16:16. T.E.: step = gndx / 0x120.
+// Hangtime: step = (gndx << DIVRES) / DIVSLP, DIVRES 6, DIVSLP = 64*1594*144/612 - 64*184 = 12227.
+int wide_view::gndpos(s32 gndx, int line) const
 {
-	s32 step = gndx / 0x120;
+	s32 const step = g.hangtime ? s32(u32(gndx) << 6) / 12227 : gndx / 0x120;
 	return int(s32(gndx + s32(line) * step) >> 16);
 }
 
@@ -71,7 +87,7 @@ void wide_view::frame_start()
 	m_gndx = s32(r32(s.gndx));
 	m_gc = m_gndx >> 16;
 	int const half = m_cols / 2;
-	int const lo = std::max(ART_LEFT, -GAME_EDGE) + half, hi = std::min(ART_RIGHT, GAME_EDGE) - half;
+	int const lo = std::max(g.art_left, -g.game_edge) + half, hi = std::min(g.art_right, g.game_edge) - half;
 	m_rc = !m_wide ? m_gc : lo <= hi ? std::clamp(m_gc, lo, hi) : (lo + hi) / 2;
 	// board column 56 is the game's screen x 0. m_base moves the game's 400 columns to the middle
 	// of the view; a world object also moves by the difference between the two cameras.
@@ -88,14 +104,23 @@ void wide_view::frame_start()
 	if (!m_wide) return;
 
 	int const tlx = s16(r16(s.worldtlx + 16)), tly = s16(r16(s.worldtly + 16));
-	// the 3D projection (dma_objlst #3d): x = ((X - C + ani) >> 11) * (z + 819 - GZBASE) * 5/8 >> 14,
-	// + 200 - ani, with C = (WORLDTLX + 200) << 16 the camera centre
+	m_tly = tly;
+	// the 3D projection (dma_objlst #3d), with C = (WORLDTLX + 200) << 16 the camera centre.
+	// T.E.: x = ((X - C + ani) >> 11) * (z + 819 - GZBASE) * 5/8 >> 14, + 200 - ani.
+	// Hangtime (PRJX2Z): x = ((X - C + ani) >> 5) * (z + 503 - GZBASE) * 65/128 >> 19, + 200 - ani.
 	auto proj = [&](u32 o, s32 c) {
 		s32 a7 = s32(r32(o + OXVAL)) - c;
 		s32 const ani = s32(r32(o + OXANI));
-		a7 = (a7 + ani) >> 11;
 		s32 const z = s16(r16(o + OZPOS)) + s16(r16(o + OMISC));
-		a7 *= (z + 819 - GZBASE);
+		if (g.hangtime)
+		{
+			a7 = (a7 + ani) >> 5;
+			a7 *= (z + 503 - g.gzbase);
+			a7 = (a7 >> 1) + (a7 >> 7);
+			return (a7 >> 19) + 200 - (ani >> 16);
+		}
+		a7 = (a7 + ani) >> 11;
+		a7 *= (z + 819 - g.gzbase);
 		s32 a3 = a7 >> 2;
 		a7 -= a3;
 		a3 >>= 1;
@@ -120,7 +145,7 @@ void wide_view::frame_start()
 		else if (flags & M_3DQ)
 		{
 			q = int((s32(r32(o + ODATA_P)) - s32(s.gndpos_t)) / 16);
-			if (q >= 0 && q < GND_H) k.shift = m_base - (gndpos(m_rgndx, q) - gndpos(m_gndx, q));
+			if (q >= 0 && q < g.gnd_h) k.shift = m_base - (gndpos(m_rgndx, q) - gndpos(m_gndx, q));
 		}
 		else if (flags & M_3D)
 			k.shift = m_base + proj(o, cam + s32(u32(d) << 16)) - proj(o, cam);
@@ -128,13 +153,13 @@ void wide_view::frame_start()
 
 		// flat objects (stands, banners, the courtside crowd and tables): also drawn whole,
 		// so the parts beyond the game's 400 columns appear at the sides
-		if (flags & (M_3D | M_SCRNREL)) continue;
+		if (flags & (M_3D | M_SCRNREL | M_CHARGEN)) continue;
 		if (w <= 0 || h <= 0 || w > 1023 || h > 511) continue;
 		int x = s16(r16(o + OXPOS)), y = s16(r16(o + OYPOS)) - tly;
 		if (flags & M_3DQ)
 		{
 			// x = OXPOS - gndpos_t[q], the floor line the object stands on
-			if (q < 0 || q >= GND_H) continue;
+			if (q < 0 || q >= g.gnd_h) continue;
 			x += LEFT + m_base - gndpos(m_rgndx, q);
 		}
 		else
@@ -225,19 +250,21 @@ void wide_view::on_dma(const u16 *in)
 	if (!m_started) return;
 	u16 regs[18];
 	memcpy(regs, in, sizeof regs);
-	if (m_wide && !m_floor_done && m_floor_line < GNDI_H && (regs[R_WIDTH] & 0x3ff) == 400 && (regs[R_HEIGHT] & 0x3ff) == 1 &&
+	if (m_wide && !m_floor_done && m_floor_line < g.gndi_h && (regs[R_WIDTH] & 0x3ff) == 400 && (regs[R_HEIGHT] & 0x3ff) == 1 &&
 	    (regs[R_SCALE_X] == 0 || regs[R_SCALE_X] == 0x100))
 	{
 		// a floor line (they come first): the same line of COURT, as wide as the view
-		int const line = FLOOR_FIRST + m_floor_line++;
+		// which court line: from its screen row (Hangtime leaves out the lines above the screen)
+		m_floor_line++;
+		int const line = FLOOR_FIRST + std::clamp(int(regs[R_YSTART] & 0x1ff) - m_page - (g.gndi_y - m_tly), 0, g.gndi_h - 1);
 		int const bpp = bits_per_pixel(regs[R_COMMAND]);
 		u32 const sag = u32(regs[R_OFFSETLO]) | u32(regs[R_OFFSETHI]) << 16;
-		int const gx = GNDI_W / 2 - 200 + gndpos(m_gndx, line);       // the game's first pixel
-		int const sx = GNDI_W / 2 - m_cols / 2 + gndpos(m_rgndx, line);   // the wide view's
+		int const gx = g.gndi_w / 2 - 200 + gndpos(m_gndx, line);       // the game's first pixel
+		int const sx = g.gndi_w / 2 - m_cols / 2 + gndpos(m_rgndx, line);   // the wide view's
 		u32 const start = sag - u32(gx) * u32(bpp);                     // the line's pixel 0
 		// like the game's own lines at the court's ends, a line may read a little past its
 		// picture line into the next; the wide camera never goes further out than the game's
-		if (sx >= 0 && sx + m_cols <= GNDI_W) m_floor_full++;
+		if (sx >= 0 && sx + m_cols <= g.gndi_w) m_floor_full++;
 		u32 const nsag = start + u32(s32(sx) * bpp);
 		regs[R_OFFSETLO] = u16(nsag);
 		regs[R_OFFSETHI] = u16(nsag >> 16);
