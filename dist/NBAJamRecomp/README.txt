@@ -84,7 +84,7 @@ CONTROLS
   F4   picture: Sharp -> Smooth -> Scanlines -> CRT -> Curved CRT
   F5   scaling: Fit -> Smooth -> Integer
   F6   scanline strength
-  F7   shape: Original 4:3 -> Stretch
+  F7   shape: Original 4:3 -> Widescreen (T.E. games) -> Stretch
   F8   around the 4:3 picture on a wide screen: black -> blurred picture -> overlays
   F11  fullscreen (or Alt+Enter)
   F12  screenshot (PNG in the screenshots\ folder; Print Screen works too)
@@ -106,9 +106,13 @@ VIDEO (shaders)
                  the program tells you when they are large
   Shape (F7):
     Original 4:3 as the arcade monitor showed it
+    Widescreen   NBA JAM T.E. 4.0 and T.E. Special Edition only: during play you
+                 see more of the court, as wide as your window (up to about
+                 2.5 times as wide as tall), nothing stretched. Menus, team
+                 select, halftime and other fixed screens stay 4:3. The score
+                 and names stay in the middle part for now. On the other games
+                 F7 skips it.
     Stretch      fills the whole window; the picture is distorted
-  A true widescreen view (more of the court, nothing stretched) does not exist
-  yet: the games draw a 4:3 picture.
   Sides (F8): what is shown around a 4:3 picture on a wider screen: black, the
   picture itself blurred and dimmed, or an overlay (border) from the overlays\
   folder, as in RetroArch. Two are included; overlays\README.txt explains how to

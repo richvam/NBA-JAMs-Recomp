@@ -35,6 +35,9 @@ public:
 
 	// columns: the wide view's width, 400 to 1000 (an even number)
 	wide_view(arcade_machine &m, const wide_symbols &s, int columns);
+	~wide_view();                  // unhooks itself from the machine
+	wide_view(const wide_view &) = delete;
+	wide_view &operator=(const wide_view &) = delete;
 
 	int columns() const { return m_cols; }
 	// the last finished frame: 16-bit pixels (palette and colour, as the board's video RAM),
@@ -42,6 +45,11 @@ public:
 	const u16 *picture() const { return &m_done[size_t(m_done_page) * PITCH + m_left]; }
 	int pitch() const { return PITCH; }
 	bool is_wide() const { return m_done_wide; }
+	// what to show: the wide picture once play has gone on for STEADY frames. At a tip-off the game
+	// is in play for 10 frames, then on a fixed screen for 25, then in play; showing those 10
+	// would flash the shape. Back to 4:3 at once when play stops.
+	static constexpr int STEADY = 30;
+	bool show_wide() const { return m_done_wide && m_steady >= STEADY; }
 	// the wide camera of the last frame, from mid-court, and the game's own
 	int render_centre() const { return m_done_rc; }
 	int game_centre() const { return m_done_gc; }
@@ -77,4 +85,5 @@ private:
 	size_t m_next = 0;
 	int m_base = 0;               // the game's 400 columns in the middle of the view
 	long m_frames = 0;
+	int m_steady = 0;              // finished frames in play in a row
 };

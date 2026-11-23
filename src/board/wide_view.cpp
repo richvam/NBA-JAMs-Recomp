@@ -30,6 +30,12 @@ wide_view::wide_view(arcade_machine &mach, const wide_symbols &sym, int columns)
 	m.observe_dma([this](const u16 *regs) { on_dma(regs); });
 }
 
+wide_view::~wide_view()
+{
+	m.watch_pc(0, nullptr);
+	m.observe_dma(nullptr);
+}
+
 // gnd_dodma: gndpos_t[i] = (gndx + i * (gndx / 0x120)) >> 16, gndx 16:16
 int wide_view::gndpos(s32 gndx, int line)
 {
@@ -49,6 +55,7 @@ void wide_view::frame_start()
 		m_done.swap(m_work);
 		m_done_page = m_page;
 		m_done_wide = m_wide;
+		m_steady = m_wide ? m_steady + 1 : 0;
 		m_done_rc = m_rc;
 		m_done_gc = m_gc;
 		m_done_fl = m_floor_line;

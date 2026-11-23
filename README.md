@@ -118,7 +118,7 @@ The keyboard also has shortcuts for what is in those menus:
 | F4 | picture: sharp, smooth, scanlines, CRT, curved CRT |
 | F5 | scaling: Fit (fills the height, crisp pixels), Smooth (the same, filtered), Integer (whole-number size, may leave borders) |
 | F6 | scanline strength |
-| F7 | shape: Original 4:3, or Stretch (fills the window, distorts the picture). There is no true widescreen view yet: the games draw a 4:3 picture, and showing more of the court needs changes to each game that are still to come. |
+| F7 | shape: Original 4:3, Widescreen, or Stretch (fills the window, distorts the picture). Widescreen is true widescreen on NBA JAM T.E. 4.0 and T.E. Special Edition: during play you see more of the court, as wide as the window, nothing stretched; fixed screens stay 4:3, and the score stays in the middle part for now. The other games do not have it yet, and F7 skips it there. |
 | F8 | around the 4:3 picture on a wider screen: black, the picture blurred and dimmed, then each overlay in the `overlays` folder (see [Overlays](#overlays-and-borders)) |
 | F11 or Alt+Enter | fullscreen |
 | F12 or Print Screen | screenshot, saved in `screenshots` |
