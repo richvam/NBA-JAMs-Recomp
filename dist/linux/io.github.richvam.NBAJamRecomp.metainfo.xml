@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.richvam.NBAJamRecomp</id>
+  <name>NBA JAM Recomp</name>
+  <summary>The NBA JAM arcade games, recompiled; bring your own ROMs</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>BSD-3-Clause</project_license>
+  <developer id="io.github.richvam">
+    <name>NBA JAM Recomp contributors</name>
+  </developer>
+  <description>
+    <p>
+      Plays NBA JAM, Tournament Edition, T.E. Special Edition, NBA Hangtime and Maximum
+      Hangtime from your own ROM files. No game data is included.
+    </p>
+    <ul>
+      <li>Widescreen for every game, with original 4:3 and stretch</li>
+      <li>Menus that work with a controller alone</li>
+      <li>Online games without port forwarding</li>
+      <li>Lua mods, shaders and save states</li>
+    </ul>
+    <p>
+      Drag your ROM files onto the window, or use Open my ROM folder in the main menu.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.richvam.NBAJamRecomp.desktop</launchable>
+  <url type="homepage">https://github.com/richvam/NBA-JAMs-Recomp</url>
+  <url type="bugtracker">https://github.com/richvam/NBA-JAMs-Recomp/issues</url>
+  <content_rating type="oars-1.1">
+    <content_attribute id="violence-cartoon">mild</content_attribute>
+  </content_rating>
+  <supports>
+    <control>gamepad</control>
+    <control>keyboard</control>
+  </supports>
+  <releases>
+    <release version="2026.11.06" date="2026-11-06"/>
+  </releases>
+</component>

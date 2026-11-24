@@ -1,0 +1,53 @@
+# Flatpak manifest (roadmap R4.3). Built in CI by the flatpak job:
+#   flatpak-builder --user --install-deps-from=flathub build flatpak/io.github.richvam.NBAJamRecomp.yml
+# Everything is built from source: SDL2 (pinned, checked by SHA-256, static as in the other
+# Linux builds) and the program. The program keeps its data in the sandbox's own folder,
+# ~/.var/app/io.github.richvam.NBAJamRecomp/data/NBAJamRecomp (ROMs in its roms/), and copies
+# the shipped mods there on first start. ROMs get in by drag and drop (the file chooser portal
+# hands the dropped files in) or through Open my ROM folder.
+app-id: io.github.richvam.NBAJamRecomp
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+command: NBAJamRecomp
+finish-args:
+  - --share=ipc
+  - --socket=x11              # SDL2 draws through X11 (XWayland on a Wayland desktop)
+  - --socket=pulseaudio       # sound
+  - --share=network           # online games, release news
+  - --device=all              # controllers and the GPU
+  # no host folders: dropped files come in through the document portal
+modules:
+  - name: sdl2
+    buildsystem: autotools
+    config-opts:
+      - --disable-shared
+      - --enable-static
+    cleanup:
+      - '*'
+    sources:
+      - type: archive
+        url: https://github.com/libsdl-org/SDL/releases/download/release-2.30.9/SDL2-2.30.9.tar.gz
+        sha256: 24b574f71c87a763f50704bbb630cbe38298d544a1f890f099a4696b1d6beba4
+
+  - name: nbajamrecomp
+    buildsystem: simple
+    build-commands:
+      - make -j"$FLATPAK_BUILDER_N_JOBS" BUILD=build/linux build/linux/libcore.a build/linux/liblua.a
+      - make BUILD=build/linux SDL2L=/app APP_VERSION="$(cat .flatpak-version 2>/dev/null || echo dev)" linux-app
+      - install -Dm755 build/linux/NBAJamRecomp /app/lib/nbajamrecomp/NBAJamRecomp
+      - install -Dm644 dist/NBAJamRecomp/README.txt /app/lib/nbajamrecomp/README.txt
+      - cp -r dist/NBAJamRecomp/mods dist/NBAJamRecomp/overlays /app/lib/nbajamrecomp/
+      - install -Dm644 dist/NBAJamRecomp/roms/README.txt /app/lib/nbajamrecomp/roms/README.txt
+      - install -Dm755 flatpak/NBAJamRecomp.sh /app/bin/NBAJamRecomp
+      - install -Dm644 dist/linux/nbajamrecomp.desktop /app/share/applications/io.github.richvam.NBAJamRecomp.desktop
+      - desktop-file-edit --set-icon=io.github.richvam.NBAJamRecomp /app/share/applications/io.github.richvam.NBAJamRecomp.desktop
+      - install -Dm644 dist/linux/nbajamrecomp.svg /app/share/icons/hicolor/scalable/apps/io.github.richvam.NBAJamRecomp.svg
+      - install -Dm644 dist/linux/io.github.richvam.NBAJamRecomp.metainfo.xml /app/share/metainfo/io.github.richvam.NBAJamRecomp.metainfo.xml
+    sources:
+      - type: dir
+        path: ..
+        skip:
+          - build
+          - deps
+          - .flatpak-builder
