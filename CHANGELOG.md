@@ -12,6 +12,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 ## Unreleased
 
 ### Added
+- Controls: "Plays as" puts a controller on any cabinet player (1 to 4), kept for that controller, so two controllers can play on the same team.
 - If the graphics card cannot draw the chosen look (F4) fast enough, the program switches to the next
   cheaper one on its own and says so. `frame_time_log=1` in `nbajam_recomp.ini` writes how long
   the picture takes to `frame_times.log`.
