@@ -32,13 +32,17 @@ Get the latest version from the **[Releases page](https://github.com/richvam/NBA
 |---|---|
 | Windows 10/11, 64-bit, installer | `NBAJamRecomp-<version>-windows-x64-setup.exe` (from the next release on) |
 | Windows 10/11, 64-bit, portable | `NBAJamRecomp-<version>-windows-x64.zip` |
-| Linux, 64-bit (x86-64) | `NBAJamRecomp-<version>-linux-x64.tar.gz` |
+| Linux and Steam Deck, 64-bit (x86-64), AppImage | `NBAJamRecomp-<version>-linux-x86_64.AppImage` (from the next release on) |
+| Linux, 64-bit (x86-64), portable | `NBAJamRecomp-<version>-linux-x64.tar.gz` |
 
 The Windows installer needs no administrator rights: it installs for your user, adds a Start
 menu entry (and a desktop one if you tick it), and keeps your ROMs, settings and saves in
 `%APPDATA%\NBAJamRecomp`; the Start menu has a shortcut to its `roms` folder. Uninstalling
 asks whether to delete that folder too, and keeps it unless you say yes. The archives need no
-installing: unpack them anywhere. Windows may show a SmartScreen warning
+installing: unpack them anywhere. The AppImage is one file: make it executable
+(`chmod +x`, or Properties, Allow executing) and run it; on a Steam Deck, in desktop mode. It
+keeps your ROMs, settings and saves in `~/.local/share/NBAJamRecomp` (drag ROMs onto its
+window, or use Open my ROM folder). Windows may show a SmartScreen warning
 because the program is not signed: choose "More info", then "Run anyway".
 
 **Checking a download.** The program and installer are not signed yet, so Windows cannot
