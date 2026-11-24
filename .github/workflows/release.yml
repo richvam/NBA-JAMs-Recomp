@@ -286,6 +286,17 @@ jobs:
           flatpak build-bundle fp-repo "out/NBAJamRecomp-${PKG_VERSION}-linux-x86_64.flatpak" io.github.richvam.NBAJamRecomp --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo
           ls -la out
 
+      - name: Flathub's linter on the submission manifest and the metadata (report)
+        continue-on-error: true
+        run: |
+          flatpak install --user -y --noninteractive flathub org.flatpak.Builder
+          python3 tools/flathub/make_manifest.py --self-test
+          python3 tools/flathub/make_manifest.py HEAD flathub-manifest.yml
+          lint() { flatpak run --command=flatpak-builder-lint org.flatpak.Builder "$@" || true; }
+          echo "== manifest"; lint manifest flathub-manifest.yml
+          echo "== appstream"; lint appstream dist/linux/io.github.richvam.NBAJamRecomp.metainfo.xml
+          echo "== repo"; lint repo fp-repo
+
       - name: Runs in the sandbox (audit A under Xvfb)
         run: bash tools/ci/test_flatpak.sh
 
