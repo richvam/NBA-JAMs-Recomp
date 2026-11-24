@@ -35,6 +35,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <array>
 #include <map>
@@ -411,6 +412,12 @@ private:
 	void save_screenshot(const u32 *px, int w, int h);
 	std::string net_mod_names(const std::string &game_id);
 	void refresh_availability();
+	// R3.2: ROMs dropped on the window are copied into the ROM folder, then looked for again
+	bool rescan_roms(unsigned now);                 // false in a game (the catalog is in use)
+	int copy_into_roms(const std::string &from, std::string &err);   // files copied; never overwrites
+	int m_dropped = 0;                              // files copied by the drop in progress
+	std::string m_drop_err;
+	void open_rom_folder();
 	void message(const std::string &m, u32 ms = 2500) { m_message = m; m_message_until = SDL_GetTicks() + ms; }
 	std::string nv_path(const game_info &g) const { return path_join(path_join(m_base, "saves"), std::string(g.id) + ".nv"); }
 
@@ -520,6 +527,66 @@ private:
 	std::vector<std::string> m_local_ips;
 	net_addr m_local6;                        // this computer's public IPv6 address, if it has one (N2.2)
 };
+
+bool app::rescan_roms(unsigned)
+{
+	if (m_mach) return false;
+	if (m_msound) m_msound->silence();       // not while its worker reads a game
+	m_cat->rescan();
+	refresh_availability();
+	m_arts.clear();
+	m_theme_game.clear();
+	return true;
+}
+
+// Copies a dropped file, or every file under a dropped folder, into the ROM folder. A file
+// already there with the same name and size is skipped; another with the same name is kept
+// and the new one gets a number. ROMs are recognised by their contents, so names do not matter.
+int app::copy_into_roms(const std::string &from, std::string &err)
+{
+	namespace fs = std::filesystem;
+	std::error_code ec;
+	auto utf8 = [](const fs::path &p) { auto u = p.u8string(); return std::string(u.begin(), u.end()); };
+	const fs::path dst = fs::u8path(path_join(m_base, "roms"));
+	fs::create_directories(dst, ec);
+	const fs::path src = fs::u8path(from);
+	if (fs::equivalent(src.parent_path(), dst, ec)) return 0;   // already there
+	std::vector<std::pair<fs::path, fs::path>> todo;           // source, name inside roms/
+	if (fs::is_directory(src, ec))
+	{
+		for (auto it = fs::recursive_directory_iterator(src, ec); !ec && it != fs::recursive_directory_iterator(); it.increment(ec))
+			if (it->is_regular_file(ec)) todo.push_back({ it->path(), fs::relative(it->path(), src.parent_path(), ec) });
+	}
+	else if (fs::is_regular_file(src, ec)) todo.push_back({ src, src.filename() });
+	else { err = "cannot read " + utf8(src.filename()); return 0; }
+	int n = 0;
+	for (auto &[s, rel] : todo)
+	{
+		fs::path d = dst / rel;
+		fs::create_directories(d.parent_path(), ec);
+		if (fs::exists(d, ec))
+		{
+			if (fs::file_size(d, ec) == fs::file_size(s, ec)) continue;
+			for (int k = 2; fs::exists(d, ec); k++) d = dst / rel.parent_path() / fs::u8path(utf8(rel.stem()) + " (" + std::to_string(k) + ")" + utf8(rel.extension()));
+		}
+		if (fs::copy_file(s, d, fs::copy_options::none, ec)) n++;
+		else err = "could not copy " + utf8(s.filename());
+	}
+	SDL_Log("dropped %s: %d copied into %s", from.c_str(), n, utf8(dst).c_str());
+	return n;
+}
+
+void app::open_rom_folder()
+{
+	const std::string dir = path_join(m_base, "roms");
+	std::error_code ec;
+	std::filesystem::create_directories(std::filesystem::u8path(dir), ec);
+	if (m_scripted) { SDL_Log("open folder: %s", dir.c_str()); message("Opened " + dir, 3000); return; }   // no file manager in a scripted run
+	std::string url = "file:///";
+	for (char c : dir) url += c == '\\' ? '/' : c;
+	if (SDL_OpenURL(url.c_str()) == 0) message("Opened " + dir, 3000);
+	else message("Could not open " + dir + ": put your ROMs there", 6000);
+}
 
 void app::refresh_availability()
 {
@@ -729,16 +796,47 @@ void app::poll_events()
 						break;
 					}
 				break;
+			case SDL_DROPBEGIN: m_dropped = 0; m_drop_err.clear(); break;
 			case SDL_DROPFILE:
 				if (e.drop.file)
 				{
-					std::string m;
-					import_result r;
-					bool ok = m_profiles.import_file(e.drop.file, m, r);
-					if (ok && r.setup) apply_setup(r);
-					message(ok ? "Imported: " + m + (r.setup ? " (setup applied)" : "") : "Import: " + m, 5000);
+					std::string const f = e.drop.file;
 					SDL_free(e.drop.file);
+					std::string ext = f.size() > 4 ? f.substr(f.size() - 4) : "";
+					for (char &ch : ext) ch = char(tolower(ch));
+					if (ext == ".ini")
+					{
+						// a controller profile or setup (U3)
+						std::string m;
+						import_result r;
+						bool ok = m_profiles.import_file(f, m, r);
+						if (ok && r.setup) apply_setup(r);
+						message(ok ? "Imported: " + m + (r.setup ? " (setup applied)" : "") : "Import: " + m, 5000);
+					}
+					else if (m_mach) message("Drop ROMs on the game list, not during a game", 4000);
+					else
+					{
+						// ROMs: a zip, any file, or a folder of them
+						std::string err;
+						m_dropped += copy_into_roms(f, err);
+						if (!err.empty()) m_drop_err = err;
+					}
 				}
+				break;
+			case SDL_DROPCOMPLETE:
+				if (!m_mach && (m_dropped > 0 || !m_drop_err.empty()))
+				{
+					rescan_roms(SDL_GetTicks());
+					int ready = 0;
+					for (bool a : m_avail) ready += a;
+					std::string m = "Copied " + std::to_string(m_dropped) + (m_dropped == 1 ? " file" : " files") + " to the ROM folder: " +
+					                std::to_string(ready) + " of " + std::to_string(int(game_list().size())) + " games ready";
+					if (!m_drop_err.empty()) m += " (" + m_drop_err + ")";
+					message(m, 6000);
+					SDL_Log("%s", m.c_str());
+				}
+				m_dropped = 0;
+				m_drop_err.clear();
 				break;
 			case SDL_CONTROLLERAXISMOTION:
 				if (m_capture >= 0 && !m_captured && std::abs(int(e.caxis.value)) > 24000)
@@ -906,6 +1004,27 @@ void app::script_tick()
 		}
 		case pad_script::action::log: SDL_Log("pad script line %d: %s", a.line, a.text.c_str()); break;
 		case pad_script::action::quit: m_quit = true; break;
+		case pad_script::action::drop:
+		{
+			// the same events a drop from the desktop gives
+			SDL_Event e;
+			SDL_zero(e);
+			e.type = SDL_DROPBEGIN; SDL_PushEvent(&e);
+			e.type = SDL_DROPFILE; e.drop.file = SDL_strdup(a.text.c_str()); SDL_PushEvent(&e);
+			SDL_zero(e);
+			e.type = SDL_DROPCOMPLETE; SDL_PushEvent(&e);
+			SDL_Log("pad script line %d: drop %s", a.line, a.text.c_str());
+			break;
+		}
+		case pad_script::action::expect_ready:
+		{
+			int ready = 0;
+			for (bool r : m_avail) ready += r;
+			bool ok = ready == a.n;
+			(ok ? m_script_pass : m_script_fail)++;
+			SDL_Log("pad script line %d: %s expect_ready %d (%d ready)", a.line, ok ? "PASS" : "FAIL", a.n, ready);
+			break;
+		}
 		default: break;
 		}
 	if (m_quit || m_script.done())
@@ -1375,13 +1494,10 @@ void app::menu_frame()
 			else if (r.id == ui::pk_controls) { m_ctl_scr = ui::screen(); m_screen = screen::controls; return; }
 			else if (r.id == ui::pk_news) { m_news_scr = ui::screen(); m_screen = screen::news; return; }
 			else if (r.id == ui::pk_about) { m_about_scr = ui::screen(); m_screen = screen::about; return; }
+			else if (r.id == ui::pk_romdir) open_rom_folder();
 			else if (r.id == ui::pk_rescan)
 			{
-				if (m_msound) m_msound->silence();       // not while its worker reads a game
-				m_cat->rescan();
-				refresh_availability();
-				m_arts.clear();
-				m_theme_game.clear();
+				rescan_roms(now);
 				int ready = 0;
 				for (bool a : m_avail) ready += a;
 				m_picker.toast(std::to_string(ready) + " of " + std::to_string(ng) + " games ready to play", now, 3000);

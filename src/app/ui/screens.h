@@ -43,7 +43,7 @@ struct picker_state
 	std::string news_tag, version, roms_dir;
 };
 
-enum picker_id { pk_game0 = 1, pk_online = 50, pk_settings, pk_mods, pk_controls, pk_news, pk_about, pk_rescan, pk_quit };
+enum picker_id { pk_game0 = 1, pk_online = 50, pk_settings, pk_mods, pk_controls, pk_news, pk_about, pk_romdir, pk_rescan, pk_quit };
 
 screen make_picker(const picker_state &st);
 // The game the screen is about: the focused one, or the one last focused while focus is in

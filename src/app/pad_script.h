@@ -9,6 +9,8 @@
 //   shot                         a screenshot of what is shown
 //   expect <screen>              log PASS or FAIL: is the program on that screen now
 //   log <text>                   a line in the log
+//   drop <path>                  a file dropped on the window (${NAME} is the environment variable)
+//   expect_ready <n>             log PASS or FAIL: are n games ready to play now
 //   quit                         end the program (as closing the window does)
 // Buttons: a b x y back guide start ls rs lb rb up down left right lt rt.
 // No SDL in here: the app turns the actions into presses on the virtual controller.
@@ -21,9 +23,10 @@ class pad_script
 public:
 	struct action
 	{
-		enum kind_t { none, press, release, shot, expect, log, quit } kind = none;
+		enum kind_t { none, press, release, shot, expect, log, quit, drop, expect_ready } kind = none;
 		std::vector<int> buttons;           // press / release: SDL game controller buttons (lt, rt: 100, 101)
-		std::string text;                   // expect: the screen's name; log: the text
+		std::string text;                   // expect: the screen's name; log: the text; drop: the path
+		int n = 0;                          // expect_ready: the number of games
 		int line = 0;
 	};
 

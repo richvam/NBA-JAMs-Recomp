@@ -13,6 +13,9 @@ src/app/pad_script.h.
   c_join.pad     online, the other side: the host's address on the on-screen keyboard,
                  join, play, back on the game list when the host leaves
   e_deck.pad     the menus at 1280 x 800 (Steam Deck), then inside a TV's safe area
+  g_first_run.pad  first start with no ROMs to a game (R3.2): Open my ROM folder, then
+                 nbajam.zip dropped on the window (`drop ${ROMS}/nbajam.zip`, ROMS=<folder>
+                 in the environment), one game ready, started
   f_states.pad   save states (N1.4): with save_states=1 in the data folder's ini, Save in
                  slot 1, play on, Load; the log says "as saved"
 

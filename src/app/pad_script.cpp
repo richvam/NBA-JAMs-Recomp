@@ -47,6 +47,21 @@ bool pad_script::load(const std::string &text, std::string &err)
 		else if (c.op == "tap") { w >> a; if (!buttons(a)) return false; if (!(w >> c.count)) c.count = 1; }
 		else if (c.op == "hold") { w >> a; if (!buttons(a)) return false; w >> c.ms; }
 		else if (c.op == "expect" || c.op == "log") { std::getline(w >> std::ws, c.text); }
+		else if (c.op == "drop")
+		{
+			std::string raw;
+			std::getline(w >> std::ws, raw);
+			// ${NAME}: the environment variable, so a script can name files outside the repository
+			for (size_t i = 0; i < raw.size(); i++)
+			{
+				size_t e = raw[i] == '$' && i + 1 < raw.size() && raw[i + 1] == '{' ? raw.find('}', i) : std::string::npos;
+				if (e == std::string::npos) { c.text += raw[i]; continue; }
+				const char *v = getenv(raw.substr(i + 2, e - i - 2).c_str());
+				c.text += v ? v : "";
+				i = e;
+			}
+		}
+		else if (c.op == "expect_ready") { if (!(w >> c.count)) { err = "line " + std::to_string(ln) + ": expect_ready needs a number"; return false; } }
 		else if (c.op != "shot" && c.op != "quit") { err = "line " + std::to_string(ln) + ": unknown command " + c.op; return false; }
 		m_cmds.push_back(c);
 	}
@@ -86,6 +101,8 @@ std::vector<pad_script::action> pad_script::step(unsigned now)
 		else if (c.op == "expect") { a.kind = action::expect; a.text = c.text; }
 		else if (c.op == "log") { a.kind = action::log; a.text = c.text; }
 		else if (c.op == "quit") a.kind = action::quit;
+		else if (c.op == "drop") { a.kind = action::drop; a.text = c.text; }
+		else if (c.op == "expect_ready") { a.kind = action::expect_ready; a.n = c.count; }
 		out.push_back(a);
 		if (a.kind == action::shot) { m_wait_until = now + 100; return out; }
 	}
