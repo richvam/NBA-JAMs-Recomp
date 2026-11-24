@@ -16,17 +16,23 @@ name becomes `_` in the ID).
 
 ## Before submitting
 
-1. **Screenshots.** Flathub requires at least one. They must be hosted at a fixed URL, and
+1. **The app ID check.** Flathub's linter looks for the repository at
+   `github.com/richvam/nba_jams_recomp` (it keeps the `_`), which does not exist, so it gives
+   `appid-url-not-reachable`. Either rename the repository to `NBA_JAMs_Recomp` (GitHub
+   forwards the old address), or ask the reviewers for the usual exception for a `-` in the
+   repository name, in the submission pull request.
+2. **Screenshots.** Flathub requires at least one. They must be hosted at a fixed URL, and
    should show no game content (no ROM pictures). The program's own menus with no ROMs
    loaded work: add them to `dist/linux/...metainfo.xml` as
    `<screenshots><screenshot type="default"><image>URL</image></screenshot></screenshots>`.
-2. **The name.** "NBA JAM" is a trademark of other companies. Flathub reviewers may ask about
+3. **The name.** "NBA JAM" is a trademark of other companies. Flathub reviewers may ask about
    it, or for a name that does not suggest an official product. Decide before submitting.
-3. **A release.** Flathub builds a fixed version. Tag one (for example `v2026.12.01`) and add a
+4. **A release.** Flathub builds a fixed version. Tag one (for example `v2026.12.01`) and add a
    `<release version="2026.12.01" date="2026-12-01"/>` line at the top of `<releases>`.
-4. CI's Flatpak job runs Flathub's own linter on the submission manifest (step "Flathub's
-   linter"). Before submitting, it should show no errors except `appstream-missing-appinfo-file`,
-   which only CI gives: CI turns off the compose step that Flathub runs itself.
+5. CI's Flatpak job runs Flathub's own linter on the submission manifest (step "Flathub's
+   linter"). Before submitting, it should show no errors except `appstream-missing-appinfo-file` (only in CI: CI turns
+   off the compose step that Flathub runs itself) and, until point 1 is settled,
+   `appid-url-not-reachable`.
 
 ## Submitting
 
