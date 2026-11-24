@@ -79,6 +79,10 @@ struct config
 	bool net_upnp = true;         // N2.1: ask the router to forward the port when hosting
 	bool net_stun = true;         // N2.2: ask a STUN server for this computer's public address (its code)
 	std::string net_stun_server = "stun.l.google.com:19302";
+	// which cabinet player each controller plays as, by the controller's GUID (missing: its
+	// place in the connection order, as before). Lets two controllers sit on players 1 and 3
+	// for co-op on one side, or 1 and 2 for head to head.
+	std::map<std::string, int> pad_slot;
 	int pause_buttons = 0;        // held on a controller to open the pause menu: 0 Start (1 s), 1 Start + Back, 2 L3 + R3 (U5.1)
 	bool menu_music = true, menu_sounds = true;   // U6: from the highlighted game's sound board
 	float menu_volume = 0.6f;
@@ -121,6 +125,8 @@ static void save_config(const std::string &path, config &c)
 	  << "\ncountry=" << c.dips.country << "\nvideo_clips=" << c.dips.video_clips
 	  << "\n\n[controllers]\n# profile of each player's pad (files in controller_profiles/, edit them in the Controls menu)\n";
 	for (int p = 0; p < 4; p++) f << "p" << (p + 1) << "_profile=" << c.pad_profile[p] << "\n";
+	f << "# plays_as=<controller GUID>:<1-4>: the cabinet player a controller plays as (Controls, \"Plays as\")\n";
+	for (auto &ps : c.pad_slot) f << "plays_as=" << ps.first << ":" << (ps.second + 1) << "\n";
 	f << "# per-game profiles: <game>.p1_profile=... (games: nbajam nbajamte nbajamse nbahangt nbamht)\n";
 	for (auto &g : c.game_profiles)
 		for (int p = 0; p < 4; p++)
@@ -190,6 +196,15 @@ static void load_config(const std::string &path, config &c)
 				if (!h.empty()) c.net_recent.push_back(h);
 				if (b == std::string::npos) break;
 				a = b + 1;
+			}
+		}
+		else if (k == "plays_as")
+		{
+			size_t const colon = v.rfind(':');
+			if (colon != std::string::npos && colon > 0)
+			{
+				int const n = atoi(v.c_str() + colon + 1);
+				if (n >= 1 && n <= 4) c.pad_slot[v.substr(0, colon)] = n - 1;
 			}
 		}
 		else if (k == "volume") c.volume = std::clamp(float(atof(v.c_str())), 0.0f, 1.0f);
@@ -361,6 +376,20 @@ private:
 	{
 		if (game < 0) return m_cfg.pad_profile[player];
 		return m_cfg.game_profiles[game_list()[size_t(game)].id][size_t(player)];
+	}
+	static std::string pad_guid(SDL_GameController *c)
+	{
+		char g[64] = {};
+		SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(SDL_GameControllerGetJoystick(c)), g, sizeof g);
+		return g;
+	}
+	// the cabinet player controller i plays as (Controls, "Plays as"); online the host gives
+	// each computer its seat, and the first controller plays it
+	int pad_player(size_t i)
+	{
+		if (m_net_game || i >= m_pads.size()) return int(i);
+		auto it = m_cfg.pad_slot.find(pad_guid(m_pads[i]));
+		return it == m_cfg.pad_slot.end() ? int(i) : std::clamp(it->second, 0, 3);
 	}
 	const pad_profile &active_profile(int player)
 	{
@@ -858,7 +887,7 @@ cabinet_inputs app::gather_inputs()
 			}
 			if (m_start_pulse[i] > 0) { m |= 1u << A_START; m_start_pulse[i]--; }
 		}
-		auto &q = in.p[i];
+		auto &q = in.p[size_t(pad_player(i))];
 		auto on = [&](int a) { return ((m >> a) & 1u) != 0; };
 		q.up |= on(A_UP); q.down |= on(A_DOWN); q.left |= on(A_LEFT); q.right |= on(A_RIGHT);
 		q.shoot |= on(A_SHOOT); q.pass |= on(A_PASS); q.turbo |= on(A_TURBO); q.start |= on(A_START); q.coin |= on(A_COIN);
@@ -1694,6 +1723,8 @@ void app::controls_frame()
 	st.profile = inherit ? 0 : m_profiles.find(slot) + extra;
 	SDL_GameController *pad = size_t(m_ctl_player) < m_pads.size() ? m_pads[size_t(m_ctl_player)] : nullptr;
 	if (pad) { const char *pn = SDL_GameControllerName(pad); st.pad = pn ? pn : "?"; }
+	st.has_pad = pad != nullptr;
+	st.plays_as = pad ? pad_player(size_t(m_ctl_player)) : m_ctl_player;
 	const unsigned held = pad ? prof.buttons(pad) : 0;
 	for (int a = 0; a < kNumActions; a++)
 	{
@@ -1753,6 +1784,19 @@ void app::controls_frame()
 			{
 				if (r.id == ui::ct_game) { m_ctl_game = it->choice - 1; return; }
 				if (r.id == ui::ct_player) { m_ctl_player = std::clamp(it->choice, 0, 3); return; }
+				if (r.id == ui::ct_slot)
+				{
+					if (pad)
+					{
+						int const want = std::clamp(it->choice, 0, 3);
+						if (want == m_ctl_player) m_cfg.pad_slot.erase(pad_guid(pad));   // its own place: nothing to keep
+						else m_cfg.pad_slot[pad_guid(pad)] = want;
+						save_config(m_cfgpath, m_cfg);
+						message(st.pad + " plays as player " + std::to_string(want + 1), 2500);
+					}
+					else message("Connect this controller first", 2500);
+					return;
+				}
 				if (r.id == ui::ct_profile)
 				{
 					int c = it->choice - extra;

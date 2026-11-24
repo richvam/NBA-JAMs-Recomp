@@ -471,6 +471,8 @@ Check for each: `viewtest` screenshots in both languages, and the U1.2 automated
 
 **Gate passed (2026-11-17):** the owner signed off Part 2 on the controller-only audit (pull request 30) and on the sheets of every screen in each game's theme drawn from their ROMs (`arttest --roms`). Still open from earlier phases, for the owner: the release page (R2.2), the README read-through (R2.4), the W1 screenshots and the U1 gallery with a real controller.
 
+**After the gate (owner requests, 2026-11-23):** the pause shortcut is Start held one second by default (Start + Back opened a Windows menu); Lua mods are only in the main menu; the online game can be chosen with a controller. Controls, "This controller", **Plays as** puts a controller on any cabinet player 1 to 4 (`plays_as=<GUID>:<n>` in the ini), so two controllers can play on the same team; online the host still gives each computer its seat. Checked by uitest (greyed without a controller, the panel fits); not yet tried with two real controllers.
+
 ## Part 2 risks
 
 * **The real lettering and logos depend on decoding each game's art.** Only the source

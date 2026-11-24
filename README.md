@@ -94,8 +94,11 @@ In a game, by default:
 | Keyboard, player 3 | numpad 8 2 4 6 | numpad 0 | numpad . | numpad Enter | 3 | 7 |
 | Keyboard, player 4 | I K J L | H | ; | U | 4 | 8 |
 
-Each controller is one player. To change its buttons, open **Controls** in the main menu:
-choose the player, choose or create a profile, choose an action and press the button for
+Each controller is one player: the first connected is player 1, and so on. To play as
+another player (for example players 1 and 3, on the same team), open **Controls**, choose
+the controller and set **Plays as**; this is kept for that controller (offline games; online
+the host gives each computer its seat). To change its buttons, open **Controls** in the main menu:
+choose the controller, choose or create a profile, choose an action and press the button for
 it. Any game can have its own profile. One button can hold several arcade buttons at once
 (shove, turbo shot and two shortcuts of your choice). Profiles can be exported and imported
 as `.ini` files. **About and help**, tab Controls, lists what every action is on right now.

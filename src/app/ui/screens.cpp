@@ -340,15 +340,16 @@ screen make_controls(const controls_state &st)
 	panel who;
 	who.title = "Who";
 	who.r = { 0.0f, 0.0f, 1.0f, 0.23f };
-	who.items = { picker(ct_game, "Game", st.games, st.game), picker(ct_player, "Player", { "Player 1", "Player 2", "Player 3", "Player 4" }, st.player),
+	who.items = { picker(ct_game, "Game", st.games, st.game), picker(ct_player, "Controller", { "Controller 1", "Controller 2", "Controller 3", "Controller 4" }, st.player),
 	              picker(ct_profile, "Profile", st.profiles, st.profile) };
 	panel acts;
-		acts.r = { 0.0f, 0.25f, 0.52f, 0.75f };
+	acts.r = { 0.0f, 0.25f, 0.52f, 0.75f };
 	for (size_t i = 0; i < st.actions.size(); i++) acts.items.push_back(button(ct_act0 + int(i), st.actions[i].name));
 	panel prof;
-	prof.title = "This profile";
+	prof.title = "This controller";
 	prof.r = { 0.54f, 0.25f, 0.46f, 0.75f };
 	prof.items = {
+		picker(ct_slot, "Plays as", { "Player 1", "Player 2", "Player 3", "Player 4" }, st.plays_as), header("PROFILE"),
 		picker(ct_short0, "Shortcut 1", st.shortcut_sets, st.shortcut[0]), picker(ct_short0 + 1, "Shortcut 2", st.shortcut_sets, st.shortcut[1]),
 		slider(ct_dead, "Dead zone", float(st.deadzone), 5, 95, 5),
 		button(ct_new, "New profile (a copy)"), button(ct_reset, "Reset to defaults"), button(ct_delete, "Delete profile"),
@@ -371,6 +372,7 @@ void update_controls(screen &s, const controls_state &st)
 	};
 	pick(ct_game, st.games, st.game);
 	if (item *i = s.find(ct_player)) i->choice = std::clamp(st.player, 0, 3);
+	if (item *i = s.find(ct_slot)) { i->choice = std::clamp(st.plays_as, 0, 3); i->disabled = !st.has_pad; }
 	pick(ct_profile, st.profiles, st.profile);
 	pick(ct_short0, st.shortcut_sets, st.shortcut[0]);
 	pick(ct_short0 + 1, st.shortcut_sets, st.shortcut[1]);

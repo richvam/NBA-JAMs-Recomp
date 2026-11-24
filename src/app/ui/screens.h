@@ -124,6 +124,8 @@ struct controls_state
 	std::vector<std::string> profiles;   // the choices of the Profile row, as shown
 	int profile = 0;
 	std::string pad;                     // the player's controller, empty: none connected
+	bool has_pad = false;
+	int plays_as = 0;                    // the cabinet player that controller plays as (0-3)
 	struct action { std::string name, binding; bool held = false; };
 	std::vector<action> actions;
 	int capturing = -1, seconds = 0;     // the action waiting for a press, and how long it still waits
@@ -134,7 +136,7 @@ struct controls_state
 	std::string name;
 };
 
-enum controls_id { ct_game = 1, ct_player, ct_profile, ct_act0 = 100, ct_short0 = 200, ct_dead = 210, ct_new, ct_reset, ct_delete, ct_export, ct_export_setup, ct_import };
+enum controls_id { ct_game = 1, ct_player, ct_profile, ct_slot, ct_act0 = 100, ct_short0 = 200, ct_dead = 210, ct_new, ct_reset, ct_delete, ct_export, ct_export_setup, ct_import };
 
 screen make_controls(const controls_state &st);
 void update_controls(screen &s, const controls_state &st);

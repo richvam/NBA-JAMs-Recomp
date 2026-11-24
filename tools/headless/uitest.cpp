@@ -858,6 +858,16 @@ int main(int argc, char **argv)
 		cs.shortcut[1] = 3;
 		screen ct = make_controls(cs);
 		walk(ct, "Controls");
+		{
+			controls_state c2 = cs;
+			c2.has_pad = true; c2.plays_as = 2;
+			screen a2 = make_controls(c2);
+			const item *sl = a2.find(ct_slot);
+			c2.has_pad = false;
+			screen b2 = make_controls(c2);
+			CHECK(sl && sl->choice == 2 && !sl->disabled && b2.find(ct_slot)->disabled && a2.rows_visible(2) >= int(a2.tabs[0].panels[2].items.size()),
+			      "Controls: Plays as shows the controller's player, is greyed without a controller, and the right panel fits");
+		}
 		CHECK(ct.find(ct_act0 + 4)->value_text == "* a, y" && ct.find(ct_act0)->value_text == "dpup" && ct.find(ct_short0 + 1)->choice == 3 && ct.find(ct_profile)->choices.size() == 2 &&
 		      ct.tabs[0].panels[1].title == "Buttons: Xbox Wireless Controller" && ct.rows_visible(1) >= 13,
 		      "Controls: every action shows its binding, a held one is marked, and all thirteen fit without scrolling");
