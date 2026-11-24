@@ -1151,6 +1151,8 @@ clicks, see what changed in each version, and play online against any other plat
 | R3.2 | Sonnet | First-run ROM step: a screen with "Open my ROM folder" and drag-and-drop of files or zips onto the window, then a rescan. | Scripted first run from empty to a playable game |
 | R3.3 | Opus | Signing: apply to a free signing programme for open-source projects; if accepted, sign the executable and installer in CI. If not, document the Windows warning and publish checksums. | Decision recorded |
 
+**Status (R3):** R3.1 is written, in English only (rule 4: no Spanish). `tools/installer/NBAJamRecomp.iss` (Inno Setup 6) installs the Windows package without `portable.txt`, per user (`PrivilegesRequired=lowest`, into the user's Programs folder), with a Start menu entry, a shortcut to `%APPDATA%\NBAJamRecomp\roms`, and an optional desktop shortcut. The program then keeps everything in `%APPDATA%\NBAJamRecomp` (R1.4). Uninstalling removes the program and asks whether to delete the data folder too (No is the default); a silent uninstall keeps it, unless `/PURGE` is given. The `windows-installer` CI job builds it on a Windows runner from the packaged zip and runs `tools/installer/test_installer.ps1`: silent install, the files and shortcut there and no `portable.txt`, `--version`, silent uninstall with the user's settings and ROMs folder kept, install again, uninstall with `/PURGE`. The setup goes into the draft release, and the release page lists it. Not checked: the installer's pages by hand, and on the owner's PC.
+
 ## Phase R4: Linux packages
 
 | ID | Model | Task | Check |
