@@ -21,7 +21,7 @@ end
 
 mod = {
   name = "Quarter length",
-  description = "Sets the minutes per quarter, up to 12 (overtime uses the same length). The original is 3:00. Over 9:00 the minutes digit shows 9 until 9 minutes are left.",
+  description = "Sets the minutes per quarter, up to 12 (overtime uses the same length). The original is 3:00. Note: over 9:00 the game clock does not show the time correctly (its minutes digit stays at 9 until 9 minutes are left), but the quarter still lasts the time chosen.",
   games = { "nbajam", "nbajamte", "nbajamse", "nbahangt", "nbamht" },
   options = {
     { id = "minutes", label = "Quarter length", values = lengths, labels = labels, default = 3 },
