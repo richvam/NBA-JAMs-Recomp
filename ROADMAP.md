@@ -1151,6 +1151,8 @@ clicks, see what changed in each version, and play online against any other plat
 | R3.2 | Sonnet | First-run ROM step: a screen with "Open my ROM folder" and drag-and-drop of files or zips onto the window, then a rescan. | Scripted first run from empty to a playable game |
 | R3.3 | Opus | Signing: apply to a free signing programme for open-source projects; if accepted, sign the executable and installer in CI. If not, document the Windows warning and publish checksums. | Decision recorded |
 
+**Crash reports (2026-11-24):** while the installer was tried on the owner's PC, the program's first start crashed in `d3d11.dll` (NVIDIA's OpenGL driver presents through Direct3D 11). The same crash happened twice the day before in an uninstalled test copy, so it is not the installer. 25 more starts did not crash, and Windows kept no dump. The program now writes its own on Windows: `crashes/NBAJamRecomp-<time>.txt` (version, exception, module and offset) and `.dmp` (minidump) in the data folder, checked with `NBAJAM_CRASH_TEST=1`. Open: the cause, from the next dump.
+
 ## Phase R4: Linux packages
 
 | ID | Model | Task | Check |

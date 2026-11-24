@@ -12,6 +12,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 ## Unreleased
 
 ### Added
+- Windows: a crash writes a report (`crashes/*.txt` and a minidump `*.dmp`) in the data folder, to attach to an issue.
 - Menus fill a wide window: on a 16:9 or 21:9 screen the menus are laid out that wide (up to 21:9; wider windows get black sides), instead of a 4:3 box.
 - Controls: "Plays as" puts a controller on any cabinet player (1 to 4), kept for that controller, so two controllers can play on the same team.
 - If the graphics card cannot draw the chosen look (F4) fast enough, the program switches to the next
