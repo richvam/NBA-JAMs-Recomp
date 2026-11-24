@@ -118,6 +118,8 @@ static roms synthetic()
 // ---------------------------------------------------------------- the user's ROMs
 static int real_roms(const std::string &base, const std::string &out)
 {
+	// ARTTEST_MENU_W=<columns>: draw the screens as wide as the program does on a wider window
+	if (const char *mw = getenv("ARTTEST_MENU_W")) ui::screen::kW = std::clamp(atoi(mw), ui::screen::kMinW, ui::screen::kMaxW);
 	game_catalog cat(base);
 	ui::theme th;
 	int found = 0;

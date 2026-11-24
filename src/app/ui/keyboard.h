@@ -50,7 +50,8 @@ public:
 	const key &current() const { return m_rows[size_t(m_row)][size_t(m_col)]; }
 	bool lower() const { return m_lower; }
 
-	static constexpr int kX = 46, kY = 70, kW = 308, kH = 170;   // the box, in canvas units
+	static constexpr int kY = 70, kW = 308, kH = 170;   // the box, in canvas units, centred across
+	static int box_x();
 
 private:
 	void build();

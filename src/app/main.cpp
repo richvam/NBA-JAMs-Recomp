@@ -317,6 +317,7 @@ private:
 	// the theme follows the highlighted game, with a cross-fade (U2.3)
 	std::map<std::string, rom_art::art_set> m_arts;
 	ui::theme m_theme, m_theme_from, m_theme_to;
+	int m_theme_w = 0;
 	std::string m_theme_game;
 	unsigned m_theme_start = 0;
 	bool m_theme_fading = false;
@@ -1167,6 +1168,12 @@ void app::ui_frame_begin()
 	int dw = 0, dh = 0;
 	if (m_gl.ok()) m_gl.drawable_size(dw, dh); else if (m_ren) SDL_GetRendererOutputSize(m_ren, &dw, &dh);
 	SDL_GetWindowSize(m_win, &m_ui_ww, &m_ui_wh);
+	// the menu picture is as wide as the window's shape (4:3 to 21:9), 300 rows high
+	if (dw > 0 && dh > 0)
+	{
+		int const hint = int(std::lround(300.0 * dw / dh)) & ~1;
+		ui::screen::kW = std::clamp(hint, ui::screen::kMinW, ui::screen::kMaxW);
+	}
 	// the menu picture's place, in the units the mouse reports (window points, not pixels)
 	m_ui_shown = view_for(dw, dh, ui::screen::kW, ui::screen::kH, false);
 	if (dw > 0 && dh > 0)
@@ -1193,6 +1200,7 @@ const rom_art::art_set *app::art_of(const std::string &game_id)
 
 void app::follow_theme(const std::string &game_id, unsigned now)
 {
+	if (m_theme_w != ui::screen::kW) { m_theme_w = ui::screen::kW; m_theme_game.clear(); }   // the backdrop is made for one width
 	if (game_id != m_theme_game)
 	{
 		m_theme_from = m_theme;
@@ -2491,11 +2499,13 @@ bool app::pause_frame()
 	ui::theme th = m_theme;
 	const int w = m_mach->width(), h = m_mach->height();
 	const u32 *src = m_mach->frame();
-	th.backdrop.assign(size_t(ui::screen::kW) * ui::screen::kH, 0);
+	// the game's 4:3 picture in the middle, black at the sides of a wider menu
+	const int gw = 400, gx = (ui::screen::kW - gw) / 2;
+	th.backdrop.assign(size_t(ui::screen::kW) * ui::screen::kH, 0xff000000);
 	for (int y = 0; y < ui::screen::kH; y++)
-		for (int x = 0; x < ui::screen::kW; x++)
+		for (int x = gx; x < gx + gw; x++)
 		{
-			u32 c = src[size_t(y * h / ui::screen::kH) * size_t(w) + size_t(x * w / ui::screen::kW)];
+			u32 c = src[size_t(y * h / ui::screen::kH) * size_t(w) + size_t((x - gx) * w / gw)];
 			th.backdrop[size_t(y) * ui::screen::kW + size_t(x)] = 0xff000000 | ((c >> 1) & 0x7f7f7f);
 		}
 	th.panel_alpha = 215;
@@ -2589,7 +2599,7 @@ void app::gallery_loop()
 		if (m_gl.ok()) m_gl.drawable_size(dw, dh); else if (m_ren) SDL_GetRendererOutputSize(m_ren, &dw, &dh);
 		SDL_GetWindowSize(m_win, &ww, &wh);
 		// the menu picture's place, in the units the mouse reports (window points, not pixels)
-		view_rect shown = compute_view(dw, dh, ui::screen::kW, ui::screen::kH, view_shape::original, view_scaling::fit);
+		view_rect shown = menu_view(dw, dh, ui::screen::kW, ui::screen::kH, m_cfg.tv_margins);
 		if (dw > 0 && dh > 0)
 		{
 			shown.x = shown.x * ww / dw; shown.w = shown.w * ww / dw;
