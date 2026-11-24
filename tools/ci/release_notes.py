@@ -91,15 +91,17 @@ def render(version, summary, sections, online, repo_files=None):
         "## Downloads",
         "| System | File |",
         "|---|---|",
-        "| Windows 10/11, 64-bit | `NBAJamRecomp-v%s-windows-x64.zip` |" % v,
+        "| Windows 10/11, 64-bit, installer | `NBAJamRecomp-v%s-windows-x64-setup.exe` |" % v,
+        "| Windows 10/11, 64-bit, portable | `NBAJamRecomp-v%s-windows-x64.zip` |" % v,
         "| Linux, 64-bit (x86-64) | `NBAJamRecomp-v%s-linux-x64.tar.gz` |" % v,
         "",
         "`SHA256SUMS.txt` lists the checksum of each file. Windows may show a SmartScreen warning because "
         "the program is not signed: choose \"More info\", then \"Run anyway\".",
         "",
         "## First run",
-        "1. Unpack the archive anywhere.",
-        "2. Copy your own ROM sets into the `roms` folder (MAME zips or the source repository zips; see "
+        "1. Run the installer (no administrator rights needed), or unpack the archive anywhere.",
+        "2. Copy your own ROM sets into the `roms` folder: with the installer it is "
+        "`%APPDATA%\\NBAJamRecomp\\roms` (the Start menu has a shortcut to it), with the archive it is in the unpacked folder (MAME zips or the source repository zips; see "
         "`README.txt` for the list). No game data is included.",
         "3. Run `NBAJamRecomp`. Pick a game with the arrows and Enter, or a controller.",
         "",
@@ -164,7 +166,7 @@ def self_test():
     except SystemExit:
         ok(True, "cut twice is refused")
     page = render("1.1.0", summary, secs, online_line("1", "1", "v1.0.0"))
-    ok("NBAJamRecomp-v1.1.0-windows-x64.zip" in page and "NBAJamRecomp-v1.1.0-linux-x64.tar.gz" in page, "page names both downloads")
+    ok("NBAJamRecomp-v1.1.0-windows-x64-setup.exe" in page and "NBAJamRecomp-v1.1.0-windows-x64.zip" in page and "NBAJamRecomp-v1.1.0-linux-x64.tar.gz" in page, "page names both downloads")
     ok("## First run" in page and "**Plays online with v1.0.0**" in page, "page has first-run steps and the online line")
     ok("Does not play online" in online_line("2", "1", "v1.0.0"), "protocol change is announced")
     ok("first release" in online_line("1", None, None), "no previous version")

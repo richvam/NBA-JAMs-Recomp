@@ -30,15 +30,21 @@ Get the latest version from the **[Releases page](https://github.com/richvam/NBA
 
 | System | File |
 |---|---|
-| Windows 10/11, 64-bit | `NBAJamRecomp-<version>-windows-x64.zip` |
+| Windows 10/11, 64-bit, installer | `NBAJamRecomp-<version>-windows-x64-setup.exe` (from the next release on) |
+| Windows 10/11, 64-bit, portable | `NBAJamRecomp-<version>-windows-x64.zip` |
 | Linux, 64-bit (x86-64) | `NBAJamRecomp-<version>-linux-x64.tar.gz` |
 
-Unpack it anywhere. There is nothing to install. Windows may show a SmartScreen warning
+The Windows installer needs no administrator rights: it installs for your user, adds a Start
+menu entry (and a desktop one if you tick it), and keeps your ROMs, settings and saves in
+`%APPDATA%\NBAJamRecomp`; the Start menu has a shortcut to its `roms` folder. Uninstalling
+asks whether to delete that folder too, and keeps it unless you say yes. The archives need no
+installing: unpack them anywhere. Windows may show a SmartScreen warning
 because the program is not signed: choose "More info", then "Run anyway".
 
 ## 2. Where the ROMs go
 
-Copy your own files into the `roms` folder next to the program. The program recognises
+Copy your own files into the `roms` folder: next to the program for the archives, or
+`%APPDATA%\NBAJamRecomp\roms` for the Windows installer. The program recognises
 every file by its contents (CRC32), whatever its name, inside zips and sub-folders too,
 so there is nothing to unpack or rename.
 
