@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- NBA JAM Recomp icon: a plain basketball, drawn for this project -->
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <rect x="8" y="8" width="240" height="240" rx="48" fill="#1b1f3a"/>
+  <circle cx="128" cy="128" r="92" fill="#e8742a" stroke="#2a1608" stroke-width="8"/>
+  <g fill="none" stroke="#2a1608" stroke-width="7" stroke-linecap="round">
+    <line x1="128" y1="36" x2="128" y2="220"/>
+    <line x1="36" y1="128" x2="220" y2="128"/>
+    <path d="M62 62 C100 96 100 160 62 194"/>
+    <path d="M194 62 C156 96 156 160 194 194"/>
+  </g>
+</svg>
