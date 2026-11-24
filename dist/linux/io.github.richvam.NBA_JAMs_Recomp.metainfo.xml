@@ -24,6 +24,24 @@
     </p>
   </description>
   <launchable type="desktop-id">io.github.richvam.NBA_JAMs_Recomp.desktop</launchable>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/richvam/NBA-JAMs-Recomp/main/docs/flathub/screenshots/1-game-list.png</image>
+      <caption>The game list</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/richvam/NBA-JAMs-Recomp/main/docs/flathub/screenshots/2-settings.png</image>
+      <caption>Settings: picture shape, scaling and shaders</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/richvam/NBA-JAMs-Recomp/main/docs/flathub/screenshots/3-controls.png</image>
+      <caption>Controls: buttons per controller and profile</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/richvam/NBA-JAMs-Recomp/main/docs/flathub/screenshots/4-online.png</image>
+      <caption>Online games without port forwarding</caption>
+    </screenshot>
+  </screenshots>
   <url type="homepage">https://github.com/richvam/NBA-JAMs-Recomp</url>
   <url type="bugtracker">https://github.com/richvam/NBA-JAMs-Recomp/issues</url>
   <content_rating type="oars-1.1">

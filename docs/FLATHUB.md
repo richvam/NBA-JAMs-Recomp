@@ -21,10 +21,9 @@ name becomes `_` in the ID).
    `appid-url-not-reachable`. Either rename the repository to `NBA_JAMs_Recomp` (GitHub
    forwards the old address), or ask the reviewers for the usual exception for a `-` in the
    repository name, in the submission pull request.
-2. **Screenshots.** Flathub requires at least one. They must be hosted at a fixed URL, and
-   should show no game content (no ROM pictures). The program's own menus with no ROMs
-   loaded work: add them to `dist/linux/...metainfo.xml` as
-   `<screenshots><screenshot type="default"><image>URL</image></screenshot></screenshots>`.
+2. **Screenshots.** Done: four of the program's own menus, drawn from test data with no ROMs
+   (no game graphics), in `docs/flathub/screenshots/`, listed in the metainfo. Their URLs point
+   at `main`, so they work once this is merged.
 3. **The name.** "NBA JAM" is a trademark of other companies. Flathub reviewers may ask about
    it, or for a name that does not suggest an official product. Decide before submitting.
 4. **A release.** Flathub builds a fixed version. Tag one (for example `v2026.12.01`) and add a
