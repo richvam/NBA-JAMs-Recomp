@@ -259,10 +259,46 @@ jobs:
           path: out/*.AppImage
           if-no-files-found: error
 
+  flatpak:
+    name: Linux Flatpak (x86_64; built from source, tested in the sandbox)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0       # tags, for the version string
+
+      - name: Flatpak tools, Flathub, the runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends flatpak flatpak-builder xvfb xauth appstream elfutils librsvg2-common
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive flathub org.freedesktop.Platform//24.08 org.freedesktop.Sdk//24.08 org.freedesktop.Platform.GL.default//24.08
+
+      - name: AppStream metadata is valid
+        run: appstreamcli validate --no-net --explain dist/linux/io.github.richvam.NBAJamRecomp.metainfo.xml
+
+      - name: Build and install
+        run: |
+          make -s print-version > .flatpak-version
+          echo "version: $(cat .flatpak-version)"
+          flatpak-builder --user --install --force-clean --repo=fp-repo fp-build flatpak/io.github.richvam.NBAJamRecomp.yml
+          mkdir -p out
+          flatpak build-bundle fp-repo "out/NBAJamRecomp-${PKG_VERSION}-linux-x86_64.flatpak" io.github.richvam.NBAJamRecomp --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo
+          ls -la out
+
+      - name: Runs in the sandbox (audit A under Xvfb)
+        run: bash tools/ci/test_flatpak.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-x86_64-flatpak
+          path: out/*.flatpak
+          if-no-files-found: error
+
   release:
     name: Draft GitHub Release
     if: github.ref_type == 'tag'
-    needs: [repo-check, linux, windows, windows-installer, linux-appimage]
+    needs: [repo-check, linux, windows, windows-installer, linux-appimage, flatpak]
     runs-on: ubuntu-22.04
     permissions:
       contents: write          # create the release

@@ -1,5 +1,7 @@
 CXX ?= g++
-CXXFLAGS ?= -std=c++20 -O2 -g -Wno-deprecated-declarations
+CXXFLAGS ?= -O2 -g
+# always, also when CXXFLAGS comes from the environment (flatpak-builder sets it)
+CXXFLAGS += -std=c++20 -Wno-deprecated-declarations
 # ARM's char is unsigned, x86's signed: build ARM like x86, so the emulation (and later
 # a saved state or an online game between the two) behaves the same (R4.2)
 ifneq ($(filter aarch64 arm64,$(shell uname -m)),)

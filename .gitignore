@@ -15,3 +15,7 @@ dist/NBAJamRecomp/mods.ini
 releases/
 *.tar.gz
 *.7z
+.flatpak-version
+.flatpak-builder/
+fp-build/
+fp-repo/
