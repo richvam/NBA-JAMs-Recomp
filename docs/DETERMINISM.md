@@ -39,6 +39,13 @@ but the save states were not: they held bytes that were never set.
 | **Uninitialised memory.** | whole emulation | **None that matters**: identical results with locals set to zero or a pattern and with the heap filled with two bytes (table above). |
 | **Struct layout in states.** | `state_io` | Covered by the padding fix: no type with padding can be written whole. |
 
+## Save states between builds (R5.3)
+
+`tools/golden/state_cross.sh` has each build save at frame 1 800, then each build load each
+state and play to frame 3 000. GCC x86-64, Clang x86-64, Clang ARM64 (qemu-user) and MinGW on
+Windows, all five games: the states are the same bytes on all four, and all 16 pairs play on
+to the same RAM, picture, sound and final-state hashes as a run that never loaded.
+
 ## Not covered yet
 
 - MSVC: there is no MSVC build yet (R6/R7).
