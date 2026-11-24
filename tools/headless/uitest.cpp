@@ -1161,7 +1161,7 @@ int main(int argc, char **argv)
 				for (act m : { act::up, act::down, act::left, act::right }) { keyboard n = s; n.handle(ev(m)); states.push_back(n); }
 			}
 			bool inside = true;
-			for (auto &r : k.rows()) for (auto &key : r) inside = inside && key.r.x >= keyboard::kX && key.r.x + key.r.w <= keyboard::kX + keyboard::kW && key.r.y + key.r.h <= keyboard::kY + keyboard::kH - 14;
+			for (auto &r : k.rows()) for (auto &key : r) inside = inside && key.r.x >= keyboard::box_x() && key.r.x + key.r.w <= keyboard::box_x() + keyboard::kW && key.r.y + key.r.h <= keyboard::kY + keyboard::kH - 14;
 			keyboard w = k;
 			w.handle(ev(act::left));
 			CHECK(int(seen.size()) == total && inside && w.col() == int(w.rows()[0].size()) - 1,

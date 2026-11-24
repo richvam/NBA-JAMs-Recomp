@@ -237,7 +237,8 @@ item slider(int id, const std::string &l, float v, float mn, float mx, float st)
 }
 
 // ---------------------------------------------------------------- layout
-static const float kX0 = 8, kW0 = screen::kW - 16;
+static const float kX0 = 8;
+#define kW0 float(screen::kW - 16)
 static int strip_h(const panel &p) { return p.title.empty() ? 2 : 13; }
 
 rectf screen::panel_rect(int p) const
@@ -477,7 +478,7 @@ result screen::press(item &it)
 	return r;
 }
 
-static rectf dialog_button(bool yes) { return { yes ? 120.0f : 216.0f, 164, 64, 16 }; }
+static rectf dialog_button(bool yes) { return { float((screen::kW - 400) / 2) + (yes ? 120.0f : 216.0f), 164, 64, 16 }; }
 
 result screen::handle(const event &e)
 {
@@ -718,7 +719,7 @@ void screen::draw(canvas &cv, const theme &th, device dev, unsigned now_ms) cons
 	if (asking())
 	{
 		cv.blend(0, 0, cv.w, cv.h, 0xff000000, 150);
-		int x = 70, y = 104, w = 260, h = 86;
+		int x = (cv.w - 260) / 2, y = 104, w = 260, h = 86;
 		cv.fill(x, y, w, h, th.dialog);
 		cv.frame(x, y, w, h, th.bar);
 		// the question, wrapped inside the box

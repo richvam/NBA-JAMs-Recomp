@@ -7,6 +7,9 @@
 namespace ui
 {
 
+int keyboard::box_x() { return (screen::kW - kW) / 2; }
+
+
 static const int kKeyH = 16, kGap = 3;
 
 bool keyboard::takes(char c) const
@@ -61,7 +64,7 @@ void keyboard::build()
 	{
 		std::vector<key> row;
 		const int n = int(chars[r].size()), w = n * (cw + kGap) - kGap;
-		const float x0 = float(kX + kW / 2 - w / 2);
+		const float x0 = float(box_x() + kW / 2 - w / 2);
 		for (int c = 0; c < n; c++)
 		{
 			char ch = chars[r][size_t(c)];
@@ -76,7 +79,7 @@ void keyboard::build()
 	}
 	// the last row: the special keys share the width of the grid
 	const int n = int(special.size()), w = (total - (n - 1) * kGap) / n;
-	const float x0 = float(kX + kW / 2 - total / 2), y = top + float(chars.size()) * (kKeyH + kGap) + 2;
+	const float x0 = float(box_x() + kW / 2 - total / 2), y = top + float(chars.size()) * (kKeyH + kGap) + 2;
 	for (int i = 0; i < n; i++) special[size_t(i)].r = { x0 + float(i * (w + kGap)), y, float(w), float(kKeyH) };
 	m_rows.push_back(special);
 }
@@ -170,13 +173,13 @@ void keyboard::draw(canvas &cv, const theme &th, device dev, unsigned now_ms) co
 	if (!m_open) return;
 	auto put = [&](int x, int y, const std::string &s, uint32_t c, face f = face::list) { draw_text(cv, x, y, s, f, th.ink_for(c)); };
 	cv.blend(0, 0, cv.w, cv.h, 0xff000000, 150);
-	cv.fill(kX, kY, kW, kH, th.dialog);
-	cv.frame(kX, kY, kW, kH, th.bar);
-	cv.fill(kX + 1, kY + 1, kW - 2, 11, th.strip);
-	put(kX + 4, kY + 3, fit_px(m_title, kW - 8, face::note), th.strip_text, face::note);
+	cv.fill(box_x(), kY, kW, kH, th.dialog);
+	cv.frame(box_x(), kY, kW, kH, th.bar);
+	cv.fill(box_x() + 1, kY + 1, kW - 2, 11, th.strip);
+	put(box_x() + 4, kY + 3, fit_px(m_title, kW - 8, face::note), th.strip_text, face::note);
 
 	// the text so far, in the plain font so that small letters show as small letters
-	const int fx = kX + 10, fy = kY + 18, fw = kW - 20;
+	const int fx = box_x() + 10, fy = kY + 18, fw = kW - 20;
 	cv.fill(fx, fy, fw, 16, th.panel);
 	cv.frame(fx, fy, fw, 16, th.panel_edge);
 	const int room = (fw - 12) / 8 - 1;
@@ -204,7 +207,7 @@ void keyboard::draw(canvas &cv, const theme &th, device dev, unsigned now_ms) co
 	std::string help = "[" + glyph(dev, act::confirm) + "] Type  [" + glyph(dev, act::context) + "] Del  [" + glyph(dev, act::tab_next) + "] OK  [" +
 	                   glyph(dev, act::back) + "] Back";
 	if (dev == device::keyboard) help = "Keys type. Enter: OK  Esc: cancel  Ctrl+V: paste";
-	put(kX + 6, kY + kH - 12, fit_px(help, kW - 12, face::note), th.status, face::note);
+	put(box_x() + 6, kY + kH - 12, fit_px(help, kW - 12, face::note), th.status, face::note);
 }
 
 } // namespace ui

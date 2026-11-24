@@ -92,7 +92,8 @@ view_shape view_shape_from_old_aspect(int aspect)
 
 view_rect menu_view(int win_w, int win_h, int menu_w, int menu_h, bool tv_margins)
 {
-	view_rect v = compute_view(win_w, win_h, menu_w, menu_h, view_shape::original, view_scaling::fit);
+	// 400 menu columns are 4:3; a wider menu picture keeps the same pixel shape
+	view_rect v = compute_view(win_w, win_h, menu_w, menu_h, view_shape::widescreen, view_scaling::fit, true);
 	if (tv_margins)
 	{
 		const int dx = v.w / 20, dy = v.h / 20;
