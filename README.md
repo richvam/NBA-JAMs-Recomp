@@ -59,8 +59,8 @@ Repository ZIPs are downloaded on GitHub with "Code", then "Download ZIP".
    files; the panel beside the list says which.
 3. Insert a coin and press Start (on the keyboard: `5`, then `1`; on a controller: Back,
    then Start).
-4. In a game, open the **pause menu** with `Esc`, the Guide button, or by holding Start and
-   Back for half a second. It has everything the program can do during a game: settings,
+4. In a game, open the **pause menu** with `Esc`, the Guide button, or by holding Start for one
+   second (a quick press of Start still joins the game, as on the cabinet). It has everything the program can do during a game: settings,
    controls, coins, the TEST switch, reset, help, and "Quit to the game list".
 
 Everything works with a controller alone: menus, settings, button binding, Lua mods, online
@@ -280,7 +280,7 @@ Included:
 
 | Script | What it does |
 |---|---|
-| `quarter_length.lua` | Quarter and overtime length from 0:30 to 12:00 (the original is 3:00). The scoreboard has one minutes digit, so above 9:00 it shows 9 until nine minutes are left. |
+| `quarter_length.lua` | Quarter and overtime length from 0:30 to 12:00 (the original is 3:00). Over 9:00 the game clock does not show the time correctly (it reads 9 minutes until nine minutes are left), but the quarter lasts the time chosen. |
 | `no_select_timer.lua` | Removes the countdown on the team select screen, and optionally on initials entry. |
 | `codes_te.lua` | T.E. and T.E. Special Edition: every cabinet code as a switch, without entering it: tournament mode, big head, huge head, maximum power, quick hands, goaltending, shot percentage, computer assistance off, baby-size players, expanded roster, switch teams at halftime, and a secret player for each player. Per-player codes apply to each player you tick. While tournament mode is on, the codes it blocks in the game are greyed. |
 | `codes_mht.lua` | NBA Hangtime (L1.3, L1.1) and Maximum Hangtime (1.3, 1.03): every number code and stick code as a switch, without entering it (per-player codes for each player you tick). Not included: the number code lock and the special combo, whose parts each have their own switch. While tournament mode is on, the codes it clears are greyed. |

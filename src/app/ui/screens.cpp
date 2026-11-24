@@ -54,7 +54,7 @@ void update_picker(screen &s, const picker_state &st, int game)
 	const bool have = !st.games.empty();
 	bool any = false;
 	for (auto &g : st.games) any = any || g.available;
-	if (item *it = s.find(pk_online)) { it->value_text = have ? st.games[size_t(game)].title : ""; it->disabled = !have || !st.games[size_t(game)].available; }
+	if (item *it = s.find(pk_online)) { it->value_text = have ? "< " + st.games[size_t(game)].title + " >" : "";   // left / right choose the game it->disabled = !have || !st.games[size_t(game)].available; }
 	if (item *it = s.find(pk_mods)) it->value_text = std::to_string(st.mods_on) + " of " + std::to_string(st.mods_total) + " on";
 	if (item *it = s.find(pk_news)) it->value_text = !st.news_on ? "Off" : st.news_new ? "New version" : "";
 	s.fix_focus();
@@ -180,7 +180,7 @@ screen make_settings(const settings_state &st)
 	p.r = { 0.1f, 0.0f, 0.8f, 0.9f };
 	p.items = { toggle(st_news, "Check for new versions", st.news), label("Asks the Releases page once at start."), label("Nothing is downloaded or installed."),
 	            header("PAUSE MENU IN A GAME"), picker(st_pause, "Hold on a controller", pause_button_names(), st.pause_buttons),
-	            label("Half a second. Esc and the Guide button"), label("open it too."),
+	            label("Start: one second (a quick press"), label("still joins). Others: half a second."), label("Esc and Guide open it too."),
 	            toggle(st_save_states, "Save states", st.save_states), label("Save and Load, three slots per game."), label("Offline games only.") };
 	prog.panels = { p };
 
@@ -215,7 +215,7 @@ void read_settings(const screen &s, settings_state &st)
 
 const std::vector<std::string> &pause_button_names()
 {
-	static const std::vector<std::string> n = { "Start + Back", "L3 + R3" };
+	static const std::vector<std::string> n = { "Start (1 second)", "Start + Back", "L3 + R3" };
 	return n;
 }
 
@@ -700,7 +700,7 @@ screen make_pause(const pause_state &st)
 	game.title = st.online ? "Online game: still running" : "Game";
 	game.r = { 0.0f, 0.0f, 0.5f, 1.0f };
 	game.items = { button(ps_resume, "Resume"), slider(ps_volume, "Volume", st.volume, 0, 1, 0.1f), button(ps_shot, "Screenshot"),
-	               header("SETTINGS"), button(ps_video, "Video and sound"), button(ps_controls, "Controls"), button(ps_mods, "Lua mods"), button(ps_help, "Help: the controls"),
+	               header("SETTINGS"), button(ps_video, "Video and sound"), button(ps_controls, "Controls"), button(ps_help, "Help: the controls"),
 	               header(""), button(ps_quit, st.online ? "Leave the online game" : "Quit to the game list") };
 	panel coins;
 	coins.title = "Insert a coin";

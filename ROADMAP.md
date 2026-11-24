@@ -119,6 +119,8 @@ No game changes. All in `src/app/`.
 **Gate:** advisor compares screenshots at 1080p, 4K and 3440x1440 in all three modes. W1
 can be released here.
 
+**Gate passed (2026-11-23):** the owner checked the W1 screenshots and found them good.
+
 ## Phase W2: how the games draw (research)
 
 Opus. No code ships from this phase; the output is a design note in the pull request.
@@ -159,6 +161,8 @@ widescreen and a 4:3 player stay in sync. Not measured yet: the Hangtime backdro
 | W3.5 | Opus | Netplay: if W2.2 held, prove a 4:3 peer and a 16:9 peer stay in sync and keep widescreen out of the fingerprint. If not, add the view width to the fingerprint and the lobby. | `nettest`, 10 000 frames, equal hashes |
 
 **Gate:** advisor plays a full game at 16:9 and 21:9.
+
+**Gate passed (2026-11-23):** the owner verified the W3 gate.
 
 **Status:** W3.1 is done, as the engine side of the W2.6 choice (the program draws the wide
 picture itself; the game is not patched). The blitter's command decode is split out of
@@ -398,6 +402,8 @@ Opus. New files under `src/app/ui/`; `main.cpp` shrinks instead of growing.
 **Status:** U1.1 to U1.5 are written in `src/app/ui/`: widgets, the one navigation rule (at the top of `ui.h`), the unified input layer with hold-to-repeat, text prompts per device family, and text fitting. `tools/headless/uitest` (67 checks, in CI) includes the automated walk: every usable item of the gallery is reached by directions and tab buttons alone, focus never rests on a header or a disabled item, and Back is reported from every state. `viewtest --gallery` draws the gallery at four sizes. `NBAJamRecomp --ui-gallery` opens it in the program. Open: no real controller, mouse or touch screen has been used (scripted input only, keyboard by hand); prompts are words, not glyph pictures; no string table, since the program is English only for now (rule 4).
 
 **Gate:** advisor reviews the gallery and the navigation rule before any screen is rebuilt.
+
+**Gate passed (2026-11-23):** the owner checked the gallery with a real controller; it works.
 
 ## Phase U2: lettering and themes
 
@@ -647,6 +653,8 @@ tournament mode suppresses what it should.
 
 **Gate status:** deferred: the owner merged 3.2 to 3.6 (#47 to #51) on 2026-11-19 and will play the gate checks later with a controller (owed, with R2.2, R2.4, W1 and U1).
 
+**Gate passed (2026-11-23):** the owner verified the Phase 3 gate.
+
 ## Phase 4: unlock all hidden players
 
 `unlock_players.lua`, with one implementation per family.
@@ -892,6 +900,8 @@ rollback. Useful offline too.
 
 **Status:** N1.4 is done. Settings, Program: "Save states" (off by default; `save_states` in the ini). When it is on and the game is offline, the pause menu's Cabinet panel has Slot (1 to 3), Save and Load; online they are not there at all, and Save and Load check it again. A slot is `states/<game>/slot<n>.state` in the data folder (`src/app/state_file.h`): the machine's and the scripts' state compressed together (about 6 to 140 KB) with the program's version, the game and the game state's hash. It loads only into the same game and version; a load that fails puts the machine back as it was. After a load the sound fades in over 2 ms (`audio_join`) and the log says whether the game state is the one saved. Load is greyed on an empty slot and says when the state was saved. Checks: uitest (5 more: the items only when on and offline, off by default, Load greyed on an empty slot, every item reached by directions) and `tools/audit/f_states.pad`, a controller-only run that saves in slot 1, plays on, loads and finds the game state as saved.
 
+**Gate passed (2026-11-23):** statetest passes on all five games at frames 2 400, 4 000 and 6 000 (1 500 frames equal after a load, in the same machine and a new one); statebench: a state is about 1.7 MB raw and 112 to 120 KB compressed, a save takes about 0.07 ms and a load about 0.1 ms (median).
+
 **Gate:** advisor reviews the determinism results. Nothing else in Part 4 that touches a
 running game starts before this passes on all five games.
 
@@ -985,6 +995,8 @@ by its code alone from behind any router. Against the real internet: `nattest --
 same public address as a web service. **Not checked:** a real router's UPnP (the owner's
 router was not changed from here), and two real computers in different places; that is
 the owner's test.
+
+**Online test passed (2026-11-23):** the owner played an online game with a controller; it worked.
 
 ## Phase N3: meeting point
 
@@ -1126,6 +1138,8 @@ clicks, see what changed in each version, and play online against any other plat
 | R2.4 | Haiku | README rewrite in both languages around what a player needs: download, where ROMs go, first run, controls, online, mods, troubleshooting. Build instructions move to `docs/BUILDING.md`. Kept current by R8.3. | Advisor read-through |
 
 **Status (R2):** R2.1 is done (the check failed a test pull request with no entry and passed it once labelled): `CHANGELOG.md` with an Unreleased part (Added, Changed, Fixed, Online, Known issues), and the `changelog` workflow fails a pull request that adds no line there unless it has the `no-changelog` label (`tools/ci/check_changelog.py`). R2.2 is written: `tools/ci/release_notes.py` builds the release page from the changelog (lists, downloads per system, first-run steps, online compatibility from the protocol version) and the release job uses it; `cut` turns Unreleased into a version section before tagging. Open: the owner reviews the first draft, and the job has not yet run on a tag. R2.3 is done on the current menu (U3 carries it to the new one): `src/app/news.{h,cpp}` asks the Releases feed once, in the background, at start; the main menu shows "New version available", the News screen shows the notes, About shows the latest release; `news=0` or the menu switches it off. Checked on Windows with a stand-in feed answer, with the real feed (no release published yet: no notice), with an unreachable address (no notice, no delay) and switched off; 27 ROM-free tests in CI. On Linux the request (made by the system curl) was run from a test program. Not checked: a real published release of this project, and the screens on Linux. R2.4 is written: `README.md` is rewritten around what a player needs (download, ROMs, first run, controls, online, mods, troubleshooting) and the build, test and release instructions are in `docs/BUILDING.md`. English only, per rule 4. Open: the owner reads it through.
+
+**R2.4 verified (2026-11-23):** the owner checked the README rewrite. R2.2 (the release page) is still to be reviewed when a release is tagged.
 
 ## Phase R3: Windows installer
 

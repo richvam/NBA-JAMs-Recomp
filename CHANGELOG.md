@@ -114,6 +114,13 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - New Lua mod cpu_vs_cpu.lua (every game): whole games between two computer teams, one after another, for watching.
 
 ### Changed
+- The pause menu opens by holding Start for one second on a controller (a quick press still joins
+  the game). Start + Back opened a Windows menu; it and L3 + R3 can still be chosen in Settings,
+  Program.
+- The pause menu no longer has Lua mods: changing them in the middle of a game could leave it
+  in a state the scripts do not expect. They are set in the main menu.
+- "Quarter length" says in its description that over 9:00 the game clock does not show the time
+  correctly (the quarter still lasts the time chosen).
 - The emulator can now save and load the whole state of a running game (every CPU, sound board, video and timer), checked on all five games, together with the state of the Lua scripts that are running and the changes they made to the program ROM. There is no save menu yet; this is groundwork for later online features. A state is about 1.6 MB (110 to 140 KB compressed) and takes about 0.1 ms to save and 0.13 ms to load.
 - The read-me has a Lua mods section, and mods/README.txt lists every script that comes with the program, the games it runs on and which ones stay off online.
 - The CRT mask is as coarse at 4K as at 1080p (it was twice as fine at 4K), and it lines up
@@ -143,6 +150,8 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - The README files describe the menus and the pause menu first; the F-keys are shortcuts.
 
 ### Fixed
+- With a controller, "Online game" in the main menu could only be used for the last game in the
+  list. Left and right on that row now choose the game.
 - Widescreen: a strip of the stands at the right edge (16:9) could stay empty, where the original
   screen ended.
 - Widescreen: popup boxes (the controls help at the tip-off) moved to the side while their text

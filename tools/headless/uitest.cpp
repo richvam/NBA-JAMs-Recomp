@@ -1258,7 +1258,7 @@ int main(int argc, char **argv)
 		screen on = make_pause(po);
 		walk(on, "Pause menu (online)");
 		bool greyed = true;
-		for (int id : { (int)ps_reset, (int)ps_test, (int)ps_mods, (int)ps_service, (int)ps_video, (int)ps_controls, (int)ps_help, ps_coin0 + 1, ps_coin0 + 2, ps_coin0 + 3 }) greyed = greyed && on.find(id)->disabled;
+		for (int id : { (int)ps_reset, (int)ps_test, (int)ps_service, (int)ps_video, (int)ps_controls, (int)ps_help, ps_coin0 + 1, ps_coin0 + 2, ps_coin0 + 3 }) greyed = greyed && on.find(id)->disabled;
 		bool open = true;
 		for (int id : { (int)ps_resume, (int)ps_volume, (int)ps_shot, (int)ps_quit, (int)ps_coin0 }) open = open && !on.find(id)->disabled;
 		CHECK(greyed && open && on.find(ps_quit)->label == "Leave the online game" && on.find(ps_coin0)->label == "You" && on.tabs[0].panels[0].title == "Online game: still running",

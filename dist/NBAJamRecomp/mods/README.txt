@@ -6,9 +6,8 @@ X (Delete) turns the highlighted mod on or off. A (Enter) opens its page:
   * Apply to: All games / Selected games (then tick the games you want)
   * the mod's own options
 Settings are saved in mods.ini next to the program.
-During an offline game the same page opens from the pause menu (Esc, Guide, or Start + Back
-held). There, options marked live change the game at once; the others, and turning a mod on
-or off, apply next game, and the page says so. Online the page is not offered.
+The page is only in the main menu, not in the pause menu during a game: changing mods in the
+middle of a game could leave it in a state the scripts do not expect.
 
 Included scripts
 ----------------
@@ -239,4 +238,3 @@ a hash (line ends do not matter). When a file is missing or differs, that player
 start, and the message names the file. Mods may write RAM and use on_frame online.
   nba.netplay                  true in an online game: a script that should not run online
                                can check it in on_load and do nothing.
-The pause menu's mods page stays offline only.

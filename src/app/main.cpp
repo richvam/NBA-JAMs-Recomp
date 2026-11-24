@@ -79,7 +79,7 @@ struct config
 	bool net_upnp = true;         // N2.1: ask the router to forward the port when hosting
 	bool net_stun = true;         // N2.2: ask a STUN server for this computer's public address (its code)
 	std::string net_stun_server = "stun.l.google.com:19302";
-	int pause_buttons = 0;        // held on a controller to open the pause menu: 0 Start + Back, 1 L3 + R3 (U5.1)
+	int pause_buttons = 0;        // held on a controller to open the pause menu: 0 Start (1 s), 1 Start + Back, 2 L3 + R3 (U5.1)
 	bool menu_music = true, menu_sounds = true;   // U6: from the highlighted game's sound board
 	float menu_volume = 0.6f;
 	std::string pad_profile[4] = { "Default", "Default", "Default", "Default" };   // controller profile of each player
@@ -110,7 +110,7 @@ static SDL_Scancode *key_slot(key_map &k, int i)
 static void save_config(const std::string &path, config &c)
 {
 	std::ofstream f(path);
-	f << "# NBA JAM Recomp - configuration\n[general]\n# news=1 asks github.com once at start for the latest release (only to tell you; nothing is downloaded)\nnews=" << c.news << "\n# pause_buttons: held half a second on a controller for the pause menu (Esc and Guide always work): start+back or l3+r3\npause_buttons=" << (c.pause_buttons == 1 ? "l3+r3" : "start+back") << "\n# save_states=1 adds Save and Load (three slots per game) to the pause menu of an offline game\nsave_states=" << c.save_states << "\n# the menus play the highlighted game's own music and sounds, from its ROMs\nmenu_music=" << c.menu_music << "\nmenu_sounds=" << c.menu_sounds << "\nmenu_volume=" << c.menu_volume << "\n\n[video]\n# scale: size of the window in multiples of 400x300; 0 = chosen from the screen size\nscale=" << c.scale << "\nfullscreen=" << c.fullscreen << "\n# tv_margins=1 keeps the menus 5% in from each edge, for TVs that cut the edges off\ntv_margins=" << c.tv_margins
+	f << "# NBA JAM Recomp - configuration\n[general]\n# news=1 asks github.com once at start for the latest release (only to tell you; nothing is downloaded)\nnews=" << c.news << "\n# pause_button: held on a controller for the pause menu (Esc and Guide always work): start (one second; a quick press still goes to the game), start+back or l3+r3 (half a second)\npause_button=" << (c.pause_buttons == 2 ? "l3+r3" : c.pause_buttons == 1 ? "start+back" : "start") << "\n# save_states=1 adds Save and Load (three slots per game) to the pause menu of an offline game\nsave_states=" << c.save_states << "\n# the menus play the highlighted game's own music and sounds, from its ROMs\nmenu_music=" << c.menu_music << "\nmenu_sounds=" << c.menu_sounds << "\nmenu_volume=" << c.menu_volume << "\n\n[video]\n# scale: size of the window in multiples of 400x300; 0 = chosen from the screen size\nscale=" << c.scale << "\nfullscreen=" << c.fullscreen << "\n# tv_margins=1 keeps the menus 5% in from each edge, for TVs that cut the edges off\ntv_margins=" << c.tv_margins
 	  << "\n# shader: 0 sharp, 1 smooth, 2 scanlines, 3 CRT, 4 curved CRT\nshader=" << c.shader
 	  << "\n# view: original (4:3), widescreen (more of the court in play; all five games) or stretch (fills the window, distorted).\nview=" << view_shape_id(c.shape)
 	  << "\n# scaling: integer (whole multiples of the game's lines), fit (fills the height, crisp pixels), smooth (fills the height, filtered)\nscaling=" << view_scaling_id(c.scaling) << "\n# frame_time_log=1 writes how long each 120 game frames took to draw to frame_times.log in the data folder\nframe_time_log=" << c.frame_log << "\n# max_view_width: the widest the Widescreen view gets: widest (as wide as the window, up to 1000 columns), 16:9 or 21:9; a wider window gets sides\nmax_view_width=" << (c.max_wide == 1 ? "16:9" : c.max_wide == 2 ? "21:9" : "widest") << "\n# side_fill: around a 4:3 picture on a wider screen: black, blur (the picture, blurred and dimmed), overlay (an image from overlays/ in the data folder)\nside_fill=" << (c.side_fill == 1 ? "blur" : c.side_fill == 2 ? "overlay" : "black") << "\noverlay=" << c.overlay << "\n# overlay_opacity: 0.1 to 1, for overlays with a transparent opening\noverlay_opacity=" << c.overlay_opacity << "\nscanline_strength=" << c.scan_strength
@@ -149,7 +149,8 @@ static void load_config(const std::string &path, config &c)
 		if (k == "language") continue;       // from older versions: the program is English only for now
 		else if (k == "news") c.news = atoi(v.c_str()) != 0;
 		else if (k == "save_states") c.save_states = atoi(v.c_str()) != 0;
-		else if (k == "pause_buttons") c.pause_buttons = v == "l3+r3" ? 1 : 0;
+		else if (k == "pause_button") c.pause_buttons = v == "l3+r3" ? 2 : v == "start+back" ? 1 : 0;
+		else if (k == "pause_buttons") c.pause_buttons = v == "l3+r3" ? 2 : 0;   // before: start+back (the default then, which opens a Windows menu) becomes Start
 		else if (k == "menu_music") c.menu_music = atoi(v.c_str()) != 0;
 		else if (k == "menu_sounds") c.menu_sounds = atoi(v.c_str()) != 0;
 		else if (k == "menu_volume") c.menu_volume = std::clamp(float(atof(v.c_str())), 0.0f, 1.0f);
@@ -270,6 +271,10 @@ private:
 	screen m_back_to = screen::menu;   // where Settings, Controls, Lua mods and About return: the picker, or the pause menu
 	int m_coin_pulse[4] = { 0, 0, 0, 0 }, m_service_pulse = 0;   // coins from the menu: 8 frames each, the coin held for 4 of them
 	unsigned m_combo_since = 0;
+	static constexpr unsigned kStartHoldMs = 1000;   // Start held this long opens the pause menu
+	unsigned m_start_since[4] = {};    // when Start went down on each controller (0: up)
+	bool m_start_used[4] = {};         // that press opened the pause menu: nothing for the game
+	int m_start_pulse[4] = {};         // frames of Start still to give the game after a quick press
 	bool m_combo_wait = false;         // the shortcut acted: wait for its buttons to be let go
 	bool m_menu_guide = false;
 	bool pause_held(SDL_GameController *c);
@@ -836,7 +841,23 @@ cabinet_inputs app::gather_inputs()
 		SDL_GameController *c = m_pads[i];
 		unsigned m = active_profile(int(i)).buttons(c);      // shortcuts already expanded to cabinet buttons
 		// while Start + Back is held for the pause menu, the game sees neither
-		if (m_cfg.pause_buttons == 0 && pause_held(c)) m &= ~((1u << A_START) | (1u << A_COIN));
+		if (m_cfg.pause_buttons == 1 && pause_held(c)) m &= ~((1u << A_START) | (1u << A_COIN));
+		// Start alone opens the pause menu when held a second: the game gets Start only when it
+		// is let go sooner, as a short press of its own (a held Start joins nothing by itself)
+		if (m_cfg.pause_buttons == 0)
+		{
+			bool const down = (m >> A_START) & 1u;
+			m &= ~(1u << A_START);
+			unsigned const now = SDL_GetTicks();
+			if (down && !m_start_since[i]) m_start_since[i] = now ? now : 1;
+			if (!down && m_start_since[i])
+			{
+				if (!m_start_used[i] && now - m_start_since[i] < kStartHoldMs) m_start_pulse[i] = 6;
+				m_start_since[i] = 0;
+				m_start_used[i] = false;
+			}
+			if (m_start_pulse[i] > 0) { m |= 1u << A_START; m_start_pulse[i]--; }
+		}
 		auto &q = in.p[i];
 		auto on = [&](int a) { return ((m >> a) & 1u) != 0; };
 		q.up |= on(A_UP); q.down |= on(A_DOWN); q.left |= on(A_LEFT); q.right |= on(A_RIGHT);
@@ -1212,6 +1233,18 @@ void app::menu_frame()
 	ui::event ev;
 	while (ui_next(ev))
 	{
+		// Online game: left and right choose its game, so a controller can reach every game from
+		// this row (down from the game list always arrived with the last game chosen)
+		if ((ev.a == ui::act::left || ev.a == ui::act::right) && m_picker.focused() && m_picker.focused()->id == ui::pk_online)
+		{
+			for (int n = 0; n < ng; n++)
+			{
+				m_sel = (m_sel + (ev.a == ui::act::right ? 1 : ng - 1)) % ng;
+				if (m_avail[size_t(m_sel)]) break;
+			}
+			m_picker.tabs[0].panels[0].focus = m_sel;
+			continue;
+		}
 		ui::result r = m_picker.handle(ev);
 		m_sel = ui::picker_game_index(m_picker, m_sel);
 		if (r.what == ui::result::back) m_picker.ask("Quit NBA JAM Recomp?", ui::pk_quit);
@@ -1309,7 +1342,7 @@ void app::apply_settings(const ui::settings_state &want)
 	m_cfg.volume = std::clamp(want.volume, 0.0f, 1.0f);
 	m_cfg.dips.free_play = want.free_play; m_cfg.dips.four_players = want.four_players; m_cfg.dips.video_clips = want.video_clips;
 	m_cfg.dips.country = std::clamp(want.country, 0, 2);
-	m_cfg.pause_buttons = std::clamp(want.pause_buttons, 0, 1);
+	m_cfg.pause_buttons = std::clamp(want.pause_buttons, 0, 2);
 	m_cfg.save_states = want.save_states;
 	m_cfg.menu_music = want.menu_music; m_cfg.menu_sounds = want.menu_sounds; m_cfg.menu_volume = std::clamp(want.menu_volume, 0.0f, 1.0f);
 	m_cfg.tv_margins = want.tv_margins;
@@ -2287,21 +2320,27 @@ bool app::load_slot(int n)
 bool app::pause_held(SDL_GameController *c)
 {
 	auto b = [&](SDL_GameControllerButton x) { return SDL_GameControllerGetButton(c, x) != 0; };
-	if (m_cfg.pause_buttons == 1) return b(SDL_CONTROLLER_BUTTON_LEFTSTICK) && b(SDL_CONTROLLER_BUTTON_RIGHTSTICK);
-	return b(SDL_CONTROLLER_BUTTON_START) && b(SDL_CONTROLLER_BUTTON_BACK);
+	if (m_cfg.pause_buttons == 2) return b(SDL_CONTROLLER_BUTTON_LEFTSTICK) && b(SDL_CONTROLLER_BUTTON_RIGHTSTICK);
+	if (m_cfg.pause_buttons == 1) return b(SDL_CONTROLLER_BUTTON_START) && b(SDL_CONTROLLER_BUTTON_BACK);
+	return b(SDL_CONTROLLER_BUTTON_START);
 }
 
-// The held shortcut, on any controller: true once it has been held half a second, then not
-// again until its buttons are let go.
+// The held shortcut, on any controller: true once it has been held half a second (Start alone:
+// one second), then not again until its buttons are let go.
 bool app::pause_shortcut()
 {
 	bool held = false;
-	for (SDL_GameController *c : m_pads) held = held || pause_held(c);
+	for (size_t i = 0; i < m_pads.size(); i++)
+		if (pause_held(m_pads[i]))
+		{
+			held = true;
+			if (i < 4 && m_combo_since && SDL_GetTicks() - m_combo_since >= (m_cfg.pause_buttons == 0 ? kStartHoldMs : 500u)) m_start_used[i] = true;
+		}
 	const unsigned now = SDL_GetTicks();
 	if (!held) { m_combo_since = 0; m_combo_wait = false; return false; }
 	if (m_combo_wait) return false;
 	if (!m_combo_since) m_combo_since = now ? now : 1;
-	if (now - m_combo_since < 500) return false;
+	if (now - m_combo_since < (m_cfg.pause_buttons == 0 ? kStartHoldMs : 500u)) return false;
 	m_combo_wait = true;
 	return true;
 }

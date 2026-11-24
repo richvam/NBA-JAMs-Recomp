@@ -10,9 +10,10 @@ with a controller alone; the keyboard and the mouse work too. In the menus the
 directions move, A (Enter) chooses, B (Esc) goes back, the shoulder buttons
 (Q, E) change tab, and the bottom line says what each button does.
 
-In a game, Esc, the Guide button, or Start and Back held for half a second open
-the pause menu: resume, volume, screenshot, settings, controls, Lua mods, help,
-coins, service credit, TEST switch, reset, and "Quit to the game list".
+In a game, Esc, the Guide button, or Start held for one second (a quick press
+still joins the game) open the pause menu: resume, volume, screenshot, settings,
+controls, help, coins, service credit, TEST switch, reset, and "Quit to the
+game list".
 
 "News" in the menu tells you when a newer version is published (it only tells
 you; nothing is downloaded). It can be switched off in Settings, Program.
@@ -172,7 +173,7 @@ LUA MODS
 --------
   Scripts in the mods folder change or add to the games: house rules, codes,
   hidden players, a fantasy draft, on-screen info, a box score saved to stats.
-  Choose "Lua mods" in the main menu (or the pause menu) to turn them on and set
+  Choose "Lua mods" in the main menu (not during a game) to turn them on and set
   their options. mods\README.txt lists the scripts that come with the program and
   explains how to write one.
   * Online, the host's mods run for everybody, with the host's options; every
