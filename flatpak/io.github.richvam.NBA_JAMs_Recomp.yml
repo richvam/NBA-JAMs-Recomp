@@ -26,6 +26,7 @@ modules:
     config-opts:
       - --disable-shared
       - --enable-static
+      - --disable-pipewire    # sound goes through PulseAudio (the sandbox has that socket); 2.30.9's PipeWire code does not build with 26.08's PipeWire
     cleanup:
       - '*'
     sources:
