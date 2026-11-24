@@ -1,13 +1,13 @@
 # Flatpak manifest (roadmap R4.3). Built in CI by the flatpak job:
-#   flatpak-builder --user --install-deps-from=flathub build flatpak/io.github.richvam.NBAJamRecomp.yml
+#   flatpak-builder --user --install-deps-from=flathub build flatpak/io.github.richvam.NBA_JAMs_Recomp.yml
 # Everything is built from source: SDL2 (pinned, checked by SHA-256, static as in the other
 # Linux builds) and the program. The program keeps its data in the sandbox's own folder,
-# ~/.var/app/io.github.richvam.NBAJamRecomp/data/NBAJamRecomp (ROMs in its roms/), and copies
+# ~/.var/app/io.github.richvam.NBA_JAMs_Recomp/data/NBAJamRecomp (ROMs in its roms/), and copies
 # the shipped mods there on first start. ROMs get in by drag and drop (the file chooser portal
 # hands the dropped files in) or through Open my ROM folder.
-app-id: io.github.richvam.NBAJamRecomp
+app-id: io.github.richvam.NBA_JAMs_Recomp
 runtime: org.freedesktop.Platform
-runtime-version: '24.08'
+runtime-version: '26.08'
 sdk: org.freedesktop.Sdk
 command: NBAJamRecomp
 # The metadata is checked with appstreamcli validate in CI; the store-listing compose step
@@ -26,6 +26,7 @@ modules:
     config-opts:
       - --disable-shared
       - --enable-static
+      - --disable-pipewire    # sound goes through PulseAudio (the sandbox has that socket); 2.30.9's PipeWire code does not build with 26.08's PipeWire
     cleanup:
       - '*'
     sources:
@@ -43,11 +44,11 @@ modules:
       - cp -r dist/NBAJamRecomp/mods dist/NBAJamRecomp/overlays /app/lib/nbajamrecomp/
       - install -Dm644 dist/NBAJamRecomp/roms/README.txt /app/lib/nbajamrecomp/roms/README.txt
       - install -Dm755 flatpak/NBAJamRecomp.sh /app/bin/NBAJamRecomp
-      - install -Dm644 dist/linux/nbajamrecomp.desktop /app/share/applications/io.github.richvam.NBAJamRecomp.desktop
-      - desktop-file-edit --set-icon=io.github.richvam.NBAJamRecomp /app/share/applications/io.github.richvam.NBAJamRecomp.desktop
-      - install -Dm644 dist/linux/nbajamrecomp.svg /app/share/icons/hicolor/scalable/apps/io.github.richvam.NBAJamRecomp.svg
-      - for n in 64 128 256; do mkdir -p /app/share/icons/hicolor/${n}x${n}/apps; rsvg-convert -w $n -h $n dist/linux/nbajamrecomp.svg -o /app/share/icons/hicolor/${n}x${n}/apps/io.github.richvam.NBAJamRecomp.png; done
-      - install -Dm644 dist/linux/io.github.richvam.NBAJamRecomp.metainfo.xml /app/share/metainfo/io.github.richvam.NBAJamRecomp.metainfo.xml
+      - install -Dm644 dist/linux/nbajamrecomp.desktop /app/share/applications/io.github.richvam.NBA_JAMs_Recomp.desktop
+      - desktop-file-edit --set-icon=io.github.richvam.NBA_JAMs_Recomp /app/share/applications/io.github.richvam.NBA_JAMs_Recomp.desktop
+      - install -Dm644 dist/linux/nbajamrecomp.svg /app/share/icons/hicolor/scalable/apps/io.github.richvam.NBA_JAMs_Recomp.svg
+      - for n in 64 128 256; do mkdir -p /app/share/icons/hicolor/${n}x${n}/apps; rsvg-convert -w $n -h $n dist/linux/nbajamrecomp.svg -o /app/share/icons/hicolor/${n}x${n}/apps/io.github.richvam.NBA_JAMs_Recomp.png; done
+      - install -Dm644 dist/linux/io.github.richvam.NBA_JAMs_Recomp.metainfo.xml /app/share/metainfo/io.github.richvam.NBA_JAMs_Recomp.metainfo.xml
     sources:
       - type: dir
         path: ..

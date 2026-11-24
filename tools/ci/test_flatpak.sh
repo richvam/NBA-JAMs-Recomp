@@ -8,7 +8,7 @@
 # the audit scripts (a real install sees neither).
 set -uo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
-id=io.github.richvam.NBAJamRecomp
+id=io.github.richvam.NBA_JAMs_Recomp
 fail=0
 check() { if [ "$1" = 0 ]; then echo "PASS  $2"; else echo "FAIL  $2"; fail=1; fi; }
 

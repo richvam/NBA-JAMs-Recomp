@@ -272,19 +272,30 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends flatpak flatpak-builder xvfb xauth appstream elfutils librsvg2-common
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-          flatpak install --user -y --noninteractive flathub org.freedesktop.Platform//24.08 org.freedesktop.Sdk//24.08 org.freedesktop.Platform.GL.default//24.08
+          flatpak install --user -y --noninteractive flathub org.freedesktop.Platform//26.08 org.freedesktop.Sdk//26.08 org.freedesktop.Platform.GL.default//26.08
 
       - name: AppStream metadata is valid
-        run: appstreamcli validate --no-net --explain dist/linux/io.github.richvam.NBAJamRecomp.metainfo.xml
+        run: appstreamcli validate --no-net --explain dist/linux/io.github.richvam.NBA_JAMs_Recomp.metainfo.xml
 
       - name: Build and install
         run: |
           make -s print-version > .flatpak-version
           echo "version: $(cat .flatpak-version)"
-          flatpak-builder --user --install --force-clean --repo=fp-repo fp-build flatpak/io.github.richvam.NBAJamRecomp.yml
+          flatpak-builder --user --install --force-clean --repo=fp-repo fp-build flatpak/io.github.richvam.NBA_JAMs_Recomp.yml
           mkdir -p out
-          flatpak build-bundle fp-repo "out/NBAJamRecomp-${PKG_VERSION}-linux-x86_64.flatpak" io.github.richvam.NBAJamRecomp --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak build-bundle fp-repo "out/NBAJamRecomp-${PKG_VERSION}-linux-x86_64.flatpak" io.github.richvam.NBA_JAMs_Recomp --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo
           ls -la out
+
+      - name: Flathub's linter on the submission manifest and the metadata (report)
+        continue-on-error: true
+        run: |
+          flatpak install --user -y --noninteractive flathub org.flatpak.Builder
+          python3 tools/flathub/make_manifest.py --self-test
+          python3 tools/flathub/make_manifest.py HEAD io.github.richvam.NBA_JAMs_Recomp.yml
+          lint() { flatpak run --command=flatpak-builder-lint org.flatpak.Builder "$@" || true; }
+          echo "== manifest"; lint manifest io.github.richvam.NBA_JAMs_Recomp.yml
+          echo "== appstream"; lint appstream dist/linux/io.github.richvam.NBA_JAMs_Recomp.metainfo.xml
+          echo "== repo"; lint repo fp-repo
 
       - name: Runs in the sandbox (audit A under Xvfb)
         run: bash tools/ci/test_flatpak.sh

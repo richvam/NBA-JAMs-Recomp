@@ -47,7 +47,7 @@ keeps your ROMs, settings and saves in `~/.local/share/NBAJamRecomp` (drag ROMs 
 window, or use Open my ROM folder). The Flatpak installs with
 `flatpak install --user NBAJamRecomp-<version>-linux-x86_64.flatpak` (or by opening it in
 your software centre) and runs in a sandbox that sees only its own folder:
-`~/.var/app/io.github.richvam.NBAJamRecomp/data/NBAJamRecomp`, with the ROMs in its `roms`.
+`~/.var/app/io.github.richvam.NBA_JAMs_Recomp/data/NBAJamRecomp`, with the ROMs in its `roms`.
 Drag ROMs onto its window, or use Open my ROM folder. Windows may show a SmartScreen warning
 because the program is not signed: choose "More info", then "Run anyway".
 
