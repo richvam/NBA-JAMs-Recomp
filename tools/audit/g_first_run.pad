@@ -1,0 +1,21 @@
+# R3.2: first start with no ROMs to a playable game, controller only, ROMs by drag and drop.
+# Needs ROMS=<folder with nbajam.zip> in the environment, and an empty data folder.
+wait 4000
+expect menu
+expect_ready 0
+shot
+# down from the first game: Settings is 5 down, Open my ROM folder 10 (it only logs in a scripted run)
+tap down 10
+tap a
+expect menu
+drop ${ROMS}/nbajam.zip
+wait 4000
+expect_ready 1
+shot
+# NBA JAM is the first game in the list: start it
+tap up 20
+tap a
+wait 8000
+expect game
+shot
+quit

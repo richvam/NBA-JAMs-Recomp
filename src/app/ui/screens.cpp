@@ -24,7 +24,7 @@ screen make_picker(const picker_state &st)
 	menu.title = "Menu";
 	menu.r = { 0.0f, 0.48f, 0.5f, 0.52f };
 	menu.items = { button(pk_online, "Online game"), button(pk_settings, "Settings"), button(pk_mods, "Lua mods"), button(pk_controls, "Controls"),
-	               button(pk_news, "News"), button(pk_about, "About"), button(pk_rescan, "Look for ROMs again"), button(pk_quit, "Quit") };
+	               button(pk_news, "News"), button(pk_about, "About"), button(pk_romdir, "Open my ROM folder"), button(pk_rescan, "Look for ROMs again"), button(pk_quit, "Quit") };
 	panel info;
 	info.r = { 0.52f, 0.0f, 0.48f, 1.0f };
 	t.panels = { games, menu, info };
@@ -76,9 +76,9 @@ void update_picker(screen &s, const picker_state &st, int game)
 		{
 			// first run: nothing can be played yet
 			info.items.push_back(header("NO GAMES FOUND"));
-			lines("Put your ROM sets (ZIP files) in this folder:");
+			lines("Drag your ROM sets (ZIP files) onto this window, or put them in this folder:");
 			lines(st.roms_dir);
-			lines("Then choose Look for ROMs again.");
+			lines("Open my ROM folder opens it. After copying, choose Look for ROMs again.");
 		}
 		else if (g.available) info.items.push_back(header("READY TO PLAY"));
 		else

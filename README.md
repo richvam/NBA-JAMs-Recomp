@@ -48,6 +48,11 @@ Copy your own files into the `roms` folder: next to the program for the archives
 every file by its contents (CRC32), whatever its name, inside zips and sub-folders too,
 so there is nothing to unpack or rename.
 
+The easiest way: **drag your ROM files, zips or a folder of them onto the program's window**
+while the game list is shown. They are copied into the `roms` folder and the games are
+looked for again at once. **Open my ROM folder** in the main menu opens the folder itself;
+after copying files there by hand, choose **Look for ROMs again**.
+
 | Game | What to put in `roms` |
 |---|---|
 | NBA JAM (1993) | MAME romset `nbajam.zip` |

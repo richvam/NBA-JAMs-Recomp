@@ -12,6 +12,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 ## Unreleased
 
 ### Added
+- ROMs can be dragged onto the window (files, zips or a folder): they are copied into the ROM folder and the games are looked for again. "Open my ROM folder" in the main menu opens it.
 - Windows: a crash writes a report (`crashes/*.txt` and a minidump `*.dmp`) in the data folder, to attach to an issue.
 - A Windows installer (`...-windows-x64-setup.exe`, Inno Setup): per user, no administrator prompt, Start menu and optional desktop shortcut, data in `%APPDATA%\NBAJamRecomp`; uninstalling keeps your ROMs and saves unless you say yes. Built and tested (silent install and uninstall) in CI.
 - Menus fill a wide window: on a 16:9 or 21:9 screen the menus are laid out that wide (up to 21:9; wider windows get black sides), instead of a 4:3 box.
