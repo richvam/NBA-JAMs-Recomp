@@ -123,6 +123,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - New Lua mod cpu_vs_cpu.lua (every game): whole games between two computer teams, one after another, for watching.
 
 ### Changed
+- Save states are now the same bytes on every build (R5.1). States saved by earlier versions do not load.
 - The pause menu opens by holding Start for one second on a controller (a quick press still joins
   the game). Start + Back opened a Windows menu; it and L3 + R3 can still be chosen in Settings,
   Program.
@@ -159,6 +160,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - The README files describe the menus and the pause menu first; the F-keys are shortcuts.
 
 ### Fixed
+- Builds now give the same game on every compiler and processor: no padding in save states, an exact timer division (it used `long double`), a written-out sound table (it used `pow`), and the same rules for integer overflow and floating point everywhere (`docs/DETERMINISM.md`).
 - The build now always uses C++20, also when the environment sets its own compiler flags (as Flatpak builds do).
 - The build after the pause and online picker changes: a comment had swallowed the rest of a line in the game list.
 - With a controller, "Online game" in the main menu could only be used for the last game in the

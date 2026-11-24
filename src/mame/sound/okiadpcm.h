@@ -34,6 +34,9 @@ public:
 	int32_t   m_loop_step;
 	bool      m_saved;
 
+	// save states (NBA JAM Recomp, R5.3): field by field, the padding after m_saved is never set
+	template <typename S> void io(S &s) { s(m_signal); s(m_step); s(m_loop_signal); s(m_loop_step); s(m_saved); }
+
 private:
 	static const int8_t s_index_shift[8];
 	static int s_diff_lookup[49*16];

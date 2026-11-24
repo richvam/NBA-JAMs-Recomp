@@ -26,6 +26,7 @@ private:
 		u32 sample = 0, count = 0;
 		float volume = 0;
 		oki_adpcm_state adpcm;
+		void io(state_io &s) { s(playing); s(base_offset); s(sample); s(count); s(volume); s(adpcm); }
 	};
 	voice m_voice[4];
 	int m_command = -1;
