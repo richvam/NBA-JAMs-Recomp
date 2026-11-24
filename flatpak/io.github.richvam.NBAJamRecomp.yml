@@ -10,6 +10,9 @@ runtime: org.freedesktop.Platform
 runtime-version: '24.08'
 sdk: org.freedesktop.Sdk
 command: NBAJamRecomp
+# The metadata is checked with appstreamcli validate in CI; the store-listing compose step
+# fails in CI's flatpak-builder 1.4 without naming the file, and Flathub runs its own.
+appstream-compose: false
 finish-args:
   - --share=ipc
   - --socket=x11              # SDL2 draws through X11 (XWayland on a Wayland desktop)
