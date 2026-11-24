@@ -1,5 +1,11 @@
 CXX ?= g++
 CXXFLAGS ?= -std=c++20 -O2 -g -Wno-deprecated-declarations
+# ARM's char is unsigned, x86's signed: build ARM like x86, so the emulation (and later
+# a saved state or an online game between the two) behaves the same (R4.2)
+ifneq ($(filter aarch64 arm64,$(shell uname -m)),)
+CXXFLAGS += -fsigned-char
+CFLAGS += -fsigned-char
+endif
 INC = -Isrc/emu -Isrc/mame -Isrc/board
 CORE_SRC = src/emu/emu.cpp \
   src/mame/cpu/tms34010/tms34010.cpp src/mame/cpu/tms34010/34010dsm.cpp \
@@ -37,7 +43,7 @@ $(BUILD)/headless_w: tools/headless/headless_w.cpp $(BUILD)/libcore.a
 LUA_SRC = $(filter-out src/third_party/lua/lua.c src/third_party/lua/luac.c,$(wildcard src/third_party/lua/*.c))
 $(BUILD)/lua/%.o: src/third_party/lua/%.c
 	@mkdir -p $(dir $@)
-	$(CC) -O2 -std=gnu99 -c $< -o $@
+	$(CC) -O2 $(CFLAGS) -std=gnu99 -c $< -o $@
 $(BUILD)/liblua.a: $(patsubst src/third_party/lua/%.c,$(BUILD)/lua/%.o,$(LUA_SRC))
 	ar rcs $@ $^
 
@@ -98,7 +104,7 @@ win:
 SDL2L ?= /home/claude/deps/sdl2linux
 APP_INC = -Isrc/emu -Isrc/mame -Isrc/board -Isrc/app -Isrc/third_party/miniz -Isrc/third_party/lua
 $(BUILD)/miniz.o: src/third_party/miniz/miniz.c
-	$(CC) -O2 -c $< -o $@
+	$(CC) -O2 $(CFLAGS) -c $< -o $@
 linux-app: $(BUILD)/libcore.a $(BUILD)/miniz.o $(BUILD)/liblua.a
 	$(CXX) $(CXXFLAGS) $(APP_INC) -I$(SDL2L)/include/SDL2 src/app/main.cpp src/app/games.cpp src/app/romload.cpp src/app/netplay.cpp src/app/nat.cpp src/app/gl_present.cpp src/app/controls.cpp src/app/mods.cpp src/app/menu_sound.cpp src/app/pad_script.cpp src/app/version.cpp src/app/paths.cpp src/app/news.cpp src/app/view.cpp src/app/png_read.cpp src/app/overlay.cpp src/app/ui/ui.cpp src/app/ui/gallery.cpp src/app/ui/lettering.cpp src/app/ui/themes.cpp src/app/ui/screens.cpp src/app/ui/keyboard.cpp src/app/ui/art_view.cpp src/app/rom_art.cpp $(VERSION_DEFS) \
 	  $(BUILD)/miniz.o $(BUILD)/libcore.a $(BUILD)/liblua.a -L$(SDL2L)/lib -Wl,-Bstatic -lSDL2 -Wl,-Bdynamic -static-libstdc++ -static-libgcc -lm -ldl -lpthread -o $(BUILD)/NBAJamRecomp

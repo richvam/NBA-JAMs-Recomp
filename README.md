@@ -34,6 +34,7 @@ Get the latest version from the **[Releases page](https://github.com/richvam/NBA
 | Windows 10/11, 64-bit, portable | `NBAJamRecomp-<version>-windows-x64.zip` |
 | Linux and Steam Deck, 64-bit (x86-64), AppImage | `NBAJamRecomp-<version>-linux-x86_64.AppImage` (from the next release on) |
 | Linux, 64-bit (x86-64), portable | `NBAJamRecomp-<version>-linux-x64.tar.gz` |
+| Linux on ARM 64-bit (Raspberry Pi 4/5 with a 64-bit system, ARM laptops), AppImage or portable | `NBAJamRecomp-<version>-linux-aarch64.AppImage`, `NBAJamRecomp-<version>-linux-arm64.tar.gz` (from the next release on) |
 
 The Windows installer needs no administrator rights: it installs for your user, adds a Start
 menu entry (and a desktop one if you tick it), and keeps your ROMs, settings and saves in

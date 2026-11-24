@@ -12,6 +12,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 ## Unreleased
 
 ### Added
+- Linux on ARM 64-bit: an AppImage and a portable archive, built and tested on an ARM machine in CI.
 - Linux: an AppImage (`...-linux-x86_64.AppImage`), one file that runs on current distributions and the Steam Deck; data in `~/.local/share/NBAJamRecomp`. Tested in CI on Ubuntu 24.04, Debian 12, Fedora 41 and Arch.
 - README: how to check a download against the release's `SHA256SUMS.txt`, while the program is not signed.
 - ROMs can be dragged onto the window (files, zips or a folder): they are copied into the ROM folder and the games are looked for again. "Open my ROM folder" in the main menu opens it.
