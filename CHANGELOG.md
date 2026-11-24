@@ -12,6 +12,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 ## Unreleased
 
 ### Added
+- Linux: a Flatpak (`...-linux-x86_64.flatpak`), built from source and tested in its sandbox in CI; ROMs go in its own folder (drag them onto the window).
 - Linux on ARM 64-bit: an AppImage and a portable archive, built and tested on an ARM machine in CI.
 - Linux: an AppImage (`...-linux-x86_64.AppImage`), one file that runs on current distributions and the Steam Deck; data in `~/.local/share/NBAJamRecomp`. Tested in CI on Ubuntu 24.04, Debian 12, Fedora 41 and Arch.
 - README: how to check a download against the release's `SHA256SUMS.txt`, while the program is not signed.
@@ -158,6 +159,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - The README files describe the menus and the pause menu first; the F-keys are shortcuts.
 
 ### Fixed
+- The build now always uses C++20, also when the environment sets its own compiler flags (as Flatpak builds do).
 - The build after the pause and online picker changes: a comment had swallowed the rest of a line in the game list.
 - With a controller, "Online game" in the main menu could only be used for the last game in the
   list. Left and right on that row now choose the game.
