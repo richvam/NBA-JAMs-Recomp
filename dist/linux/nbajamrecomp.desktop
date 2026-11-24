@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=NBA JAM Recomp
+Comment=Recompiled NBA JAM arcade games (bring your own ROMs)
+Exec=NBAJamRecomp
+Icon=nbajamrecomp
+Terminal=false
+Categories=Game;ArcadeGame;

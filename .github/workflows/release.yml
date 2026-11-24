@@ -207,10 +207,40 @@ jobs:
           path: setup-out/*.exe
           if-no-files-found: error
 
+  linux-appimage:
+    name: Linux AppImage (x86_64; runs in Ubuntu, Debian, Fedora and Arch)
+    needs: linux
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-x64
+          path: pkg
+
+      - name: Build the AppImage
+        run: |
+          mkdir stage && tar -xzf pkg/*.tar.gz -C stage
+          tools/ci/appimage.sh x86_64 stage/NBAJamRecomp "out/NBAJamRecomp-${PKG_VERSION}-linux-x86_64.AppImage"
+
+      - name: Runs in four distribution containers (audit A under Xvfb)
+        run: |
+          img=$(ls out/*.AppImage)
+          for d in ubuntu:24.04 debian:12 fedora:41 archlinux:latest; do
+            docker run --rm -v "$PWD:/w" -w /w "$d" bash tools/ci/test_appimage.sh "$img" || exit 1
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-x86_64-appimage
+          path: out/*.AppImage
+          if-no-files-found: error
+
   release:
     name: Draft GitHub Release
     if: github.ref_type == 'tag'
-    needs: [repo-check, linux, windows, windows-installer]
+    needs: [repo-check, linux, windows, windows-installer, linux-appimage]
     runs-on: ubuntu-22.04
     permissions:
       contents: write          # create the release
