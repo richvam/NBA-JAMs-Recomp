@@ -43,6 +43,12 @@
 #include <thread>
 #include <ctime>
 #include <vector>
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#include <dbghelp.h>
+#endif
 
 // ---------------------------------------------------------------------------
 // configuration (nbajam_recomp.ini next to the executable)
@@ -51,6 +57,61 @@ struct key_map
 {
 	SDL_Scancode up, down, left, right, shoot, pass, turbo, start, coin;
 };
+
+
+#ifdef _WIN32
+// A crash on Windows writes crashes/NBAJamRecomp-<time>.dmp (a minidump: the threads' stacks
+// and the modules) and crashes/NBAJamRecomp-<time>.txt (the exception, where it happened, the
+// version) into the data folder, so a crash that cannot be repeated can still be looked at.
+// dbghelp.dll is loaded only then; nothing else is done in a crashed process than writing.
+static char g_crash_dir[MAX_PATH * 2];
+static LONG WINAPI write_crash_dump(EXCEPTION_POINTERS *ep)
+{
+	if (!g_crash_dir[0]) return EXCEPTION_CONTINUE_SEARCH;
+	CreateDirectoryA(g_crash_dir, nullptr);
+	SYSTEMTIME t;
+	GetLocalTime(&t);
+	char base[MAX_PATH * 2 + 64];
+	snprintf(base, sizeof base, "%s\\NBAJamRecomp-%04u%02u%02u-%02u%02u%02u", g_crash_dir, t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond);
+	// where: the module the faulting address is in, and the offset into it
+	void *at = ep && ep->ExceptionRecord ? ep->ExceptionRecord->ExceptionAddress : nullptr;
+	char mod[MAX_PATH] = "?";
+	HMODULE hm = nullptr;
+	if (at && GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCSTR)at, &hm))
+		GetModuleFileNameA(hm, mod, sizeof mod);
+	char txt[sizeof base + 8];
+	snprintf(txt, sizeof txt, "%s.txt", base);
+	if (FILE *f = fopen(txt, "w"))
+	{
+		fprintf(f, "NBA JAM Recomp %s crashed\nexception 0x%08lX at %p\nmodule %s + 0x%llx\nthread %lu\n", app_version(),
+			ep && ep->ExceptionRecord ? (unsigned long)ep->ExceptionRecord->ExceptionCode : 0ul, at, mod,
+			(unsigned long long)((const char *)at - (const char *)hm), (unsigned long)GetCurrentThreadId());
+		fclose(f);
+	}
+	if (HMODULE dh = LoadLibraryA("dbghelp.dll"))
+	{
+		using write_fn = BOOL(WINAPI *)(HANDLE, DWORD, HANDLE, MINIDUMP_TYPE, PMINIDUMP_EXCEPTION_INFORMATION, PMINIDUMP_USER_STREAM_INFORMATION, PMINIDUMP_CALLBACK_INFORMATION);
+		auto fn = reinterpret_cast<write_fn>(reinterpret_cast<void *>(GetProcAddress(dh, "MiniDumpWriteDump")));
+		char dmp[sizeof base + 8];
+		snprintf(dmp, sizeof dmp, "%s.dmp", base);
+		HANDLE h = CreateFileA(dmp, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+		if (fn && h != INVALID_HANDLE_VALUE)
+		{
+			MINIDUMP_EXCEPTION_INFORMATION mi{ GetCurrentThreadId(), ep, FALSE };
+			fn(GetCurrentProcess(), GetCurrentProcessId(), h, MINIDUMP_TYPE(MiniDumpWithIndirectlyReferencedMemory | MiniDumpWithThreadInfo | MiniDumpWithUnloadedModules), ep ? &mi : nullptr, nullptr, nullptr);
+		}
+		if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
+	}
+	return EXCEPTION_CONTINUE_SEARCH;   // Windows still reports it as before
+}
+static void install_crash_dumps(const std::string &data_dir)
+{
+	snprintf(g_crash_dir, sizeof g_crash_dir, "%s\\crashes", data_dir.c_str());
+	SetUnhandledExceptionFilter(write_crash_dump);
+}
+#else
+static void install_crash_dumps(const std::string &) {}
+#endif
 
 struct config
 {
@@ -2576,6 +2637,9 @@ void app::choose_data_folder()
 	}
 	seed_data_dir(m_paths);
 	m_base = m_paths.data_dir;
+	install_crash_dumps(m_base);
+	// NBAJAM_CRASH_TEST=1: crash here on purpose, to check that a dump is written
+	if (const char *ct = getenv("NBAJAM_CRASH_TEST")) if (*ct == '1') *(volatile int *)nullptr = 1;
 	SDL_Log("data folder: %s%s", m_base.c_str(), m_paths.portable ? " (portable)" : "");
 }
 

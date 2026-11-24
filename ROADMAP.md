@@ -1153,6 +1153,8 @@ clicks, see what changed in each version, and play online against any other plat
 
 **Status (R3):** R3.1 is written, in English only (rule 4: no Spanish). `tools/installer/NBAJamRecomp.iss` (Inno Setup 6) installs the Windows package without `portable.txt`, per user (`PrivilegesRequired=lowest`, into the user's Programs folder), with a Start menu entry, a shortcut to `%APPDATA%\NBAJamRecomp\roms`, and an optional desktop shortcut. The program then keeps everything in `%APPDATA%\NBAJamRecomp` (R1.4). Uninstalling removes the program and asks whether to delete the data folder too (No is the default); a silent uninstall keeps it, unless `/PURGE` is given. The `windows-installer` CI job builds it on a Windows runner from the packaged zip and runs `tools/installer/test_installer.ps1`: silent install, the files and shortcut there and no `portable.txt`, `--version`, silent uninstall with the user's settings and ROMs folder kept, install again, uninstall with `/PURGE`. The setup goes into the draft release, and the release page lists it. Not checked: the installer's pages by hand, and on the owner's PC.
 
+**Crash reports (2026-11-24):** while the installer was tried on the owner's PC, the program's first start crashed in `d3d11.dll` (NVIDIA's OpenGL driver presents through Direct3D 11). The same crash happened twice the day before in an uninstalled test copy, so it is not the installer. 25 more starts did not crash, and Windows kept no dump. The program now writes its own on Windows: `crashes/NBAJamRecomp-<time>.txt` (version, exception, module and offset) and `.dmp` (minidump) in the data folder, checked with `NBAJAM_CRASH_TEST=1`. Open: the cause, from the next dump.
+
 ## Phase R4: Linux packages
 
 | ID | Model | Task | Check |

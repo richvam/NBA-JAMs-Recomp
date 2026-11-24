@@ -331,6 +331,7 @@ nothing. To write your own, see [`mods/README.txt`](dist/NBAJamRecomp/mods/READM
 | No picture, or a black window | Your graphics driver may lack OpenGL 2.1. Set `opengl=0` in `nbajam_recomp.ini` for the basic mode (no shaders). |
 | The picture is too wide | Press F7 until it says "Original 4:3". "Stretch" distorts the picture. |
 | Borders on every side | That is Integer scaling, which only grows in whole steps. Press F5 until it says "Fit". |
+| The program closes by itself (Windows) | It writes a report in the `crashes` folder of its data folder (About shows which folder): a `.txt` and a `.dmp`. Attach both to an issue on GitHub. |
 | A controller does nothing | Open **Controls**: the top line shows the pad the program sees. Select an action and press the button you want. |
 | I cannot find my saves or settings | Open **About**: the "Data" line shows the folder. |
 | Online: "your ROMs (or Lua mods) are not the same as the host's" | Use the same ROM files. |
