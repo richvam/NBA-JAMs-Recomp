@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>io.github.richvam.NBAJamRecomp</id>
+  <id>io.github.richvam.NBA_JAMs_Recomp</id>
   <name>NBA JAM Recomp</name>
   <summary>The NBA JAM arcade games, recompiled; bring your own ROMs</summary>
   <metadata_license>CC0-1.0</metadata_license>
@@ -23,7 +23,7 @@
       Drag your ROM files onto the window, or use Open my ROM folder in the main menu.
     </p>
   </description>
-  <launchable type="desktop-id">io.github.richvam.NBAJamRecomp.desktop</launchable>
+  <launchable type="desktop-id">io.github.richvam.NBA_JAMs_Recomp.desktop</launchable>
   <url type="homepage">https://github.com/richvam/NBA-JAMs-Recomp</url>
   <url type="bugtracker">https://github.com/richvam/NBA-JAMs-Recomp/issues</url>
   <content_rating type="oars-1.1">

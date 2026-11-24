@@ -3,7 +3,7 @@
 
     python3 tools/flathub/make_manifest.py <tag> [out.yml]
 
-flatpak/io.github.richvam.NBAJamRecomp.yml builds from the checked-out folder (`type: dir`)
+flatpak/io.github.richvam.NBA_JAMs_Recomp.yml builds from the checked-out folder (`type: dir`)
 and turns off the AppStream compose step. Flathub builds from a fixed release instead, and
 runs compose itself. This writes the same manifest with:
   * the program's source as `type: git` at <tag>, with the tag's commit (Flathub wants both)
@@ -17,7 +17,7 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-SRC = os.path.join(ROOT, "flatpak", "io.github.richvam.NBAJamRecomp.yml")
+SRC = os.path.join(ROOT, "flatpak", "io.github.richvam.NBA_JAMs_Recomp.yml")
 REPO_URL = "https://github.com/richvam/NBA-JAMs-Recomp.git"
 
 
@@ -54,7 +54,7 @@ def main():
     tag = sys.argv[1]
     commit = subprocess.run(["git", "-C", ROOT, "rev-parse", tag + "^{commit}"], capture_output=True, text=True, check=True).stdout.strip()
     out = make(tag, commit, open(SRC, encoding="utf-8").read())
-    path = sys.argv[2] if len(sys.argv) > 2 else "io.github.richvam.NBAJamRecomp.yml"
+    path = sys.argv[2] if len(sys.argv) > 2 else "io.github.richvam.NBA_JAMs_Recomp.yml"
     open(path, "w", encoding="utf-8", newline="\n").write(out)
     print("wrote", path, "for", tag, commit)
     return 0
