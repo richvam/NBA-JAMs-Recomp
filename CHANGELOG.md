@@ -12,6 +12,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 ## Unreleased
 
 ### Added
+- A save state made on one computer loads on another (Windows, Linux x64 or ARM64) and plays on identically, checked by `tools/golden/state_cross.sh` (R5.3).
 - Linux: a Flatpak (`...-linux-x86_64.flatpak`), built from source and tested in its sandbox in CI; ROMs go in its own folder (drag them onto the window).
 - Linux on ARM 64-bit: an AppImage and a portable archive, built and tested on an ARM machine in CI.
 - Linux: an AppImage (`...-linux-x86_64.AppImage`), one file that runs on current distributions and the Steam Deck; data in `~/.local/share/NBAJamRecomp`. Tested in CI on Ubuntu 24.04, Debian 12, Fedora 41 and Arch.
