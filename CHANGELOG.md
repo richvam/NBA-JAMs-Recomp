@@ -160,6 +160,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - The README files describe the menus and the pause menu first; the F-keys are shortcuts.
 
 ### Fixed
+- `make CXXFLAGS=...` no longer drops C++20 and the determinism flags (R5.2).
 - Builds now give the same game on every compiler and processor: no padding in save states, an exact timer division (it used `long double`), a written-out sound table (it used `pow`), and the same rules for integer overflow and floating point everywhere (`docs/DETERMINISM.md`).
 - The build now always uses C++20, also when the environment sets its own compiler flags (as Flatpak builds do).
 - The build after the pause and online picker changes: a comment had swallowed the rest of a line in the game list.
