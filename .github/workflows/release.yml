@@ -274,6 +274,9 @@ jobs:
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
           flatpak install --user -y --noninteractive flathub org.freedesktop.Platform//24.08 org.freedesktop.Sdk//24.08 org.freedesktop.Platform.GL.default//24.08
 
+      - name: AppStream metadata is valid
+        run: appstreamcli validate --no-net --explain dist/linux/io.github.richvam.NBAJamRecomp.metainfo.xml
+
       - name: Build and install
         run: |
           make -s print-version > .flatpak-version
@@ -282,9 +285,6 @@ jobs:
           mkdir -p out
           flatpak build-bundle fp-repo "out/NBAJamRecomp-${PKG_VERSION}-linux-x86_64.flatpak" io.github.richvam.NBAJamRecomp --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo
           ls -la out
-
-      - name: AppStream metadata is valid
-        run: appstreamcli validate --no-net dist/linux/io.github.richvam.NBAJamRecomp.metainfo.xml
 
       - name: Runs in the sandbox (audit A under Xvfb)
         run: bash tools/ci/test_flatpak.sh

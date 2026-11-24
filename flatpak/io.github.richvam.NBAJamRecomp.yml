@@ -43,6 +43,7 @@ modules:
       - install -Dm644 dist/linux/nbajamrecomp.desktop /app/share/applications/io.github.richvam.NBAJamRecomp.desktop
       - desktop-file-edit --set-icon=io.github.richvam.NBAJamRecomp /app/share/applications/io.github.richvam.NBAJamRecomp.desktop
       - install -Dm644 dist/linux/nbajamrecomp.svg /app/share/icons/hicolor/scalable/apps/io.github.richvam.NBAJamRecomp.svg
+      - for n in 64 128 256; do mkdir -p /app/share/icons/hicolor/${n}x${n}/apps; rsvg-convert -w $n -h $n dist/linux/nbajamrecomp.svg -o /app/share/icons/hicolor/${n}x${n}/apps/io.github.richvam.NBAJamRecomp.png; done
       - install -Dm644 dist/linux/io.github.richvam.NBAJamRecomp.metainfo.xml /app/share/metainfo/io.github.richvam.NBAJamRecomp.metainfo.xml
     sources:
       - type: dir
