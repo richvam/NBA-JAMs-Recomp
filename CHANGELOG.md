@@ -150,6 +150,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - The README files describe the menus and the pause menu first; the F-keys are shortcuts.
 
 ### Fixed
+- The build after the pause and online picker changes: a comment had swallowed the rest of a line in the game list.
 - With a controller, "Online game" in the main menu could only be used for the last game in the
   list. Left and right on that row now choose the game.
 - Widescreen: a strip of the stands at the right edge (16:9) could stay empty, where the original

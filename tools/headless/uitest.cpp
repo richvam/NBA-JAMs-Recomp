@@ -1302,7 +1302,7 @@ int main(int argc, char **argv)
 		screen st = make_settings(ss);
 		settings_state back_st;
 		read_settings(st, back_st);
-		CHECK(st.find(st_pause) && st.find(st_pause)->choices == pause_button_names() && back_st.pause_buttons == 1 && pause_button_names().size() == 2 &&
+		CHECK(st.find(st_pause) && st.find(st_pause)->choices == pause_button_names() && back_st.pause_buttons == 1 && pause_button_names().size() == 3 &&
 		      std::find(pause_button_names().begin(), pause_button_names().end(), std::string("None")) == pause_button_names().end(),
 		      "Settings: the pause menu's controller shortcut can be chosen, and there is no choice of none");
 

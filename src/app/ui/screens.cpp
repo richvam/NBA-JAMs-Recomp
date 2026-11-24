@@ -54,7 +54,8 @@ void update_picker(screen &s, const picker_state &st, int game)
 	const bool have = !st.games.empty();
 	bool any = false;
 	for (auto &g : st.games) any = any || g.available;
-	if (item *it = s.find(pk_online)) { it->value_text = have ? "< " + st.games[size_t(game)].title + " >" : "";   // left / right choose the game it->disabled = !have || !st.games[size_t(game)].available; }
+	// left / right choose the online game
+	if (item *it = s.find(pk_online)) { it->value_text = have ? "< " + st.games[size_t(game)].title + " >" : ""; it->disabled = !have || !st.games[size_t(game)].available; }
 	if (item *it = s.find(pk_mods)) it->value_text = std::to_string(st.mods_on) + " of " + std::to_string(st.mods_total) + " on";
 	if (item *it = s.find(pk_news)) it->value_text = !st.news_on ? "Off" : st.news_new ? "New version" : "";
 	s.fix_focus();
