@@ -31,8 +31,16 @@ jobs:
       - run: python3 tools/ci/check_repo.py
 
   linux:
-    name: Linux x64 (build, ROM-free Lua tests, package)
-    runs-on: ubuntu-22.04      # oldest current runner: keeps the glibc requirement low
+    name: Linux ${{ matrix.arch }} (build, ROM-free Lua tests, package)
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-22.04       # oldest current runner: keeps the glibc requirement low
+          - arch: arm64
+            runner: ubuntu-22.04-arm   # R4.2: native ARM64, the same tests
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -50,7 +58,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: deps/sdl2linux
-          key: sdl2-linux-${{ runner.os }}-${{ hashFiles('tools/ci/fetch_sdl.sh') }}
+          key: sdl2-linux-${{ matrix.arch }}-${{ hashFiles('tools/ci/fetch_sdl.sh') }}
 
       - name: Fetch SDL2
         run: tools/ci/fetch_sdl.sh linux deps/sdl2linux
@@ -112,7 +120,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: viewtest-screenshots
+          name: viewtest-screenshots-${{ matrix.arch }}
           path: viewtest-out/*.png
           if-no-files-found: error
 
@@ -126,11 +134,11 @@ jobs:
           fi
 
       - name: Package
-        run: tools/ci/package.sh linux build/NBAJamRecomp-linux "NBAJamRecomp-${PKG_VERSION}-linux-x64" dist-out
+        run: tools/ci/package.sh linux build/NBAJamRecomp-linux "NBAJamRecomp-${PKG_VERSION}-linux-${{ matrix.arch }}" dist-out
 
       - uses: actions/upload-artifact@v4
         with:
-          name: linux-x64
+          name: linux-${{ matrix.arch }}
           path: dist-out/*
           if-no-files-found: error
 
@@ -208,32 +216,46 @@ jobs:
           if-no-files-found: error
 
   linux-appimage:
-    name: Linux AppImage (x86_64; runs in Ubuntu, Debian, Fedora and Arch)
+    name: Linux AppImage (${{ matrix.appimage }}; runs in ${{ matrix.distros_name }})
     needs: linux
-    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            appimage: x86_64
+            runner: ubuntu-22.04
+            distros: ubuntu:24.04 debian:12 fedora:41 archlinux:latest
+            distros_name: Ubuntu, Debian, Fedora and Arch
+          - arch: arm64
+            appimage: aarch64
+            runner: ubuntu-22.04-arm
+            distros: ubuntu:24.04 debian:12 fedora:41      # no official Arch image for ARM
+            distros_name: Ubuntu, Debian and Fedora
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v4
         with:
-          name: linux-x64
+          name: linux-${{ matrix.arch }}
           path: pkg
 
       - name: Build the AppImage
         run: |
           mkdir stage && tar -xzf pkg/*.tar.gz -C stage
-          tools/ci/appimage.sh x86_64 stage/NBAJamRecomp "out/NBAJamRecomp-${PKG_VERSION}-linux-x86_64.AppImage"
+          tools/ci/appimage.sh ${{ matrix.appimage }} stage/NBAJamRecomp "out/NBAJamRecomp-${PKG_VERSION}-linux-${{ matrix.appimage }}.AppImage"
 
       - name: Runs in four distribution containers (audit A under Xvfb)
         run: |
           img=$(ls out/*.AppImage)
-          for d in ubuntu:24.04 debian:12 fedora:41 archlinux:latest; do
+          for d in ${{ matrix.distros }}; do
             docker run --rm -v "$PWD:/w" -w /w "$d" bash tools/ci/test_appimage.sh "$img" || exit 1
           done
 
       - uses: actions/upload-artifact@v4
         with:
-          name: linux-x86_64-appimage
+          name: linux-${{ matrix.appimage }}-appimage
           path: out/*.AppImage
           if-no-files-found: error
 
