@@ -1,18 +1,18 @@
 CXX ?= g++
 CXXFLAGS ?= -O2 -g
 # always, also when CXXFLAGS comes from the environment (flatpak-builder sets it)
-CXXFLAGS += -std=c++20 -Wno-deprecated-declarations
+override CXXFLAGS += -std=c++20 -Wno-deprecated-declarations
 # the same results on every compiler and processor (R5.1): signed overflow wraps (as MSVC does
 # in practice) instead of being undefined, and no fused multiply-add (clang fuses by default,
 # ARM has the instruction, and fusing changes float rounding)
 DETERMINISM = -fwrapv -ffp-contract=off
-CXXFLAGS += $(DETERMINISM)
-CFLAGS += $(DETERMINISM)
+override CXXFLAGS += $(DETERMINISM)
+override CFLAGS += $(DETERMINISM)
 # ARM's char is unsigned, x86's signed: build ARM like x86, so the emulation (and later
 # a saved state or an online game between the two) behaves the same (R4.2)
 ifneq ($(filter aarch64 arm64,$(shell uname -m)),)
-CXXFLAGS += -fsigned-char
-CFLAGS += -fsigned-char
+override CXXFLAGS += -fsigned-char
+override CFLAGS += -fsigned-char
 endif
 INC = -Isrc/emu -Isrc/mame -Isrc/board
 CORE_SRC = src/emu/emu.cpp \

@@ -41,6 +41,9 @@ but the save states were not: they held bytes that were never set.
 
 ## Not covered yet
 
-- Clang, ARM64 and MSVC builds with ROMs. The CI machines have no ROMs (none may be uploaded),
-  and this computer has no Clang, ARM cross-compiler or emulator. R5.2 runs `goldentest` on each.
+- MSVC: there is no MSVC build yet (R6/R7).
+- A real ARM64 machine. `tools/golden/golden_cross.sh` (R5.2) already compares GCC x86-64,
+  Clang x86-64 and Clang ARM64 under qemu-user: identical, 3 000 frames of all five games,
+  save states included. The CI machines have no ROMs (none may be uploaded), so this is a
+  local check.
 - The Lua engine (R5.4).
