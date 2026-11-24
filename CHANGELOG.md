@@ -12,6 +12,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 ## Unreleased
 
 ### Added
+- README: how to check a download against the release's `SHA256SUMS.txt`, while the program is not signed.
 - ROMs can be dragged onto the window (files, zips or a folder): they are copied into the ROM folder and the games are looked for again. "Open my ROM folder" in the main menu opens it.
 - Windows: a crash writes a report (`crashes/*.txt` and a minidump `*.dmp`) in the data folder, to attach to an issue.
 - A Windows installer (`...-windows-x64-setup.exe`, Inno Setup): per user, no administrator prompt, Start menu and optional desktop shortcut, data in `%APPDATA%\NBAJamRecomp`; uninstalling keeps your ROMs and saves unless you say yes. Built and tested (silent install and uninstall) in CI.

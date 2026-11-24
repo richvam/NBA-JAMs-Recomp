@@ -41,6 +41,12 @@ asks whether to delete that folder too, and keeps it unless you say yes. The arc
 installing: unpack them anywhere. Windows may show a SmartScreen warning
 because the program is not signed: choose "More info", then "Run anyway".
 
+**Checking a download.** The program and installer are not signed yet, so Windows cannot
+say who made them. Each release lists the SHA-256 checksum of every file in
+`SHA256SUMS.txt`. In PowerShell, `Get-FileHash .\NBAJamRecomp-<version>-windows-x64-setup.exe`
+prints the checksum of your copy; it must be the same as the one in that file. On Linux,
+`sha256sum -c SHA256SUMS.txt --ignore-missing` checks every file you downloaded.
+
 ## 2. Where the ROMs go
 
 Copy your own files into the `roms` folder: next to the program for the archives, or
