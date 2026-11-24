@@ -1165,6 +1165,7 @@ clicks, see what changed in each version, and play online against any other plat
 |---|---|---|---|
 | R4.1 | Sonnet | AppImage built on an old enough base to run on current distributions and on Steam Deck, with desktop entry and icon; the tar archive stays. | Runs in three distribution containers |
 | R4.2 | Sonnet | Linux ARM64 build, as the first non-x86 target and the first test of R5. | Runs under emulation in CI |
+| R4.3 | Sonnet | **Flatpak** (added at the owner's request, 2026-11-24): a manifest on the freedesktop runtime with SDL2 and OpenGL, the desktop entry, icon and AppStream metadata, built in CI with `flatpak-builder` and attached to each release as a `.flatpak` bundle. The sandbox sees only the app's own data folder, so the ROMs go in `~/.var/app/<id>/data/NBAJamRecomp/roms`: the README says so, and drag-and-drop and Open my ROM folder (R3.2) are the way in. Controllers, sound and the network (online play) are allowed by the manifest. Optional and the owner's: submitting to Flathub and looking after the listing. | Installs and starts in CI; the scripted first run (`g_first_run.pad`) passes inside the sandbox |
 
 ## Phase R5: identical emulation everywhere
 
