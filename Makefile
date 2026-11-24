@@ -2,6 +2,12 @@ CXX ?= g++
 CXXFLAGS ?= -O2 -g
 # always, also when CXXFLAGS comes from the environment (flatpak-builder sets it)
 CXXFLAGS += -std=c++20 -Wno-deprecated-declarations
+# the same results on every compiler and processor (R5.1): signed overflow wraps (as MSVC does
+# in practice) instead of being undefined, and no fused multiply-add (clang fuses by default,
+# ARM has the instruction, and fusing changes float rounding)
+DETERMINISM = -fwrapv -ffp-contract=off
+CXXFLAGS += $(DETERMINISM)
+CFLAGS += $(DETERMINISM)
 # ARM's char is unsigned, x86's signed: build ARM like x86, so the emulation (and later
 # a saved state or an online game between the two) behaves the same (R4.2)
 ifneq ($(filter aarch64 arm64,$(shell uname -m)),)
@@ -97,7 +103,7 @@ win:
 	@mkdir -p $(WIN_OUT) build/win
 	x86_64-w64-mingw32-gcc -O2 -c src/third_party/miniz/miniz.c -o build/win/miniz.o
 	$(MAKE) BUILD=build/win CC=x86_64-w64-mingw32-gcc build/win/liblua.a
-	x86_64-w64-mingw32-g++ -std=c++20 -O2 -Isrc/emu -Isrc/mame -Isrc/board -Isrc/app -Isrc/third_party/miniz -Isrc/third_party/lua -I$(SDL2W)/include/SDL2 \
+	x86_64-w64-mingw32-g++ -std=c++20 -O2 $(DETERMINISM) -Isrc/emu -Isrc/mame -Isrc/board -Isrc/app -Isrc/third_party/miniz -Isrc/third_party/lua -I$(SDL2W)/include/SDL2 \
 	  src/app/main.cpp src/app/games.cpp src/app/romload.cpp src/app/netplay.cpp src/app/nat.cpp src/app/gl_present.cpp src/app/controls.cpp src/app/mods.cpp src/app/menu_sound.cpp src/app/pad_script.cpp src/app/version.cpp src/app/paths.cpp src/app/news.cpp src/app/view.cpp src/app/png_read.cpp src/app/overlay.cpp src/app/ui/ui.cpp src/app/ui/gallery.cpp src/app/ui/lettering.cpp src/app/ui/themes.cpp src/app/ui/screens.cpp src/app/ui/keyboard.cpp src/app/ui/art_view.cpp src/app/rom_art.cpp $(VERSION_DEFS) build/win/miniz.o build/win/libcore.a build/win/liblua.a \
 	  -L$(SDL2W)/lib -lmingw32 -lSDL2main -lSDL2 -mwindows -static -lwinmm -lsetupapi -loleaut32 -lole32 -limm32 -lversion -lgdi32 -luser32 -lshell32 -luuid -ladvapi32 -lcfgmgr32 -lws2_32 -liphlpapi -lwinhttp -lwinpthread \
 	  -o $(WIN_OUT)/NBAJamRecomp.exe
@@ -113,6 +119,8 @@ linux-app: $(BUILD)/libcore.a $(BUILD)/miniz.o $(BUILD)/liblua.a
 $(BUILD)/cattest: tools/headless/cattest.cpp src/app/games.cpp src/app/romload.cpp $(BUILD)/libcore.a $(BUILD)/miniz.o
 	$(CXX) $(CXXFLAGS) $(APP_INC) $< src/app/games.cpp src/app/romload.cpp $(BUILD)/miniz.o $(BUILD)/libcore.a -o $@
 $(BUILD)/statetest: tools/headless/statetest.cpp src/app/games.cpp src/app/romload.cpp $(BUILD)/libcore.a $(BUILD)/miniz.o
+	$(CXX) $(CXXFLAGS) $(APP_INC) $< src/app/games.cpp src/app/romload.cpp $(BUILD)/miniz.o $(BUILD)/libcore.a -o $@
+$(BUILD)/goldentest: tools/headless/goldentest.cpp src/app/games.cpp src/app/romload.cpp $(BUILD)/libcore.a $(BUILD)/miniz.o
 	$(CXX) $(CXXFLAGS) $(APP_INC) $< src/app/games.cpp src/app/romload.cpp $(BUILD)/miniz.o $(BUILD)/libcore.a -o $@
 $(BUILD)/statebench: tools/headless/statebench.cpp src/app/games.cpp src/app/romload.cpp $(BUILD)/libcore.a $(BUILD)/miniz.o
 	$(CXX) $(CXXFLAGS) $(APP_INC) $< src/app/games.cpp src/app/romload.cpp $(BUILD)/miniz.o $(BUILD)/libcore.a -o $@

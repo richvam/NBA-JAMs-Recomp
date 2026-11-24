@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <bit>
 #include <cstring>
 #include <functional>
 #include <memory>
@@ -156,6 +157,13 @@ template <typename... Args> [[noreturn]] inline void fatalerror(const char *fmt,
 // to load, so the two can never disagree on order or size. A load that finds a size
 // or a section mark it does not expect fails (ok() false) without going further.
 // --------------------------------------------------------------------------
+// What the emulation assumes of every build (R5.1). char is signed, as on x86 and MSVC: ARM
+// builds with GCC or Clang need -fsigned-char (the Makefile adds it; Android builds must too).
+// Little-endian: memory regions, states and hashes are read as little-endian bytes (every
+// target in the roadmap is little-endian).
+static_assert(std::is_signed_v<char>, "build with -fsigned-char: the emulation assumes a signed char");
+static_assert(std::endian::native == std::endian::little, "the emulation assumes a little-endian processor");
+
 class state_io
 {
 public:
@@ -176,14 +184,24 @@ public:
 		std::memcpy(p, m_in + m_pos, n);
 		m_pos += n;
 	}
+	// a type is written as its bytes, so it must have no padding (R5.3: padding is never set,
+	// and a state must be the same bytes on every build); floating point is allowed (its bytes
+	// are its value). A type with padding gives its own io(state_io &) instead.
+	template <typename T> static constexpr bool plain_v = std::is_trivially_copyable_v<T> &&
+		(std::has_unique_object_representations_v<T> || std::is_floating_point_v<T> || std::is_same_v<T, bool>);
 	template <typename T> void operator()(T &v)
 	{
-		static_assert(std::is_trivially_copyable_v<T>, "state_io: not plain data");
-		raw(&v, sizeof(T));
+		if constexpr (requires { v.io(*this); }) v.io(*this);
+		else if constexpr (std::is_array_v<T>) { for (auto &e : v) (*this)(e); }
+		else
+		{
+			static_assert(plain_v<T>, "state_io: not plain data, or has padding (give it an io(state_io &))");
+			raw(&v, sizeof(T));
+		}
 	}
 	template <typename T> void vec(std::vector<T> &v)
 	{
-		static_assert(std::is_trivially_copyable_v<T>, "state_io: not plain data");
+		static_assert(plain_v<T>, "state_io: not plain data, or has padding");
 		uint32_t n = uint32_t(v.size());
 		(*this)(n);
 		if (!saving()) { if (!m_ok) return; if (size_t(n) * sizeof(T) > m_size - m_pos) { fail("the state ends early"); return; } v.resize(n); }
@@ -275,6 +293,7 @@ public:
 	}
 	u64 as_ticks(const XTAL &x) const { return as_ticks(x.value()); }
 	s32 seconds() const { return m_sec; }
+	void io(state_io &s) { s(m_sec); s(m_atto); }   // field by field: the 4 bytes between them are padding
 	attoseconds_t attoseconds() const { return m_atto; }
 
 	static attotime from_double(double d)
@@ -336,15 +355,20 @@ public:
 	{
 		if (is_never()) return never;
 		if (d == 0) return never;
-		double v = as_double() / d;
-		u64 secs = u64(m_sec) / d;
-		u64 rem = u64(m_sec) % d;
-		// rem * 1e18 / d + atto / d, computed carefully
-		long double extra = (long double)rem * (long double)ATTOSECONDS_PER_SECOND / d;
+		// exact, in integers (R5.1): this was a long double division, and long double is 80 bits
+		// on x86-64 Linux, 128 on ARM64 Linux and 64 with MSVC and on Apple, so the result (a
+		// timer period of the DCS sound board) could differ by build.
+		// rem * 1e18 / d, with rem < d < 2^32: 1e18 = q * d + r, so rem * 1e18 / d
+		// = rem * q + (rem * r) / d, and rem * r < d * d < 2^64 fits.
+		u64 const secs = u64(m_sec) / d, rem = u64(m_sec) % d;
+		u64 const q = u64(ATTOSECONDS_PER_SECOND) / d, r = u64(ATTOSECONDS_PER_SECOND) % d;
+		u64 const remq = rem * q, remr = rem * r;
+		u64 const extra = remq + remr / d;
+		// the two parts are divided separately, as before: floor(rem*1e18/d) + floor(atto/d)
 		attoseconds_t a = attoseconds_t(extra) + m_atto / d;
-		(void)v;
-		if (a >= ATTOSECONDS_PER_SECOND) { a -= ATTOSECONDS_PER_SECOND; secs++; }
-		return attotime(s32(secs), a);
+		u64 s = secs;
+		if (a >= ATTOSECONDS_PER_SECOND) { a -= ATTOSECONDS_PER_SECOND; s++; }
+		return attotime(s32(s), a);
 	}
 	bool operator==(const attotime &r) const { return m_sec == r.m_sec && m_atto == r.m_atto; }
 	bool operator!=(const attotime &r) const { return !(*this == r); }

@@ -56,9 +56,7 @@ public:
 	{
 		s.mark("video");
 		s(m_midtunit_control); s(m_gfxbank_offset); s(m_videobank_select); s(m_dma_register);
-		m_dma_state.gfxrom = nullptr;    // a pointer into this program's copy of the ROM: not saved
-		s(m_dma_state);
-		m_dma_state.gfxrom = m_gfxrom;
+		s(m_dma_state);                  // its io leaves out the pointer into the ROM
 		s.raw(m_local_videoram.get(), 0x100000 / 2 * sizeof(u16));
 	}
 
@@ -109,6 +107,13 @@ private:
 		s32 topclip, botclip, leftclip, rightclip;
 		s32 startskip, endskip;
 		u16 xstep, ystep;
+		// field by field (no padding, no pointer): gfxrom points into this program's copy of the ROM
+		void io(state_io &s)
+		{
+			s(offset); s(rowbits); s(xpos); s(ypos); s(width); s(height); s(palette); s(color);
+			s(yflip); s(preskip); s(postskip); s(topclip); s(botclip); s(leftclip); s(rightclip);
+			s(startskip); s(endskip); s(xstep); s(ystep);
+		}
 	};
 	dma_state m_dma_state;
 	std::vector<u8> m_gfx_padded;   // gfx rom + guard bytes for the bit extractor

@@ -126,7 +126,10 @@ void oki_adpcm_state::compute_tables()
 	for (int step = 0; step <= 48; step++)
 	{
 		// compute the step value
-		int stepval = floor(16.0 * pow(11.0 / 10.0, (double)step));
+		// floor(16 * 1.1^step), written out (NBA JAM Recomp, R5.1): pow() may round differently
+		// on another C library, and the table must be the same on every build
+		static const int s_stepval[49] = { 16, 17, 19, 21, 23, 25, 28, 31, 34, 37, 41, 45, 50, 55, 60, 66, 73, 80, 88, 97, 107, 118, 130, 143, 157, 173, 190, 209, 230, 253, 279, 307, 337, 371, 408, 449, 494, 544, 598, 658, 724, 796, 876, 963, 1060, 1166, 1282, 1411, 1552 };
+		int stepval = s_stepval[step];
 
 		// loop over all nibbles and compute the difference
 		for (int nib = 0; nib < 16; nib++)
