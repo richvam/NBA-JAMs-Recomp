@@ -862,6 +862,12 @@ void app::poll_events()
 				if (e.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE || (m_screen != screen::game && e.cbutton.button == SDL_CONTROLLER_BUTTON_B)) m_menu_back = true;
 				if (e.cbutton.button == SDL_CONTROLLER_BUTTON_Y) m_menu_net = true;
 				break;
+			case SDL_WINDOWEVENT:
+				// fullscreen chosen with the window's own control (the green button on a Mac,
+				// which gives the game its own Space): the setting follows
+				if (e.window.event == SDL_WINDOWEVENT_SIZE_CHANGED && m_win)
+					m_cfg.fullscreen = (SDL_GetWindowFlags(m_win) & SDL_WINDOW_FULLSCREEN_DESKTOP) == SDL_WINDOW_FULLSCREEN_DESKTOP;
+				break;
 			case SDL_TEXTINPUT:
 				if (m_editing)
 					for (const char *c = e.text.text; *c; c++) m_kbd.type(*c);       // the keyboard's layout says which characters it takes
@@ -870,11 +876,15 @@ void app::poll_events()
 			{
 				SDL_Keycode k = e.key.keysym.sym;
 				bool alt = (e.key.keysym.mod & KMOD_ALT) != 0;
+				// Mac (R6.2): Command is KMOD_GUI. Ctrl+Command+F and Command+Enter go fullscreen,
+				// Command+V pastes; Command+Q quits through SDL's own app menu
+				bool cmd = (e.key.keysym.mod & KMOD_GUI) != 0;
+				bool fs_key = k == SDLK_F11 || (k == SDLK_RETURN && (alt || cmd)) || (k == SDLK_f && cmd && (e.key.keysym.mod & KMOD_CTRL));
 				if (m_editing)
 				{
 					if (k == SDLK_F12 || k == SDLK_PRINTSCREEN) m_shot = true;     // a screenshot works while typing too
 					if (k == SDLK_BACKSPACE) m_kbd.erase();
-					if (k == SDLK_v && (e.key.keysym.mod & KMOD_CTRL))
+					if (k == SDLK_v && (e.key.keysym.mod & (KMOD_CTRL | KMOD_GUI)))
 						if (char *t = SDL_GetClipboardText()) { for (char *c = t; *c; c++) if (!isspace((unsigned char)*c)) m_kbd.type(*c); SDL_free(t); }
 					if (k == SDLK_RETURN || k == SDLK_KP_ENTER) m_menu_ok = true;
 					if (k == SDLK_ESCAPE) m_menu_back = true;
@@ -884,11 +894,11 @@ void app::poll_events()
 				if (k == SDLK_DOWN) m_menu_down = true;
 				if (k == SDLK_LEFT) m_menu_left = true;
 				if (k == SDLK_RIGHT) m_menu_right = true;
-				if (k == SDLK_RETURN && !alt) m_menu_ok = true;
+				if (k == SDLK_RETURN && !alt && !cmd) m_menu_ok = true;
 				if (k == SDLK_ESCAPE) m_menu_back = true;
 				if (k == SDLK_n) m_menu_net = true;
 				if (k == SDLK_DELETE || k == SDLK_BACKSPACE) m_menu_clear = true;
-				if (k == SDLK_F11 || (k == SDLK_RETURN && alt))
+				if (fs_key)
 				{
 					m_cfg.fullscreen = !m_cfg.fullscreen;
 					SDL_SetWindowFullscreen(m_win, m_cfg.fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);

@@ -204,6 +204,32 @@ jobs:
           ! grep -aq "FAIL" audit.log
           grep -aq "pad script" audit.log
 
+      - name: App bundle (R6.2)
+        run: |
+          brew list librsvg >/dev/null 2>&1 || brew install librsvg
+          mkdir -p dist-out
+          tools/ci/mac_bundle.sh build/NBAJamRecomp-mac "$(build/NBAJamRecomp-mac --version)" dist-out
+          plutil -p "dist-out/NBA JAM Recomp.app/Contents/Info.plist" | grep -E "Identifier|ShortVersion|HighResolution"
+          ls -la "dist-out/NBA JAM Recomp.app/Contents/Resources"
+
+      - name: The app as a user starts it (data in Application Support, screenshots)
+        run: |
+          set -o pipefail
+          data="$HOME/Library/Application Support/NBAJamRecomp"
+          rm -rf "$data"; mkdir -p shots
+          app="dist-out/NBA JAM Recomp.app/Contents/MacOS/NBAJamRecomp"
+          SDL_AUDIODRIVER=dummy "$app" --pad-script tools/audit/a_noroms.pad > bundle.log 2>&1 &
+          pid=$!
+          sleep 7; screencapture -x shots/desktop-menu.png || true
+          sleep 6; screencapture -x shots/desktop-settings.png || true
+          wait $pid || true
+          grep -aE "pad script|FAIL" bundle.log
+          ! grep -aq "FAIL" bundle.log
+          grep -aq "line 50: PASS" bundle.log
+          echo "data folder: $data"; ls "$data"
+          n=$(find "$data/mods" -name '*.lua' | wc -l); echo "$n shipped scripts copied"; [ "$n" -gt 10 ]
+          cp "$data"/screenshots/*.png shots/ 2>/dev/null || true; ls shots
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -211,7 +237,16 @@ jobs:
           path: |
             viewtest-out/*.png
             audit.log
+            bundle.log
+            shots/*.png
           if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@v4
+        if: matrix.arch == 'arm64'
+        with:
+          name: macos-app
+          path: dist-out/
+          if-no-files-found: error
 
   windows:
     name: Windows x64 (cross-build, package)
