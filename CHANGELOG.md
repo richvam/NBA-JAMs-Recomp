@@ -12,6 +12,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 ## Unreleased
 
 ### Added
+- Menus: a Back button in the corner when they are used by touch or mouse; on Android the back gesture is Back.
 - An Android build in CI: a debug APK for 64-bit ARM (and x86_64), started on an emulator, where it reaches the game picker (R7.1, not released yet).
 - macOS: the reason shown in the Local Network question, and online help for it and the firewall (R6.4).
 - macOS download: a disk image with the universal app for Apple Silicon and Intel; drag it onto Applications (R6.3). The first start needs Open Anyway, as the read-me in the image says.
