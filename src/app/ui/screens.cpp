@@ -147,7 +147,11 @@ screen make_settings(const settings_state &st)
 	panel vk;
 	vk.r = { 0.1f, 0.66f, 0.8f, 0.3f };
 	vk.items = { label("Also on keys: F7 shape, F5 scaling,"), label("F4 look, F6 scanlines, F8 sides,"), label("F11 fullscreen.") };
+#ifdef __ANDROID__
+	video.panels = { v };                     // no F keys on a phone (R7.1)
+#else
 	video.panels = { v, vk };
+#endif
 
 	tab sound;
 	sound.name = "Sound";
@@ -608,8 +612,19 @@ screen make_about(const about_state &st)
 		{ "Scanline strength", "F6" }, { "Picture shape", "F7" }, { "Sides of a 4:3 picture", "F8" },
 		{ "Fullscreen", kFull }, { "Screenshot", kShot }, { "Volume", "- and +" }, { "Online game, from the menu", "N" },
 	};
+#ifdef __ANDROID__
+	// a phone or handheld: touch, the back gesture and a controller, no F keys (R7.1)
+	k.title = "Buttons and gestures";
+	static const char *const kTouch[][2] = {
+		{ "Choose in a menu", "Tap, or A on a controller" }, { "Back", "Back gesture, < Back, or B" },
+		{ "Pause menu, in a game", "Back gesture, or hold Start" }, { "Picture, sound, game", "Settings in the menu" },
+	};
+	for (auto &r : kTouch) k.items.push_back(row(r[0], r[1]));
+	add_text(k.items, "With a keyboard attached, the desktop keys (Esc, F1 to F12) work too.", px, 2);
+#else
 	for (auto &r : kKeys) k.items.push_back(row(r[0], r[1]));
 	add_text(k.items, "F4 to F8, F11 and the volume are also in Settings.", px, 2);
+#endif
 	prog.panels = { k };
 
 	tab cred;

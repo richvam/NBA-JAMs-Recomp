@@ -1189,7 +1189,11 @@ bool app::start_game(int index, bool net_client)
 	SDL_SetWindowTitle(m_win, (std::string("NBA JAM Recomp - ") + g.title + (m_net_game ? "   [ONLINE]" : "   [Esc: pause menu  F1: help]")).c_str());
 	SDL_ClearQueuedAudio(m_audio);
 	if (wide_missing) message("Widescreen is not available for this game: 4:3", 4000);
+#ifdef __ANDROID__
+	else if (!m_net_game) message("Back gesture: pause menu", 3000);
+#else
 	else if (!m_net_game) message("Press F1 to see the controls", 3000);
+#endif
 	if (m_mods.active_count() > 0)
 	{
 		std::string log;

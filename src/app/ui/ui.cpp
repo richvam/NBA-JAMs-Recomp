@@ -688,9 +688,20 @@ void screen::draw(canvas &cv, const theme &th, device dev, unsigned now_ms) cons
 	}
 
 	// status line: what each button does here, in the words of the device used last
-	std::string st = "[" + glyph(dev, act::confirm) + "] Select  [" + glyph(dev, act::back) + "] Back";
-	if (tabs.size() > 1) st += "  [" + glyph(dev, act::tab_prev) + "/" + glyph(dev, act::tab_next) + "] Tab";
-	for (const prompt &pr : prompts) st += "  [" + glyph(dev, pr.a) + "] " + pr.text;
+	std::string st;
+	if (dev == device::touch)
+	{
+		// touch (R7.1): no keys to name. Tap a row or a tab; Back is the corner button or the
+		// system's back gesture. Prompts that only have a key (Online: Del) are rows anyway.
+		st = "Tap to choose  Swipe back or < Back";
+		if (tabs.size() > 1) st += "  Tap a tab to switch";
+	}
+	else
+	{
+		st = "[" + glyph(dev, act::confirm) + "] Select  [" + glyph(dev, act::back) + "] Back";
+		if (tabs.size() > 1) st += "  [" + glyph(dev, act::tab_prev) + "/" + glyph(dev, act::tab_next) + "] Tab";
+		for (const prompt &pr : prompts) st += "  [" + glyph(dev, pr.a) + "] " + pr.text;
+	}
 	const bool back_btn = dev == device::touch || dev == device::mouse;
 	if (back_btn)
 	{

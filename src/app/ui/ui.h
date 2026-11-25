@@ -79,7 +79,11 @@ private:
 	void hold(act a, unsigned now);
 	void release(act a);
 	std::deque<event> m_q;
+#ifdef __ANDROID__
+	device m_dev = device::touch;            // a phone starts with touch prompts; a controller press switches them
+#else
 	device m_dev = device::keyboard;
+#endif
 	act m_held = act::none;
 	unsigned m_next = 0, m_interval = 0;
 	int m_stick_x = 0, m_stick_y = 0;        // -1, 0, 1 after the dead zone
