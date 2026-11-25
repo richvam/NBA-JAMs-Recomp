@@ -46,6 +46,20 @@ state and play to frame 3 000. GCC x86-64, Clang x86-64, Clang ARM64 (qemu-user)
 Windows, all five games: the states are the same bytes on all four, and all 16 pairs play on
 to the same RAM, picture, sound and final-state hashes as a run that never loaded.
 
+## The Lua engine (R5.4)
+
+`tools/headless/luadet` runs a fixed script with a mod's libraries and prints every result
+exactly; CI runs it on x86-64 and ARM64 and fails unless the hash is the one every build gave.
+
+| What | Result |
+|---|---|
+| **`pairs()` order** over string keys changed from run to run: Lua seeds its string hash from the clock and memory addresses. | **Fixed**: a fixed seed (`luaconf.h`). Order now depends only on what the script did. Tables or functions used as keys are still ordered by memory address: a script must not let that order decide a write. |
+| **Math functions.** `math.exp(1)` differed in the last bit between glibc and musl; C libraries are free to differ in every such function. | **Fixed**: `math.sin` ... `math.log` and the `^` operator use `src/third_party/detmath`, musl 1.2.5's code (MIT) built without fused multiply-add, on every build. `sqrt`, `floor`, `fmod` and the conversions are exact in every C library. |
+| **`%a`** wrote subnormal numbers differently (glibc and musl). | **Fixed**: Lua's own conversion everywhere. |
+| **Windows C89 mode.** Lua on Windows took other paths (`math.log(x, 2)` as a division, its own hex parsing). | **Fixed**: off; MinGW and MSVC 2015+ have C99. |
+| **`math.random`** is seeded from the clock: each peer of an online game drew other numbers. | **Fixed**: in an online game every script starts from the same seed. Offline it stays random. The generator itself (xoshiro256**) is integer arithmetic, the same everywhere. |
+| Integers, division, modulo, shifts, `tostring`, `string.format` with `%d %g %f %e`, `tonumber`. | **Already identical** on all four builds. |
+
 ## Not covered yet
 
 - MSVC: there is no MSVC build yet (R6/R7).
@@ -53,4 +67,3 @@ to the same RAM, picture, sound and final-state hashes as a run that never loade
   Clang x86-64 and Clang ARM64 under qemu-user: identical, 3 000 frames of all five games,
   save states included. The CI machines have no ROMs (none may be uploaded), so this is a
   local check.
-- The Lua engine (R5.4).

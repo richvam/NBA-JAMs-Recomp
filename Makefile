@@ -52,7 +52,12 @@ LUA_SRC = $(filter-out src/third_party/lua/lua.c src/third_party/lua/luac.c,$(wi
 $(BUILD)/lua/%.o: src/third_party/lua/%.c
 	@mkdir -p $(dir $@)
 	$(CC) -O2 $(CFLAGS) -std=gnu99 -c $< -o $@
-$(BUILD)/liblua.a: $(patsubst src/third_party/lua/%.c,$(BUILD)/lua/%.o,$(LUA_SRC))
+# the math functions Lua uses, the same bits everywhere (R5.4, src/third_party/detmath/detmath.h)
+DETMATH_SRC = $(wildcard src/third_party/detmath/*.c)
+$(BUILD)/detmath/%.o: src/third_party/detmath/%.c
+	@mkdir -p $(dir $@)
+	$(CC) -O2 $(CFLAGS) -fno-builtin -std=gnu99 -w -c $< -o $@
+$(BUILD)/liblua.a: $(patsubst src/third_party/lua/%.c,$(BUILD)/lua/%.o,$(LUA_SRC)) $(patsubst src/third_party/detmath/%.c,$(BUILD)/detmath/%.o,$(DETMATH_SRC))
 	ar rcs $@ $^
 
 UI_SRC = src/app/ui/ui.cpp src/app/ui/gallery.cpp src/app/ui/lettering.cpp src/app/ui/themes.cpp src/app/ui/screens.cpp src/app/ui/keyboard.cpp
@@ -120,6 +125,8 @@ $(BUILD)/cattest: tools/headless/cattest.cpp src/app/games.cpp src/app/romload.c
 	$(CXX) $(CXXFLAGS) $(APP_INC) $< src/app/games.cpp src/app/romload.cpp $(BUILD)/miniz.o $(BUILD)/libcore.a -o $@
 $(BUILD)/statetest: tools/headless/statetest.cpp src/app/games.cpp src/app/romload.cpp $(BUILD)/libcore.a $(BUILD)/miniz.o
 	$(CXX) $(CXXFLAGS) $(APP_INC) $< src/app/games.cpp src/app/romload.cpp $(BUILD)/miniz.o $(BUILD)/libcore.a -o $@
+$(BUILD)/luadet: tools/headless/luadet.cpp $(BUILD)/liblua.a
+	$(CXX) $(CXXFLAGS) -Isrc/third_party/lua $< $(BUILD)/liblua.a -o $@
 $(BUILD)/goldentest: tools/headless/goldentest.cpp src/app/games.cpp src/app/romload.cpp $(BUILD)/libcore.a $(BUILD)/miniz.o
 	$(CXX) $(CXXFLAGS) $(APP_INC) $< src/app/games.cpp src/app/romload.cpp $(BUILD)/miniz.o $(BUILD)/libcore.a -o $@
 $(BUILD)/statebench: tools/headless/statebench.cpp src/app/games.cpp src/app/romload.cpp $(BUILD)/libcore.a $(BUILD)/miniz.o

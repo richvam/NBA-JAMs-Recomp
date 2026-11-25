@@ -54,7 +54,8 @@
 
 #if defined(LUA_USE_WINDOWS)
 #define LUA_DL_DLL	/* enable support for DLL */
-#define LUA_USE_C89	/* broadly, Windows is C89 */
+/* NBA JAM Recomp (R5.4): not C89 on Windows either (MinGW and MSVC 2015+ have C99), so
+** Lua takes the same code paths there as elsewhere (log2, hex numbers): the same results */
 #endif
 
 
@@ -472,6 +473,29 @@
 
 #define l_mathop(op)		op
 
+/* NBA JAM Recomp (roadmap R5.4): inside Lua itself, math.sin ... math.log and the ^ operator
+** use src/third_party/detmath (musl's code, no FMA), so a mod gets the same bits on every
+** processor, compiler and C library. Only in Lua's own files: the program's C++ keeps <cmath>. */
+#if defined(LUA_CORE) || defined(LUA_LIB)
+/* the string hash seed is fixed, not taken from the clock and memory addresses, so pairs()
+** visits string keys in the same order in every run and on every computer */
+#define luai_makeseed(L)	((unsigned int)0x4e424a4du)
+#include <math.h>
+#include "../detmath/detmath.h"
+#define sin det_sin
+#define cos det_cos
+#define tan det_tan
+#define asin det_asin
+#define acos det_acos
+#define atan det_atan
+#define atan2 det_atan2
+#define exp det_exp
+#define log det_log
+#define log2 det_log2
+#define log10 det_log10
+#define pow det_pow
+#endif
+
 #define lua_str2number(s,p)	strtod((s), (p))
 
 #else						/* }{ */
@@ -615,10 +639,8 @@
 ** Otherwise, you can leave 'lua_number2strx' undefined and Lua will
 ** provide its own implementation.
 */
-#if !defined(LUA_USE_C89)
-#define lua_number2strx(L,b,sz,f,n)  \
-	((void)L, l_sprintf(b,sz,f,(LUAI_UACNUMBER)(n)))
-#endif
+/* NBA JAM Recomp (R5.4): always Lua's own lua_number2strx, since C libraries write subnormals
+** differently (glibc 0x0.0000000000001p-1022, musl 0x1p-1074). */
 
 
 /*

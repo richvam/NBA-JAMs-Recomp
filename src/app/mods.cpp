@@ -578,6 +578,16 @@ lua_State *mod_manager::new_state(mod_script *mod, bool with_game)
 	lua_pushboolean(L, with_game && m_netplay);   // an online game (roadmap 1.7): a script may refuse to run
 	lua_setfield(L, -2, "netplay");
 	lua_setglobal(L, "nba");
+	// R5.4: Lua seeds math.random from the clock and a memory address, different on each
+	// computer; in an online game every peer must draw the same numbers, so the seed is fixed
+	if (with_game && m_netplay)
+	{
+		lua_getglobal(L, LUA_MATHLIBNAME);
+		lua_getfield(L, -1, "randomseed");
+		lua_pushinteger(L, 0x4e42414a);
+		lua_call(L, 1, 0);
+		lua_pop(L, 1);
+	}
 	return L;
 }
 
