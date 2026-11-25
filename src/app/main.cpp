@@ -3003,6 +3003,14 @@ void app::choose_data_folder()
 	// NBAJAM_CRASH_TEST=1: crash here on purpose, to check that a dump is written
 	if (const char *ct = getenv("NBAJAM_CRASH_TEST")) if (*ct == '1') *(volatile int *)nullptr = 1;
 	SDL_Log("data folder: %s%s", m_base.c_str(), m_paths.portable ? " (portable)" : "");
+#ifdef __ANDROID__
+	{
+		// online needs the INTERNET permission: a socket that cannot be made shows here (R7.1)
+		std::string l;
+		for (const std::string &ip : net_local_ipv4()) l += " " + ip;
+		SDL_Log("network: local addresses:%s", l.empty() ? " none" : l.c_str());
+	}
+#endif
 }
 
 // The widget gallery of the menu toolkit (roadmap U1), driven by the real devices through
