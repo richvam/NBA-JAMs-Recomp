@@ -6,15 +6,25 @@
 package io.github.richvam.nbajam;
 
 import android.content.ContentResolver;
+import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
+import android.net.ConnectivityManager;
+import android.net.LinkProperties;
+import android.net.Network;
+import android.net.RouteInfo;
 import android.net.Uri;
+import android.net.wifi.WifiManager;
+import android.os.Build;
+import android.os.Bundle;
 import android.provider.DocumentsContract;
 import android.provider.OpenableColumns;
 
 import org.libsdl.app.SDLActivity;
 
 import java.io.File;
+import java.net.Inet4Address;
+import java.net.InetAddress;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -25,6 +35,54 @@ public class NBAJamActivity extends SDLActivity {
     private int mCopied, mFailed;
 
     public static native void nativeRomsImported(int copied, int failed);
+
+    // Online play: Wi-Fi drops broadcast packets (the home-network search) unless the app
+    // holds a multicast lock; it is held while the app runs
+    private WifiManager.MulticastLock mMulticast;
+
+    @Override
+    protected void onCreate(Bundle state) {
+        super.onCreate(state);
+        try {
+            WifiManager wm = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            if (wm != null) {
+                mMulticast = wm.createMulticastLock("nbajam-lan");
+                mMulticast.setReferenceCounted(false);
+                mMulticast.acquire();
+            }
+        } catch (Exception e) {
+            // no Wi-Fi: the search still works on other networks where the system allows it
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (mMulticast != null && mMulticast.isHeld()) mMulticast.release();
+        super.onDestroy();
+    }
+
+    // The router (default gateway) as an IPv4 address in host order, or 0; NAT-PMP and PCP are
+    // sent there. An app cannot read /proc/net/route on Android 10 and later.
+    public static int defaultGateway() {
+        try {
+            Context c = getContext();
+            if (c == null || Build.VERSION.SDK_INT < 23) return 0;
+            ConnectivityManager cm = (ConnectivityManager) c.getSystemService(Context.CONNECTIVITY_SERVICE);
+            Network n = cm == null ? null : cm.getActiveNetwork();
+            LinkProperties lp = n == null ? null : cm.getLinkProperties(n);
+            if (lp == null) return 0;
+            for (RouteInfo r : lp.getRoutes()) {
+                InetAddress g = r.getGateway();
+                if (r.isDefaultRoute() && g instanceof Inet4Address) {
+                    byte[] b = g.getAddress();
+                    return (b[0] & 255) << 24 | (b[1] & 255) << 16 | (b[2] & 255) << 8 | (b[3] & 255);
+                }
+            }
+        } catch (Exception e) {
+            // no permission or no network
+        }
+        return 0;
+    }
 
     // called from native code (any thread)
     public static void pickRoms(String romsDir, boolean folder) {

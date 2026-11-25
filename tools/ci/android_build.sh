@@ -41,6 +41,9 @@ ed(g, '''ndkBuild {
             }''')
 ed(g, 'compileSdkVersion 34', 'compileSdkVersion 34\n    ndkVersion "%s"' % ndk)
 ed(p + '/app/src/main/AndroidManifest.xml', 'android:preferMinimalPostProcessing="true"', 'android:preferMinimalPostProcessing="true"\n            android:screenOrientation="sensorLandscape"')
+# online play: sockets (INTERNET), which network is up and its router (NETWORK_STATE), and
+# broadcasts on Wi-Fi for the home-network search (the multicast lock)
+ed(p + '/app/src/main/AndroidManifest.xml', '<uses-permission android:name="android.permission.VIBRATE" />', '<uses-permission android:name="android.permission.VIBRATE" />\n    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />\n    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />')
 ed(p + '/app/src/main/AndroidManifest.xml', '<activity android:name="SDLActivity"', '<activity android:name="io.github.richvam.nbajam.NBAJamActivity"')
 ed(p + '/app/src/main/res/values/strings.xml', '<string name="app_name">Game</string>', '<string name="app_name">NBA JAM Recomp</string>')
 PY

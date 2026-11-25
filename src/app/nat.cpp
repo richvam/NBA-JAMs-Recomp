@@ -507,9 +507,15 @@ void upnp_mapper::run(u16 port)
 // speaks NAT-PMP answers it with version 0 (or "unsupported version"), and then NAT-PMP
 // is used. The mapping is renewed at half its lifetime and removed (lifetime 0) at the end.
 // ---------------------------------------------------------------------------
+#ifdef __ANDROID__
+u32 android_default_gateway();   // main.cpp: asks the Java side (NBAJamActivity.defaultGateway)
+#endif
+
 u32 default_gateway()
 {
-#ifdef _WIN32
+#if defined(__ANDROID__)
+	return android_default_gateway();
+#elif defined(_WIN32)
 	ULONG sz = 0;
 	GetIpForwardTable(nullptr, &sz, FALSE);
 	if (!sz) return 0;

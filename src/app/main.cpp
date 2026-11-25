@@ -607,6 +607,20 @@ extern "C" JNIEXPORT void JNICALL Java_io_github_richvam_nbajam_NBAJamActivity_n
 	e.user.data1 = reinterpret_cast<void *>(intptr_t(failed));
 	SDL_PushEvent(&e);
 }
+// the router for NAT-PMP and PCP (nat.cpp): Android does not let an app read /proc/net/route
+u32 android_default_gateway()
+{
+	JNIEnv *env = static_cast<JNIEnv *>(SDL_AndroidGetJNIEnv());
+	jobject act = static_cast<jobject>(SDL_AndroidGetActivity());
+	if (!env || !act) return 0;
+	jclass cls = env->GetObjectClass(act);
+	jmethodID m = env->GetStaticMethodID(cls, "defaultGateway", "()I");
+	u32 g = m ? u32(env->CallStaticIntMethod(cls, m)) : 0;
+	if (env->ExceptionCheck()) { env->ExceptionClear(); g = 0; }
+	env->DeleteLocalRef(cls);
+	env->DeleteLocalRef(act);
+	return g;
+}
 static void android_pick_roms(const std::string &dir, bool folder)
 {
 	JNIEnv *env = static_cast<JNIEnv *>(SDL_AndroidGetJNIEnv());
@@ -1598,6 +1612,11 @@ void app::open_online()
 	m_online_scr = ui::screen();
 	m_local_ips = net_local_ipv4();
 	net_local_ipv6(m_local6);
+	{
+		std::string l;
+		for (const std::string &ip : m_local_ips) l += " " + ip;
+		SDL_Log("online: local addresses:%s", l.empty() ? " none" : l.c_str());
+	}
 }
 
 void app::menu_frame()

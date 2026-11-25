@@ -27,3 +27,16 @@ pass=$(echo "$line" | sed 's/.*saved: //' | cut -d';' -f3)
 echo "Pass is now at $pass"
 [ -n "$pass" ] && [ "$pass" != "0.780,0.800" ]
 echo "android touch arrange: PASS"
+# online (the INTERNET permission and the network): Settings, back to the menu, Online game
+# (1st row); the app logs its local addresses, and hosting must give no socket error
+adb logcat -c
+key BACK; sleep 2
+adb shell input tap $(( W * 60 / 1000 )) $(( H * 585 / 1000 )); sleep 3
+adb exec-out screencap -p > android-shots/online.png
+key ENTER; sleep 4
+adb exec-out screencap -p > android-shots/online-host.png
+adb logcat -d > android-logcat-online.txt || true
+grep -a "online: local addresses" android-logcat-online.txt | tail -1
+grep -aq "online: local addresses: [0-9]" android-logcat-online.txt
+! grep -aq "could not create the socket" android-logcat-online.txt
+echo "android online: PASS"
