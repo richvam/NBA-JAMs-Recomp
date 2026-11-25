@@ -12,6 +12,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 ## Unreleased
 
 ### Added
+- Android: Add ROMs and Add a ROM folder open the system file picker and copy the choice into the ROM folder (R7.2); the data folder is visible over USB (Android/data/io.github.richvam.NBA_JAMs_Recomp/files).
 - Menus: a Back button in the corner when they are used by touch or mouse; on Android the back gesture is Back.
 - An Android build in CI: a debug APK for 64-bit ARM (and x86_64), started on an emulator, where it reaches the game picker (R7.1, not released yet).
 - macOS: the reason shown in the Local Network question, and online help for it and the firewall (R6.4).
