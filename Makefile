@@ -76,7 +76,7 @@ $(BUILD)/newstest: tools/headless/newstest.cpp src/app/news.cpp
 $(BUILD)/viewtest: tools/headless/viewtest.cpp src/app/view.cpp src/app/gl_present.cpp src/app/png_read.cpp src/app/overlay.cpp src/app/ui/ui.cpp src/app/ui/gallery.cpp src/app/ui/lettering.cpp src/app/ui/themes.cpp src/app/ui/screens.cpp src/app/ui/keyboard.cpp $(BUILD)/miniz.o
 	@mkdir -p $(BUILD)
 	$(CXX) $(CXXFLAGS) -Isrc/app -Isrc/third_party/miniz -I$(SDL2L)/include/SDL2 tools/headless/viewtest.cpp src/app/view.cpp src/app/gl_present.cpp src/app/png_read.cpp src/app/overlay.cpp src/app/ui/ui.cpp src/app/ui/gallery.cpp src/app/ui/lettering.cpp src/app/ui/themes.cpp src/app/ui/screens.cpp src/app/ui/keyboard.cpp $(BUILD)/miniz.o \
-	  -L$(SDL2L)/lib -Wl,-Bstatic -lSDL2 -Wl,-Bdynamic -static-libstdc++ -static-libgcc -lm -ldl -lpthread -o $@
+	  $(SDL_LINK) -o $@
 
 # uitest: the menu toolkit (U1), no SDL and no display
 $(BUILD)/uitest: tools/headless/uitest.cpp $(UI_SRC) $(BUILD)/miniz.o
@@ -115,12 +115,20 @@ win:
 
 # ---------------- application (Linux, for testing) ----------------
 SDL2L ?= /home/claude/deps/sdl2linux
+# how the programs that open a window link SDL2 (static) and the system libraries
+ifeq ($(shell uname -s),Darwin)
+# macOS (R6.1): sdl2-config lists the frameworks SDL needs; the C++ runtime is the system's
+SDL_LINK = $(shell $(SDL2L)/bin/sdl2-config --static-libs)
+else
+SDL_LINK = -L$(SDL2L)/lib -Wl,-Bstatic -lSDL2 -Wl,-Bdynamic -static-libstdc++ -static-libgcc -lm -ldl -lpthread
+endif
 APP_INC = -Isrc/emu -Isrc/mame -Isrc/board -Isrc/app -Isrc/third_party/miniz -Isrc/third_party/lua
 $(BUILD)/miniz.o: src/third_party/miniz/miniz.c
+	@mkdir -p $(dir $@)
 	$(CC) -O2 $(CFLAGS) -c $< -o $@
 linux-app: $(BUILD)/libcore.a $(BUILD)/miniz.o $(BUILD)/liblua.a
 	$(CXX) $(CXXFLAGS) $(APP_INC) -I$(SDL2L)/include/SDL2 src/app/main.cpp src/app/games.cpp src/app/romload.cpp src/app/netplay.cpp src/app/nat.cpp src/app/gl_present.cpp src/app/controls.cpp src/app/mods.cpp src/app/menu_sound.cpp src/app/pad_script.cpp src/app/version.cpp src/app/paths.cpp src/app/news.cpp src/app/view.cpp src/app/png_read.cpp src/app/overlay.cpp src/app/ui/ui.cpp src/app/ui/gallery.cpp src/app/ui/lettering.cpp src/app/ui/themes.cpp src/app/ui/screens.cpp src/app/ui/keyboard.cpp src/app/ui/art_view.cpp src/app/rom_art.cpp $(VERSION_DEFS) \
-	  $(BUILD)/miniz.o $(BUILD)/libcore.a $(BUILD)/liblua.a -L$(SDL2L)/lib -Wl,-Bstatic -lSDL2 -Wl,-Bdynamic -static-libstdc++ -static-libgcc -lm -ldl -lpthread -o $(BUILD)/NBAJamRecomp
+	  $(BUILD)/miniz.o $(BUILD)/libcore.a $(BUILD)/liblua.a $(SDL_LINK) -o $(BUILD)/NBAJamRecomp
 $(BUILD)/cattest: tools/headless/cattest.cpp src/app/games.cpp src/app/romload.cpp $(BUILD)/libcore.a $(BUILD)/miniz.o
 	$(CXX) $(CXXFLAGS) $(APP_INC) $< src/app/games.cpp src/app/romload.cpp $(BUILD)/miniz.o $(BUILD)/libcore.a -o $@
 $(BUILD)/statetest: tools/headless/statetest.cpp src/app/games.cpp src/app/romload.cpp $(BUILD)/libcore.a $(BUILD)/miniz.o

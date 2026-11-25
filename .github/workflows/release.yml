@@ -145,6 +145,74 @@ jobs:
           path: dist-out/*
           if-no-files-found: error
 
+  macos:
+    # R6.1: one universal program (Apple Silicon and Intel), built and tested on each processor
+    name: macOS ${{ matrix.arch }} (universal build, ROM-free tests, launch)
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+          - arch: x86_64
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Cache SDL2 (pinned 2.30.9, universal, built from the checked source tarball)
+        uses: actions/cache@v4
+        with:
+          path: deps/sdl2mac
+          key: sdl2-mac-${{ hashFiles('tools/ci/fetch_sdl.sh') }}
+
+      - name: Fetch SDL2
+        run: tools/ci/fetch_sdl.sh mac deps/sdl2mac
+
+      - name: Build (arm64 + x86_64 in one file) and the tests
+        run: |
+          brew list make >/dev/null 2>&1 || brew install make
+          export PATH="$(brew --prefix make)/libexec/gnubin:$PATH"
+          tools/ci/build_all.sh mac deps/sdl2mac build/NBAJamRecomp-mac
+          lipo -archs build/NBAJamRecomp-mac | grep -q "arm64" && lipo -archs build/NBAJamRecomp-mac | grep -q "x86_64"
+
+      - name: ROM-free tests (this runner's processor)
+        run: |
+          set -o pipefail
+          for t in luatest pathtest; do build/mac/$t | tee $t.log; grep -q ", 0 failed" $t.log; done
+          build/mac/luadet
+          mkdir -p viewtest-out
+          build/mac/uitest viewtest-out | tee uitest.log; grep -q ", 0 failed" uitest.log
+          build/mac/arttest viewtest-out | tee arttest.log; grep -q ", 0 failed" arttest.log
+          build/mac/viewtest --rects | tee rects.log; grep -q ", 0 failed" rects.log
+
+      - name: Presenter on a test pattern (OpenGL in a window)
+        run: |
+          set -o pipefail
+          for what in all shaders; do build/mac/viewtest --$what viewtest-out | tee viewtest-$what.log; grep -q ", 0 failed" viewtest-$what.log; done
+
+      - name: The universal program starts and renders (audit A, no ROMs)
+        run: |
+          set -o pipefail
+          build/NBAJamRecomp-mac --version
+          arch -${{ matrix.arch }} true
+          mkdir -p audit-data
+          NBAJAM_DATA_DIR="$PWD/audit-data" SDL_AUDIODRIVER=dummy perl -e 'alarm shift; exec @ARGV' 600 arch -${{ matrix.arch }} build/NBAJamRecomp-mac --pad-script tools/audit/a_noroms.pad > audit.log 2>&1 || true
+          grep -aE "pad script|FAIL" audit.log
+          ! grep -aq "FAIL" audit.log
+          grep -aq "pad script" audit.log
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: macos-${{ matrix.arch }}-test-output
+          path: |
+            viewtest-out/*.png
+            audit.log
+          if-no-files-found: ignore
+
   windows:
     name: Windows x64 (cross-build, package)
     runs-on: ubuntu-22.04
