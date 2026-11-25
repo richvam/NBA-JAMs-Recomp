@@ -596,11 +596,17 @@ screen make_about(const about_state &st)
 	panel k;
 	k.title = "The program's keys";
 	k.r = { 0.0f, 0.0f, 1.0f, 1.0f };
+#ifdef __APPLE__
+	// a Mac keyboard has no Print Screen, and the F keys may need fn (R6.2)
+	static const char *const kFull = "F11, Ctrl+Cmd+F or Cmd+Return", *const kShot = "F12 (with fn on a laptop)";
+#else
+	static const char *const kFull = "F11 or Alt+Enter", *const kShot = "F12 or Print Screen";
+#endif
 	static const char *const kKeys[][2] = {
 		{ "Pause menu, in a game", "Esc" }, { "Pause without the menu", "P" }, { "Help over the game", "F1" }, { "TEST switch (service menu)", "F2" },
 		{ "Reset the game", "F3" }, { "Service credit", "9" }, { "Picture look", "F4" }, { "Scaling", "F5" },
 		{ "Scanline strength", "F6" }, { "Picture shape", "F7" }, { "Sides of a 4:3 picture", "F8" },
-		{ "Fullscreen", "F11 or Alt+Enter" }, { "Screenshot", "F12 or Print Screen" }, { "Volume", "- and +" }, { "Online game, from the menu", "N" },
+		{ "Fullscreen", kFull }, { "Screenshot", kShot }, { "Volume", "- and +" }, { "Online game, from the menu", "N" },
 	};
 	for (auto &r : kKeys) k.items.push_back(row(r[0], r[1]));
 	add_text(k.items, "F4 to F8, F11 and the volume are also in Settings.", px, 2);
