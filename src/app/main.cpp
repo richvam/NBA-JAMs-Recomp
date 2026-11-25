@@ -2725,6 +2725,11 @@ void app::choose_data_folder()
 	// SDL_GetPrefPath creates the folder, so only ask for it when it will be used
 	if (!(env && *env) && !file_exists(path_join(exe, "portable.txt")))
 		if (char *pp = SDL_GetPrefPath("", "NBAJamRecomp")) { user = pp; SDL_free(pp); }
+#ifdef __ANDROID__
+	// R7.1: an app has no folder of its own beside the program (the working folder is the
+	// system root); everything lives in its private storage, so there is nothing to move
+	if (!user.empty()) exe = user;
+#endif
 	m_paths = resolve_paths(exe, user, env);
 	if (legacy_setup_present(m_paths))
 	{
