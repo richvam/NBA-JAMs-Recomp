@@ -12,7 +12,7 @@ commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
 date=$(date -u +%Y-%m-%d)
 ndk_ver=$(sed -n 's/^Pkg.Revision *= *//p' "$ANDROID_NDK_HOME/source.properties")
 p=build/android
-rm -rf "$p"; cp -r "$sdl/android-project" "$p"
+mkdir -p build; rm -rf "$p"; cp -r "$sdl/android-project" "$p"
 ln -s "$sdl" "$p/app/jni/SDL"
 cp dist/android/main.cmake "$p/app/jni/src/CMakeLists.txt"
 rm -f "$p/app/jni/src/Android.mk"
