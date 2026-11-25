@@ -33,4 +33,16 @@ colours = len(set(raw[j:j+64] for j in range(0, min(len(raw), 4_000_000), 4099))
 print('screen %dx%d, %d different samples' % (w, h, colours))
 assert colours > 20, 'the screen is one colour'
 PY
+# the menus by touch and the back gesture: open Settings with a tap, leave it with Android's
+# back key, open it again and leave it with the on-screen Back button (screenshots of each)
+size=$(adb shell wm size | sed -n 's/.*: *//p' | tail -1 | tr -d '\r'); W=${size%x*}; H=${size#*x}
+[ "$W" -lt "$H" ] && { t=$W; W=$H; H=$t; }
+echo "screen $W x $H"
+tap() { adb shell input tap $(( W * $1 / 1000 )) $(( H * $2 / 1000 )); sleep 2; }
+shot() { adb exec-out screencap -p > android-shots/$1.png; }
+tap 60 625; shot settings-1
+adb shell input keyevent KEYCODE_BACK; sleep 2; shot after-back-key
+tap 60 625; shot settings-2
+tap 942 960; shot after-back-button
+pid2=$(adb shell pidof $pkg | tr -d '\r'); echo "pid after the menus: ${pid2:-none}"; [ -n "$pid2" ]
 echo "android start: PASS"

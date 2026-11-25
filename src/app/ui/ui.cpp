@@ -479,10 +479,14 @@ result screen::press(item &it)
 }
 
 static rectf dialog_button(bool yes) { return { float((screen::kW - 400) / 2) + (yes ? 120.0f : 216.0f), 164, 64, 16 }; }
+// a Back button in the bottom right corner, drawn when the menus are used by touch or mouse
+// (a phone has no Esc key; R7.1)
+rectf screen::back_button() { return { float(kW - 62), float(kH - 19), 54, 15 }; }
 
 result screen::handle(const event &e)
 {
 	result r;
+	if (e.ptr == event::click && !asking() && back_button().has(e.x, e.y)) { r.what = result::back; return r; }
 	if (tabs.empty()) { if (e.a == act::back) r.what = result::back; return r; }
 	if (asking())
 	{
@@ -687,7 +691,15 @@ void screen::draw(canvas &cv, const theme &th, device dev, unsigned now_ms) cons
 	std::string st = "[" + glyph(dev, act::confirm) + "] Select  [" + glyph(dev, act::back) + "] Back";
 	if (tabs.size() > 1) st += "  [" + glyph(dev, act::tab_prev) + "/" + glyph(dev, act::tab_next) + "] Tab";
 	for (const prompt &pr : prompts) st += "  [" + glyph(dev, pr.a) + "] " + pr.text;
-	const int line = cv.w - 16;
+	const bool back_btn = dev == device::touch || dev == device::mouse;
+	if (back_btn)
+	{
+		rectf b = back_button();
+		cv.fill(int(b.x), int(b.y), int(b.w), int(b.h), th.strip);
+		cv.frame(int(b.x), int(b.y), int(b.w), int(b.h), th.bar);
+		put(int(b.x) + (int(b.w) - wide("< Back")) / 2, int(b.y) + 3, "< Back", th.tab_sel);
+	}
+	const int line = cv.w - 16 - (back_btn ? 60 : 0);
 	const int note_w = th.note.empty() ? 0 : text_w(th.note, face::note) + 12;
 	if (text_w(st, face::note) <= line)
 	{

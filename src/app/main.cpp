@@ -894,7 +894,7 @@ void app::poll_events()
 					if (k == SDLK_v && (e.key.keysym.mod & (KMOD_CTRL | KMOD_GUI)))
 						if (char *t = SDL_GetClipboardText()) { for (char *c = t; *c; c++) if (!isspace((unsigned char)*c)) m_kbd.type(*c); SDL_free(t); }
 					if (k == SDLK_RETURN || k == SDLK_KP_ENTER) m_menu_ok = true;
-					if (k == SDLK_ESCAPE) m_menu_back = true;
+					if (k == SDLK_ESCAPE || k == SDLK_AC_BACK) m_menu_back = true;
 					break;
 				}
 				if (k == SDLK_UP) m_menu_up = true;
@@ -902,7 +902,7 @@ void app::poll_events()
 				if (k == SDLK_LEFT) m_menu_left = true;
 				if (k == SDLK_RIGHT) m_menu_right = true;
 				if (k == SDLK_RETURN && !alt && !cmd) m_menu_ok = true;
-				if (k == SDLK_ESCAPE) m_menu_back = true;
+				if (k == SDLK_ESCAPE || k == SDLK_AC_BACK) m_menu_back = true;   // AC_BACK: Android's back gesture and button
 				if (k == SDLK_n) m_menu_net = true;
 				if (k == SDLK_DELETE || k == SDLK_BACKSPACE) m_menu_clear = true;
 				if (fs_key)
@@ -2951,6 +2951,8 @@ int app::run()
 #ifdef __ANDROID__
 	// R7.1: the game is 4:3 and wider; SDL would otherwise follow the phone (portrait)
 	SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
+	// the back gesture goes to the menus as Back (SDLK_AC_BACK) instead of closing the app
+	SDL_SetHint(SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1");
 #endif
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) != 0)
 	{
