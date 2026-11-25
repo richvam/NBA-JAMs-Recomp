@@ -157,6 +157,14 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+      - name: Cache Gradle downloads (fewer requests to Maven Central)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-android-${{ hashFiles('tools/ci/fetch_sdl.sh', 'tools/ci/android_build.sh') }}
+          restore-keys: gradle-android-
       - name: Fetch SDL2 source
         run: tools/ci/fetch_sdl.sh android deps/sdl2src
       - name: Build the APK
