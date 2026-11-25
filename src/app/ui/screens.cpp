@@ -23,8 +23,15 @@ screen make_picker(const picker_state &st)
 	panel menu;
 	menu.title = "Menu";
 	menu.r = { 0.0f, 0.48f, 0.5f, 0.52f };
+#ifdef __ANDROID__
+	// R7.2: the system file picker brings ROMs in (files, or a whole folder)
+	menu.items = { button(pk_online, "Online game"), button(pk_settings, "Settings"), button(pk_mods, "Lua mods"), button(pk_controls, "Controls"),
+	               button(pk_news, "News"), button(pk_about, "About"), button(pk_romdir, "Add ROMs"), button(pk_romtree, "Add a ROM folder"),
+	               button(pk_rescan, "Look for ROMs again"), button(pk_quit, "Quit") };
+#else
 	menu.items = { button(pk_online, "Online game"), button(pk_settings, "Settings"), button(pk_mods, "Lua mods"), button(pk_controls, "Controls"),
 	               button(pk_news, "News"), button(pk_about, "About"), button(pk_romdir, "Open my ROM folder"), button(pk_rescan, "Look for ROMs again"), button(pk_quit, "Quit") };
+#endif
 	panel info;
 	info.r = { 0.52f, 0.0f, 0.48f, 1.0f };
 	t.panels = { games, menu, info };
@@ -76,9 +83,15 @@ void update_picker(screen &s, const picker_state &st, int game)
 		{
 			// first run: nothing can be played yet
 			info.items.push_back(header("NO GAMES FOUND"));
+#ifdef __ANDROID__
+			lines("Choose Add ROMs and pick your ROM sets (ZIP files), or Add a ROM folder. They are copied into:");
+			lines(st.roms_dir);
+			lines("A computer sees that folder over USB too. After copying there, choose Look for ROMs again.");
+#else
 			lines("Drag your ROM sets (ZIP files) onto this window, or put them in this folder:");
 			lines(st.roms_dir);
 			lines("Open my ROM folder opens it. After copying, choose Look for ROMs again.");
+#endif
 		}
 		else if (g.available) info.items.push_back(header("READY TO PLAY"));
 		else

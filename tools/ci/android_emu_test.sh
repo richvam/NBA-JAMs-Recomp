@@ -9,7 +9,7 @@ pkg=io.github.richvam.NBA_JAMs_Recomp
 mkdir -p android-shots
 adb install -r "$apk"
 adb logcat -c
-adb shell am start -n $pkg/org.libsdl.app.SDLActivity
+adb shell am start -n $pkg/io.github.richvam.nbajam.NBAJamActivity
 sleep 25
 adb exec-out screencap -p > android-shots/start.png
 adb logcat -d > android-logcat.txt || true
@@ -47,7 +47,8 @@ tap 942 960; shot after-back-button
 pid2=$(adb shell pidof $pkg | tr -d '\r'); echo "pid after the menus: ${pid2:-none}"; [ -n "$pid2" ]
 # R7.1: the data folder is on shared storage (seen over USB), with roms/ and the mods in it
 d=/sdcard/Android/data/$pkg/files
-adb shell ls -R $d | head -20
-adb shell ls $d/roms/README.txt
-[ "$(adb shell ls $d/mods | grep -c '\.lua')" -gt 10 ]
+adb shell run-as $pkg ls -R $d | head -20
+adb shell run-as $pkg ls $d/roms/README.txt
+[ "$(adb shell run-as $pkg ls $d/mods | grep -c '\.lua')" -gt 10 ]
 echo "android start: PASS"
+"$(dirname "$0")/android_import_test.sh"

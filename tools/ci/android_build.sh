@@ -15,6 +15,9 @@ p=build/android
 mkdir -p build; rm -rf "$p"; cp -r "$sdl/android-project" "$p"
 ln -s "$sdl" "$p/app/jni/SDL"
 cp dist/android/main.cmake "$p/app/jni/src/CMakeLists.txt"
+# the app's activity: SDL's, plus the system file picker for ROMs (R7.2)
+mkdir -p "$p/app/src/main/java/io/github/richvam/nbajam"
+cp dist/android/NBAJamActivity.java "$p/app/src/main/java/io/github/richvam/nbajam/"
 rm -f "$p/app/jni/src/Android.mk"
 python3 - "$p" "$root" "$ver" "$commit" "$date" "$ndk_ver" <<'PY'
 import sys, re
@@ -38,6 +41,7 @@ ed(g, '''ndkBuild {
             }''')
 ed(g, 'compileSdkVersion 34', 'compileSdkVersion 34\n    ndkVersion "%s"' % ndk)
 ed(p + '/app/src/main/AndroidManifest.xml', 'android:preferMinimalPostProcessing="true"', 'android:preferMinimalPostProcessing="true"\n            android:screenOrientation="sensorLandscape"')
+ed(p + '/app/src/main/AndroidManifest.xml', '<activity android:name="SDLActivity"', '<activity android:name="io.github.richvam.nbajam.NBAJamActivity"')
 ed(p + '/app/src/main/res/values/strings.xml', '<string name="app_name">Game</string>', '<string name="app_name">NBA JAM Recomp</string>')
 PY
 # the files the other packages ship next to the program, as APK assets with a list of them;

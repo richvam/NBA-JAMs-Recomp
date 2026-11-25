@@ -417,7 +417,7 @@ private:
 	int copy_into_roms(const std::string &from, std::string &err);   // files copied; never overwrites
 	int m_dropped = 0;                              // files copied by the drop in progress
 	std::string m_drop_err;
-	void open_rom_folder();
+	void open_rom_folder(bool folder = false);   // Android: the system file picker (files, or a folder)
 	void message(const std::string &m, u32 ms = 2500) { m_message = m; m_message_until = SDL_GetTicks() + ms; }
 	std::string nv_path(const game_info &g) const { return path_join(path_join(m_base, "saves"), std::string(g.id) + ".nv"); }
 
@@ -576,11 +576,52 @@ int app::copy_into_roms(const std::string &from, std::string &err)
 	return n;
 }
 
-void app::open_rom_folder()
+#ifdef __ANDROID__
+#include <jni.h>
+// R7.2: the Java side (dist/android/NBAJamActivity.java) copies what was chosen in the system
+// file picker into roms/ and reports here, from its own thread; the main loop rescans
+static Uint32 g_roms_imported_event = 0;
+extern "C" JNIEXPORT void JNICALL Java_io_github_richvam_nbajam_NBAJamActivity_nativeRomsImported(JNIEnv *, jclass, jint copied, jint failed)
+{
+	if (!g_roms_imported_event) return;
+	SDL_Event e{};
+	e.type = g_roms_imported_event;
+	e.user.code = copied;
+	e.user.data1 = reinterpret_cast<void *>(intptr_t(failed));
+	SDL_PushEvent(&e);
+}
+static void android_pick_roms(const std::string &dir, bool folder)
+{
+	JNIEnv *env = static_cast<JNIEnv *>(SDL_AndroidGetJNIEnv());
+	jobject act = static_cast<jobject>(SDL_AndroidGetActivity());
+	if (!env || !act) return;
+	jclass cls = env->GetObjectClass(act);
+	jmethodID m = env->GetStaticMethodID(cls, "pickRoms", "(Ljava/lang/String;Z)V");
+	if (m)
+	{
+		jstring s = env->NewStringUTF(dir.c_str());
+		env->CallStaticVoidMethod(cls, m, s, jboolean(folder));
+		env->DeleteLocalRef(s);
+	}
+	if (env->ExceptionCheck()) env->ExceptionClear();
+	env->DeleteLocalRef(cls);
+	env->DeleteLocalRef(act);
+}
+#endif
+
+void app::open_rom_folder(bool folder)
 {
 	const std::string dir = path_join(m_base, "roms");
 	std::error_code ec;
 	std::filesystem::create_directories(std::filesystem::u8path(dir), ec);
+#ifdef __ANDROID__
+	if (m_scripted) { SDL_Log("pick roms: %s", dir.c_str()); return; }
+	if (!g_roms_imported_event) g_roms_imported_event = SDL_RegisterEvents(1);
+	android_pick_roms(dir, folder);
+	return;
+#else
+	(void)folder;
+#endif
 	if (m_scripted) { SDL_Log("open folder: %s", dir.c_str()); message("Opened " + dir, 3000); return; }   // no file manager in a scripted run
 	std::string url = "file:///";
 	for (char c : dir) url += c == '\\' ? '/' : c;
@@ -804,6 +845,23 @@ void app::poll_events()
 					}
 				break;
 			case SDL_DROPBEGIN: m_dropped = 0; m_drop_err.clear(); break;
+#ifdef __ANDROID__
+			default:
+				if (g_roms_imported_event && e.type == g_roms_imported_event && !m_mach)
+				{
+					int copied = e.user.code, failed = int(intptr_t(e.user.data1));
+					rescan_roms(SDL_GetTicks());
+					int ready = 0;
+					for (bool a : m_avail) ready += a;
+					std::string m = failed < 0 ? std::string("This device has no file picker: copy ROMs over USB")
+					                           : "Added " + std::to_string(copied) + (copied == 1 ? " file" : " files") + ": " + std::to_string(ready) + " of " +
+					                               std::to_string(int(game_list().size())) + " games ready";
+					if (failed > 0) m += " (" + std::to_string(failed) + " could not be read)";
+					message(m, 6000);
+					SDL_Log("%s", m.c_str());
+				}
+				break;
+#endif
 			case SDL_DROPFILE:
 				if (e.drop.file)
 				{
@@ -1516,6 +1574,7 @@ void app::menu_frame()
 			else if (r.id == ui::pk_news) { m_news_scr = ui::screen(); m_screen = screen::news; return; }
 			else if (r.id == ui::pk_about) { m_about_scr = ui::screen(); m_screen = screen::about; return; }
 			else if (r.id == ui::pk_romdir) open_rom_folder();
+			else if (r.id == ui::pk_romtree) open_rom_folder(true);
 			else if (r.id == ui::pk_rescan)
 			{
 				rescan_roms(now);
