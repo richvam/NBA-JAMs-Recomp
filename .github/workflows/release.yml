@@ -187,6 +187,8 @@ jobs:
           build/mac/uitest viewtest-out | tee uitest.log; grep -q ", 0 failed" uitest.log
           build/mac/arttest viewtest-out | tee arttest.log; grep -q ", 0 failed" arttest.log
           build/mac/viewtest --rects | tee rects.log; grep -q ", 0 failed" rects.log
+          # R6.4: netplay over loopback (STUN, punching, UPnP/PCP/NAT-PMP against fakes) and the router found with sysctl
+          NATTEST_EXPECT_GATEWAY=1 build/mac/nattest | tee nattest.log; grep -q ", 0 failed" nattest.log
 
       - name: Presenter on a test pattern (OpenGL in a window)
         run: |

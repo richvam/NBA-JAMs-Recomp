@@ -25,6 +25,11 @@ static void nonblock(sock_t s, bool on) { u_long nb = on ? 1 : 0; ioctlsocket(s,
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#ifdef __APPLE__
+#include <net/if.h>
+#include <net/route.h>
+#include <sys/sysctl.h>
+#endif
 typedef int sock_t;
 static const sock_t kBad = -1;
 static void nat_init() {}
@@ -519,6 +524,40 @@ u32 default_gateway()
 		if (r.dwForwardDest == 0 && r.dwForwardMask == 0 && r.dwForwardNextHop != 0 && r.dwForwardMetric1 < metric) { best = ntohl(r.dwForwardNextHop); metric = r.dwForwardMetric1; }
 	}
 	return best;
+#elif defined(__APPLE__)
+	// macOS has no /proc (R6.4): read the routing table with sysctl and take the default
+	// route (destination 0.0.0.0, flags UP and GATEWAY) whose gateway is an IPv4 address
+	int mib[6] = { CTL_NET, PF_ROUTE, 0, AF_INET, NET_RT_FLAGS, RTF_GATEWAY };
+	size_t sz = 0;
+	if (sysctl(mib, 6, nullptr, &sz, nullptr, 0) != 0 || !sz) return 0;
+	std::vector<char> buf(sz + 512);
+	sz = buf.size();
+	if (sysctl(mib, 6, buf.data(), &sz, nullptr, 0) != 0) return 0;
+	for (size_t off = 0; off + sizeof(rt_msghdr) <= sz;)
+	{
+		const rt_msghdr *rtm = reinterpret_cast<const rt_msghdr *>(buf.data() + off);
+		if (rtm->rtm_msglen == 0) break;
+		const char *p = reinterpret_cast<const char *>(rtm + 1);
+		const sockaddr *sa[RTAX_MAX] = {};
+		for (int i = 0; i < RTAX_MAX; i++)
+			if (rtm->rtm_addrs & (1 << i))
+			{
+				const sockaddr *s = reinterpret_cast<const sockaddr *>(p);
+				sa[i] = s;
+				size_t l = s->sa_len ? ((s->sa_len + sizeof(u32) - 1) & ~(sizeof(u32) - 1)) : sizeof(u32);
+				p += l;
+			}
+		bool up = (rtm->rtm_flags & (RTF_UP | RTF_GATEWAY)) == (RTF_UP | RTF_GATEWAY);
+		const sockaddr *dst = sa[RTAX_DST], *gw = sa[RTAX_GATEWAY];
+		if (up && dst && gw && dst->sa_family == AF_INET && gw->sa_family == AF_INET &&
+		    reinterpret_cast<const sockaddr_in *>(dst)->sin_addr.s_addr == 0)
+		{
+			u32 g = ntohl(reinterpret_cast<const sockaddr_in *>(gw)->sin_addr.s_addr);
+			if (g) return g;
+		}
+		off += rtm->rtm_msglen;
+	}
+	return 0;
 #else
 	FILE *f = fopen("/proc/net/route", "r");
 	if (!f) return 0;

@@ -578,6 +578,13 @@ int main(int argc, char **argv)
 		printf("public %s  code %s\n", net_addr_str(np.public_addr()).c_str(), net_code(np.public_addr()).c_str());
 		return 0;
 	}
+	// ---- the router (R6.4: also on macOS, which has no /proc/net/route) ----
+	if (getenv("NATTEST_EXPECT_GATEWAY"))
+	{
+		u32 g = default_gateway();
+		printf("  default gateway: %u.%u.%u.%u\n", g >> 24, g >> 16 & 255, g >> 8 & 255, g & 255);
+		CHECK(g != 0 && (g >> 24) != 127, "router: the default gateway is found (where NAT-PMP and PCP are asked)");
+	}
 	// ---- codes ----
 	{
 		bool rt = true;
