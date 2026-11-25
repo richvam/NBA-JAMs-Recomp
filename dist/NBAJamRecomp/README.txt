@@ -5,7 +5,8 @@ Downloads and news: https://github.com/richvam/NBA-JAMs-Recomp/releases
 Original project:   https://github.com/PocketLucho/NBA-JAM---Recompiled
 If you want to support me, go to https://buymeacoffee.com/pocket_lucho
 
-Run NBAJamRecomp.exe (64-bit Windows 10/11, no installation). Everything works
+Run NBAJamRecomp.exe (64-bit Windows 10/11, no installation), NBAJamRecomp on
+Linux, or NBA JAM Recomp in Applications on a Mac. Everything works
 with a controller alone; the keyboard and the mouse work too. In the menus the
 directions move, A (Enter) chooses, B (Esc) goes back, the shoulder buttons
 (Q, E) change tab, and the bottom line says what each button does.
@@ -87,7 +88,7 @@ CONTROLS
   F6   scanline strength
   F7   shape: Original 4:3 -> Widescreen -> Stretch
   F8   around the 4:3 picture on a wide screen: black -> blurred picture -> overlays
-  F11  fullscreen (or Alt+Enter)
+  F11  fullscreen (or Alt+Enter; on a Mac also Ctrl+Cmd+F or Cmd+Return)
   F12  screenshot (PNG in the screenshots\ folder; Print Screen works too)
   P    pause without the menu        - / +  volume
   9    service button (credit)
@@ -210,6 +211,7 @@ WHERE YOUR FILES ARE KEPT
 This package is portable: the file portable.txt next to the program makes it keep
 settings, saves, screenshots, controller profiles, mods and roms in this folder.
 Without portable.txt the program uses your user folder instead
-(Windows: %APPDATA%\NBAJamRecomp, Linux: ~/.local/share/NBAJamRecomp), so it can be
+(Windows: %APPDATA%\NBAJamRecomp, Linux: ~/.local/share/NBAJamRecomp,
+Mac: ~/Library/Application Support/NBAJamRecomp), so it can be
 installed somewhere it cannot write. If it then finds an older setup next to the
 program it offers to move it. The About screen shows the folder in use.

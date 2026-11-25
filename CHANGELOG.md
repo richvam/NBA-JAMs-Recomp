@@ -12,6 +12,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 ## Unreleased
 
 ### Added
+- macOS download: a disk image with the universal app for Apple Silicon and Intel; drag it onto Applications (R6.3). The first start needs Open Anyway, as the read-me in the image says.
 - macOS app bundle with its icon, data in Application Support, Command-key shortcuts (Ctrl+Cmd+F, Cmd+Return, Cmd+V), built and started in CI (R6.2). Still no Mac download (R6.3).
 - A macOS build in CI: one universal program for Apple Silicon and Intel, tested on both (R6.1). There is no Mac download yet; the app bundle and disk image are R6.2 and R6.3.
 - A save state made on one computer loads on another (Windows, Linux x64 or ARM64) and plays on identically, checked by `tools/golden/state_cross.sh` (R5.3).
