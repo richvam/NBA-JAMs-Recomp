@@ -12,6 +12,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 ## Unreleased
 
 ### Added
+- On-screen touch controls in a game: stick, Shoot, Pass, Turbo, Start and Coin, shown on a touch screen while no controller is connected; size, opacity and places in Settings, Touch (R7.3).
 - Android: Add ROMs and Add a ROM folder open the system file picker and copy the choice into the ROM folder (R7.2); the data folder is visible over USB (Android/data/io.github.richvam.NBA_JAMs_Recomp/files).
 - Menus: a Back button in the corner when they are used by touch or mouse; on Android the back gesture is Back.
 - An Android build in CI: a debug APK for 64-bit ARM (and x86_64), started on an emulator, where it reaches the game picker (R7.1, not released yet).
