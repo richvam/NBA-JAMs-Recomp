@@ -27,7 +27,17 @@
 static int g_run = 0, g_fail = 0;
 #define CHECK(c, what) do { g_run++; if (c) printf("ok   %s\n", what); else { g_fail++; printf("FAIL %s\n", what); } } while (0)
 
+#ifdef __APPLE__
+// macOS (CI VMs especially) oversleeps short waits by several ms, which adds up at every
+// simulated router hop and spoils the timing checks; wait by yielding instead (R6.4)
+static void sleep_ms(int ms)
+{
+	auto end = std::chrono::steady_clock::now() + std::chrono::milliseconds(ms);
+	while (std::chrono::steady_clock::now() < end) std::this_thread::yield();
+}
+#else
 static void sleep_ms(int ms) { std::this_thread::sleep_for(std::chrono::milliseconds(ms)); }
+#endif
 static u32 ip4(int a, int b, int c, int d) { return u32(a) << 24 | u32(b) << 16 | u32(c) << 8 | u32(d); }
 
 static int udp_bind(u32 ip, u16 port)
