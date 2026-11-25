@@ -12,6 +12,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 ## Unreleased
 
 ### Added
+- macOS app bundle with its icon, data in Application Support, Command-key shortcuts (Ctrl+Cmd+F, Cmd+Return, Cmd+V), built and started in CI (R6.2). Still no Mac download (R6.3).
 - A macOS build in CI: one universal program for Apple Silicon and Intel, tested on both (R6.1). There is no Mac download yet; the app bundle and disk image are R6.2 and R6.3.
 - A save state made on one computer loads on another (Windows, Linux x64 or ARM64) and plays on identically, checked by `tools/golden/state_cross.sh` (R5.3).
 - Linux: a Flatpak (`...-linux-x86_64.flatpak`), built from source and tested in its sandbox in CI; ROMs go in its own folder (drag them onto the window).
@@ -162,6 +163,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - The README files describe the menus and the pause menu first; the F-keys are shortcuts.
 
 ### Fixed
+- The fullscreen setting follows the window when fullscreen is changed with the window's own control.
 - Lua mods give the same results on every computer (R5.4): `pairs()` visits keys in the same order in every run, `math` functions and `^` give the same bits on Windows, Linux and ARM64, and in an online game `math.random` draws the same numbers on every peer.
 - `make CXXFLAGS=...` no longer drops C++20 and the determinism flags (R5.2).
 - Builds now give the same game on every compiler and processor: no padding in save states, an exact timer division (it used `long double`), a written-out sound table (it used `pow`), and the same rules for integer overflow and floating point everywhere (`docs/DETERMINISM.md`).
