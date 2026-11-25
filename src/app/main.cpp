@@ -2766,7 +2766,12 @@ void app::choose_data_folder()
 #ifdef __ANDROID__
 	// R7.1: an app has no folder of its own beside the program (the working folder is the
 	// system root); everything lives in its private storage, so there is nothing to move
+	// (the shipped files are unpacked there). The user's own folder is the app's folder on
+	// shared storage, Android/data/<app id>/files, which a computer sees over USB, so ROMs can
+	// be copied in; the private folder only when shared storage is not there (removed card).
 	if (!user.empty()) exe = unpack_android_assets(user);
+	if (!(env && *env) && (SDL_AndroidGetExternalStorageState() & SDL_ANDROID_EXTERNAL_STORAGE_WRITE))
+		if (const char *ext = SDL_AndroidGetExternalStoragePath()) user = std::string(ext) + "/";
 #endif
 	m_paths = resolve_paths(exe, user, env);
 	if (legacy_setup_present(m_paths))

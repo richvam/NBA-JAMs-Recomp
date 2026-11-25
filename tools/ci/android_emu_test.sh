@@ -45,4 +45,9 @@ adb shell input keyevent KEYCODE_BACK; sleep 2; shot after-back-key
 tap 60 625; shot settings-2
 tap 942 960; shot after-back-button
 pid2=$(adb shell pidof $pkg | tr -d '\r'); echo "pid after the menus: ${pid2:-none}"; [ -n "$pid2" ]
+# R7.1: the data folder is on shared storage (seen over USB), with roms/ and the mods in it
+d=/sdcard/Android/data/$pkg/files
+adb shell ls -R $d | head -20
+adb shell ls $d/roms/README.txt
+[ "$(adb shell ls $d/mods | grep -c '\.lua')" -gt 10 ]
 echo "android start: PASS"
