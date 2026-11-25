@@ -145,6 +145,43 @@ jobs:
           path: dist-out/*
           if-no-files-found: error
 
+  android:
+    # R7.1: a debug APK (arm64-v8a, plus x86_64 for the emulator), started on an emulator
+    name: Android (APK, started on an emulator)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Fetch SDL2 source
+        run: tools/ci/fetch_sdl.sh android deps/sdl2src
+      - name: Build the APK
+        run: tools/ci/android_build.sh deps/sdl2src dist-android
+      - name: Enable KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+      - name: Install and start on an emulator (API 30, x86_64)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: tools/ci/android_emu_test.sh dist-android
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-android-output
+          path: |
+            dist-android/*.apk
+            android-shots/
+            android-logcat.txt
+
   macos:
     # R6.1: one universal program (Apple Silicon and Intel), built and tested on each processor
     name: macOS ${{ matrix.arch }} (universal build, ROM-free tests, launch)
