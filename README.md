@@ -1,7 +1,7 @@
 # NBA JAM Recomp
 
 Midway's NBA JAM arcade games, **rebuilt from their original source code**, in one program
-for Windows and Linux: a game picker, CRT shaders, remappable controllers, Lua mods and
+for Windows, Linux and macOS: a game picker, CRT shaders, remappable controllers, Lua mods and
 online play for up to four players.
 
 Created by **Pocket_lucho** with **Claude** (Anthropic).
@@ -35,6 +35,7 @@ Get the latest version from the **[Releases page](https://github.com/richvam/NBA
 | Linux and Steam Deck, 64-bit (x86-64), AppImage | `NBAJamRecomp-<version>-linux-x86_64.AppImage` (from the next release on) |
 | Linux, 64-bit (x86-64), Flatpak | `NBAJamRecomp-<version>-linux-x86_64.flatpak` (from the next release on) |
 | Linux, 64-bit (x86-64), portable | `NBAJamRecomp-<version>-linux-x64.tar.gz` |
+| macOS 11 or later, Apple Silicon and Intel, disk image | `NBAJamRecomp-<version>-macos-universal.dmg` (from the next release on) |
 | Linux on ARM 64-bit (Raspberry Pi 4/5 with a 64-bit system, ARM laptops), AppImage or portable | `NBAJamRecomp-<version>-linux-aarch64.AppImage`, `NBAJamRecomp-<version>-linux-arm64.tar.gz` (from the next release on) |
 
 The Windows installer needs no administrator rights: it installs for your user, adds a Start
@@ -51,11 +52,20 @@ your software centre) and runs in a sandbox that sees only its own folder:
 Drag ROMs onto its window, or use Open my ROM folder. Windows may show a SmartScreen warning
 because the program is not signed: choose "More info", then "Run anyway".
 
+On a Mac, open the disk image and drag NBA JAM Recomp onto Applications. It keeps your ROMs,
+settings and saves in `~/Library/Application Support/NBAJamRecomp` (drag ROMs onto its window,
+or use Open my ROM folder). The app is not signed with an Apple developer certificate, so the
+first time macOS says it cannot check it. On macOS 15 and later: open it once, click Done,
+then in System Settings, Privacy & Security, click **Open Anyway** next to "NBA JAM Recomp was
+blocked". On macOS 11 to 14: Control-click the app in Applications, choose Open, then Open.
+After that it opens normally. The disk image has these steps in a read-me too.
+
 **Checking a download.** The program and installer are not signed yet, so Windows cannot
 say who made them. Each release lists the SHA-256 checksum of every file in
 `SHA256SUMS.txt`. In PowerShell, `Get-FileHash .\NBAJamRecomp-<version>-windows-x64-setup.exe`
 prints the checksum of your copy; it must be the same as the one in that file. On Linux,
-`sha256sum -c SHA256SUMS.txt --ignore-missing` checks every file you downloaded.
+`sha256sum -c SHA256SUMS.txt --ignore-missing` checks every file you downloaded; on a Mac,
+`shasum -a 256 -c SHA256SUMS.txt --ignore-missing`.
 
 ## 2. Where the ROMs go
 
@@ -96,7 +106,8 @@ games (the host's address is typed on an on-screen keyboard), the pause menu.
 The downloads are **portable**: settings, saves, screenshots, controller profiles, mods and
 ROMs all stay in the unpacked folder, because it contains a file called `portable.txt`.
 Without that file the program keeps them in your user folder instead
-(`%APPDATA%\NBAJamRecomp` on Windows, `~/.local/share/NBAJamRecomp` on Linux). The About
+(`%APPDATA%\NBAJamRecomp` on Windows, `~/.local/share/NBAJamRecomp` on Linux,
+`~/Library/Application Support/NBAJamRecomp` on a Mac). The About
 screen shows which folder is in use.
 
 Updating: unpack the new version over the old folder, or into a new one and copy `roms`,
@@ -150,8 +161,8 @@ The keyboard also has shortcuts for what is in those menus:
 | F6 | scanline strength |
 | F7 | shape: Original 4:3, Widescreen, or Stretch (fills the window, distorts the picture). Widescreen is true widescreen on all five games: during play you see more of the court, as wide as the window, nothing stretched; fixed screens stay 4:3, and the players' names and turbo bars spread out to the sides. It needs the game's symbol file in `mods/sym` (included); without it F7 skips Widescreen. |
 | F8 | around the 4:3 picture on a wider screen: black, the picture blurred and dimmed, then each overlay in the `overlays` folder (see [Overlays](#overlays-and-borders)) |
-| F11 or Alt+Enter | fullscreen |
-| F12 or Print Screen | screenshot, saved in `screenshots` |
+| F11 or Alt+Enter (Mac: also Ctrl+Cmd+F or Cmd+Return) | fullscreen |
+| F12 or Print Screen | screenshot, saved in `screenshots` (on a Mac laptop the F keys may need fn) |
 | P | pause without the menu |
 | - and + | volume |
 | 9 | service credit |

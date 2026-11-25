@@ -96,11 +96,14 @@ def render(version, summary, sections, online, repo_files=None):
         "| Linux and Steam Deck, 64-bit, AppImage | `NBAJamRecomp-v%s-linux-x86_64.AppImage` |" % v,
         "| Linux, 64-bit (x86-64), Flatpak | `NBAJamRecomp-v%s-linux-x86_64.flatpak` |" % v,
         "| Linux, 64-bit (x86-64), portable | `NBAJamRecomp-v%s-linux-x64.tar.gz` |" % v,
+        "| macOS 11 or later (Apple Silicon and Intel), disk image | `NBAJamRecomp-v%s-macos-universal.dmg` |" % v,
         "| Linux on ARM 64-bit, AppImage | `NBAJamRecomp-v%s-linux-aarch64.AppImage` |" % v,
         "| Linux on ARM 64-bit, portable | `NBAJamRecomp-v%s-linux-arm64.tar.gz` |" % v,
         "",
         "`SHA256SUMS.txt` lists the checksum of each file. Windows may show a SmartScreen warning because "
-        "the program is not signed: choose \"More info\", then \"Run anyway\".",
+        "the program is not signed: choose \"More info\", then \"Run anyway\". On a Mac, drag the app onto "
+        "Applications; the first time, macOS cannot check it (not signed by Apple): on macOS 15 and later click Done, then "
+        "System Settings, Privacy & Security, Open Anyway; on macOS 11 to 14 Control-click the app, Open, Open.",
         "",
         "## First run",
         "1. Run the installer (no administrator rights needed), or unpack the archive anywhere.",

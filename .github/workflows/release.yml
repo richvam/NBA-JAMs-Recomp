@@ -123,7 +123,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: viewtest-screenshots-${{ matrix.arch }}
+          name: test-viewtest-screenshots-${{ matrix.arch }}
           path: viewtest-out/*.png
           if-no-files-found: error
 
@@ -233,7 +233,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: macos-${{ matrix.arch }}-test-output
+          name: test-macos-${{ matrix.arch }}-output
           path: |
             viewtest-out/*.png
             audit.log
@@ -241,12 +241,57 @@ jobs:
             shots/*.png
           if-no-files-found: ignore
 
+      - name: Disk image (R6.3)
+        if: matrix.arch == 'arm64'
+        run: tools/ci/mac_dmg.sh "dist-out/NBA JAM Recomp.app" "dist-out/NBAJamRecomp-${PKG_VERSION}-macos-universal.dmg"
+
       - uses: actions/upload-artifact@v4
         if: matrix.arch == 'arm64'
         with:
-          name: macos-app
-          path: dist-out/
+          name: macos-universal-dmg
+          path: dist-out/*.dmg
           if-no-files-found: error
+
+  macos-dmg:
+    # R6.3: the disk image on runners that did not build it, as a user would install it
+    name: macOS disk image on a clean ${{ matrix.arch }} runner (mount, drag to Applications, start)
+    needs: macos
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+          - arch: x86_64
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4      # only for the audit script
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: macos-universal-dmg
+          path: dmg
+
+      - name: Mount, copy to Applications, start
+        run: |
+          set -o pipefail
+          img=$(ls dmg/*.dmg); echo "$img"
+          mnt=$(hdiutil attach -nobrowse -readonly "$img" | tail -1 | awk -F'	' '{print $NF}')
+          echo "mounted at $mnt"; ls -la "$mnt"
+          [ -L "$mnt/Applications" ] && [ -f "$mnt/First start - read me.txt" ]
+          cp -R "$mnt/NBA JAM Recomp.app" /Applications/
+          hdiutil detach "$mnt"
+          app="/Applications/NBA JAM Recomp.app"
+          codesign --verify --strict --verbose=2 "$app"
+          lipo -archs "$app/Contents/MacOS/NBAJamRecomp"
+          "$app/Contents/MacOS/NBAJamRecomp" --version
+          rm -rf "$HOME/Library/Application Support/NBAJamRecomp"
+          SDL_AUDIODRIVER=dummy perl -e 'alarm shift; exec @ARGV' 600 "$app/Contents/MacOS/NBAJamRecomp" --pad-script tools/audit/a_noroms.pad > run.log 2>&1 || true
+          grep -aE "pad script|FAIL" run.log
+          ! grep -aq "FAIL" run.log
+          grep -aq "line 50: PASS" run.log
+          n=$(find "$HOME/Library/Application Support/NBAJamRecomp/mods" -name '*.lua' | wc -l); echo "$n shipped scripts copied"; [ "$n" -gt 10 ]
 
   windows:
     name: Windows x64 (cross-build, package)
@@ -415,7 +460,7 @@ jobs:
   release:
     name: Draft GitHub Release
     if: github.ref_type == 'tag'
-    needs: [repo-check, linux, windows, windows-installer, linux-appimage, flatpak]
+    needs: [repo-check, linux, windows, windows-installer, linux-appimage, flatpak, macos, macos-dmg]
     runs-on: ubuntu-22.04
     permissions:
       contents: write          # create the release
@@ -426,8 +471,13 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          path: assets
-          merge-multiple: true
+          path: artifacts
+
+      - name: Only the packages (test-* artifacts are test output, not for the release)
+        run: |
+          mkdir -p assets
+          for d in artifacts/*/; do case $(basename "$d") in test-*) ;; *) cp "$d"* assets/ ;; esac; done
+          ls -la assets
 
       - name: Release page from the changelog
         run: |
