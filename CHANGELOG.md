@@ -165,6 +165,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - The README files describe the menus and the pause menu first; the F-keys are shortcuts.
 
 ### Fixed
+- macOS CI: the network test (nattest) has the loopback addresses its simulated routers need.
 - macOS: NAT-PMP and PCP now find the router (the gateway was read from a file macOS does not have).
 - The fullscreen setting follows the window when fullscreen is changed with the window's own control.
 - Lua mods give the same results on every computer (R5.4): `pairs()` visits keys in the same order in every run, `math` functions and `^` give the same bits on Windows, Linux and ARM64, and in an online game `math.random` draws the same numbers on every peer.
