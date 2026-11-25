@@ -847,6 +847,9 @@ void app::poll_events()
 {
 	m_menu_up = m_menu_down = m_menu_left = m_menu_right = m_menu_ok = m_menu_back = m_menu_net = m_menu_clear = m_menu_guide = false;
 	if (m_scripted) script_tick();
+	// each screen change goes to the log (the Android tests follow the menus by it)
+	static screen logged = screen(-1);
+	if (m_screen != logged) { logged = m_screen; SDL_Log("screen: %s", screen_name()); }
 	SDL_Event e;
 	while (SDL_PollEvent(&e))
 	{
@@ -996,7 +999,7 @@ void app::poll_events()
 					if (k == SDLK_BACKSPACE) m_kbd.erase();
 					if (k == SDLK_v && (e.key.keysym.mod & (KMOD_CTRL | KMOD_GUI)))
 						if (char *t = SDL_GetClipboardText()) { for (char *c = t; *c; c++) if (!isspace((unsigned char)*c)) m_kbd.type(*c); SDL_free(t); }
-					if (k == SDLK_RETURN || k == SDLK_KP_ENTER) m_menu_ok = true;
+					if (k == SDLK_RETURN || k == SDLK_KP_ENTER || k == SDLK_SELECT) m_menu_ok = true;
 					if (k == SDLK_ESCAPE || k == SDLK_AC_BACK) m_menu_back = true;
 					break;
 				}
@@ -1004,7 +1007,7 @@ void app::poll_events()
 				if (k == SDLK_DOWN) m_menu_down = true;
 				if (k == SDLK_LEFT) m_menu_left = true;
 				if (k == SDLK_RIGHT) m_menu_right = true;
-				if (k == SDLK_RETURN && !alt && !cmd) m_menu_ok = true;
+				if ((k == SDLK_RETURN && !alt && !cmd) || k == SDLK_SELECT) m_menu_ok = true;   // SELECT: a TV remote's centre key
 				if (k == SDLK_ESCAPE || k == SDLK_AC_BACK) m_menu_back = true;   // AC_BACK: Android's back gesture and button
 				if (k == SDLK_n) m_menu_net = true;
 				if (k == SDLK_DELETE || k == SDLK_BACKSPACE) m_menu_clear = true;

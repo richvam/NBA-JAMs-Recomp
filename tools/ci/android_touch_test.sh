@@ -32,3 +32,17 @@ echo "android touch arrange: PASS"
 grep -a "network: local addresses" android-logcat.txt | tail -1
 grep -aq "network: local addresses: [0-9]" android-logcat.txt
 echo "android online: PASS"
+# R7.4: a TV remote (or a controller's d-pad in keyboard mode) works the menus: back to the
+# menu, where Settings still has the focus; the centre key opens it; Back leaves it; two rows
+# down is Controls
+adb logcat -c
+key BACK; sleep 2
+key DPAD_CENTER; sleep 2
+key BACK; sleep 2
+key DPAD_DOWN DPAD_DOWN DPAD_CENTER; sleep 2
+adb exec-out screencap -p > android-shots/remote-controls.png
+key BACK; sleep 2
+adb logcat -d > android-logcat-remote.txt || true
+grep -a "screen: " android-logcat-remote.txt | sed 's/.*screen: /screen: /'
+grep -a "screen: " android-logcat-remote.txt | sed 's/.*screen: //' | tr -d '\r' | tr '\n' ' ' | grep -q "menu settings menu controls menu"
+echo "android remote: PASS"
