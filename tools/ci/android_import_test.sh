@@ -52,6 +52,18 @@ if picker_open; then
   adb exec-out screencap -p > android-shots/picker-selected.png
   tap_text "Select" || tap_text "SELECT" || tap_text "Open" || tap_text "OPEN" || true
 fi
+sleep 2
+# a tap on the name may be ignored: try the file's icon, then the keyboard (arrows, Enter)
+if picker_open; then
+  echo "still in the picker: tapping the icon"
+  adb shell input tap 36 232; sleep 3
+fi
+if picker_open; then
+  echo "still in the picker: keyboard"
+  for k in DPAD_DOWN DPAD_DOWN DPAD_DOWN ENTER; do adb shell input keyevent KEYCODE_$k; sleep 1; done
+  sleep 2
+fi
+picker_open && echo "the picker is still open" || echo "back in the app"
 sleep 5
 adb exec-out screencap -p > android-shots/after-import.png
 # the app reports what it copied (adb's shell cannot list Android/data here)
