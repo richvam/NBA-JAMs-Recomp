@@ -20,8 +20,8 @@ adb exec-out screencap -p > android-shots/picker.png
 
 # tap the element whose text (or description) matches, from a uiautomator dump
 tap_text() {
-  adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 || return 1
-  adb pull /sdcard/ui.xml ui.xml >/dev/null 2>&1 || return 1
+  adb shell uiautomator dump /data/local/tmp/ui.xml >/dev/null 2>&1 || return 1
+  adb pull /data/local/tmp/ui.xml ui.xml >/dev/null 2>&1 || return 1
   local xy
   xy=$(python3 - "$1" <<'PY'
 import re, sys, xml.etree.ElementTree as ET
