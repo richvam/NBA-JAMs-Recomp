@@ -15,6 +15,7 @@
 	<key>LSApplicationCategoryType</key><string>public.app-category.games</string>
 	<key>LSMinimumSystemVersion</key><string>11.0</string>
 	<key>NSHighResolutionCapable</key><true/>
+	<key>NSLocalNetworkUsageDescription</key><string>NBA JAM Recomp looks for games hosted on your home network and talks to your router to open a port for online play.</string>
 	<key>NSSupportsAutomaticGraphicsSwitching</key><true/>
 	<key>GCSupportsControllerUserInteraction</key><true/>
 	<key>NSHumanReadableCopyright</key><string>BSD 3-Clause License. No game data is included.</string>
