@@ -178,6 +178,7 @@ struct lobby_state
 	bool receiving = false;              // joining: the game data is coming
 	// N2: this computer's connection code, as the internet sees it, and how it was found
 	std::string code, code_note;
+	std::string code_long;                // IPv4 and IPv6 together, when both exist: for when the short code does not connect
 	int inviting = 0;                    // host: players being let in by their code
 	bool no_answer = false;              // joining: no answer for a few seconds
 	std::string mods;                    // the Lua mods the host runs (roadmap 1.7), "none"

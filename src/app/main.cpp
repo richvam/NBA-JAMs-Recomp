@@ -532,7 +532,7 @@ private:
 	upnp_mapper m_upnp;                // N2.1: the router's port forward while hosting
 	u32 m_join_t = 0;                  // when joining started (the hint after a few seconds)
 	void net_traversal_start();
-	std::string net_code_note(std::string &code);
+	std::string net_code_note(std::string &code, std::string *longer = nullptr);
 	std::string note_v4(std::string &code, bool host);
 	net_addr m_code4;                         // the IPv4 part of the code last shown
 	bool m_editing = false;            // text is being typed: on the on-screen keyboard or a physical one (U4.1)
@@ -2389,9 +2389,10 @@ void app::net_traversal_start()
 }
 
 // this computer's code and a line on how it was found
-std::string app::net_code_note(std::string &code)
+std::string app::net_code_note(std::string &code, std::string *longer)
 {
 	code.clear();
+	if (longer) longer->clear();
 	const bool host = m_net.role() == netplay::mode::host;
 	// IPv6 has no router in the way of the address: this computer's own address and port
 	net_addr six{};
@@ -2399,10 +2400,15 @@ std::string app::net_code_note(std::string &code)
 	std::string note = note_v4(code, host);
 	if (six.v6)
 	{
-		const bool had4 = !code.empty();
-		code = net_code_pair(had4 ? m_code4 : net_addr{}, six);
-		note = had4 ? note + " The code ends with your IPv6 address: a player with IPv6 tries that first."
-		            : "Your code holds only your IPv6 address: players with IPv6 can join with it.";
+		// with both: the short IPv4 code is the one to type; the longer one (IPv4 and IPv6
+		// together) is offered under it for when the short one does not connect, as on mobile
+		// data, where the IPv4 address is often shared by many phones
+		if (code.empty())
+		{
+			code = net_code(six);
+			note = "Your code holds only your IPv6 address: players with IPv6 can join with it.";
+		}
+		else if (longer) *longer = net_code_pair(m_code4, six);
 	}
 	// N2.3: a player who cannot reach the host goes through a player already in
 	net_addr relay = host ? m_net.relay_candidate() : net_addr{};
@@ -2469,7 +2475,7 @@ void app::net_lobby_frame()
 		st.ping = m_net.ping_ms();
 		st.count = m_net.players();
 		st.receiving = m_net.stage() == netplay::phase::transfer;
-		st.code_note = net_code_note(st.code);
+		st.code_note = net_code_note(st.code, &st.code_long);
 		st.inviting = m_net.invites();
 		st.no_answer = !host && st.slot < 0 && SDL_GetTicks() - m_join_t > 5000;
 		if (host) m_net.set_lobby_mods(net_mod_names(g.id));

@@ -252,6 +252,17 @@ const std::vector<std::string> &pause_button_names()
 	return n;
 }
 
+// the longer code (IPv4 and IPv6), split in two so the whole of it shows
+static void add_long_code(std::vector<item> &i, const std::string &c)
+{
+	if (c.empty()) return;
+	i.push_back(label("If it fails, the longer code:"));
+	size_t cut = c.size() > 24 ? c.find('-', 18) : std::string::npos;
+	if (cut == std::string::npos) { i.push_back(label(" " + c)); return; }
+	i.push_back(label(" " + c.substr(0, cut + 1)));
+	i.push_back(label(" " + c.substr(cut + 1)));
+}
+
 // ---------------------------------------------------------------- Lua mods (U3.4)
 screen make_mods(const mods_state &st)
 {
@@ -547,6 +558,7 @@ void update_lobby(screen &s, const lobby_state &st)
 		i.push_back(header("TELL THE OTHERS"));
 		i.push_back(label("Code: " + (st.code.empty() ? std::string("none") : st.code)));
 		add_text(i, st.code_note, px, 3);
+		add_long_code(i, st.code_long);
 		add_text(i, "Same network: " + joined(st.local_ips, "not known") + ", port " + std::to_string(st.port), px, 3);
 	}
 	else
@@ -578,6 +590,7 @@ void update_lobby(screen &s, const lobby_state &st)
 		i.push_back(header("YOUR CODE"));
 		i.push_back(label(st.code.empty() ? std::string("none") : st.code));
 		add_text(i, st.code_note, px, 3);
+		add_long_code(i, st.code_long);
 		i.push_back(header("YOUR CONTROLS"));
 		add_text(i, "The player 1 keys, or the first controller.", px, 3);
 	}
