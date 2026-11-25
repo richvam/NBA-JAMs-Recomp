@@ -1194,6 +1194,8 @@ green on its processor.
 | R6.3 | Sonnet | Disk image with drag-to-Applications, built in CI. Ad-hoc signed so it runs on Apple Silicon. First-launch instructions for the unidentified-developer warning in the notes and README. | Image mounts and the app runs on a clean runner |
 | R6.4 | Opus | Online on macOS: local-network permission prompt handled, firewall prompt explained, R5.2 green, a Mac against Windows and Linux in `nettest`. | Cross-platform game, equal hashes |
 
+**Status (R6):** R6.1 is done. `tools/ci/fetch_sdl.sh mac` builds the pinned SDL2 2.30.9 from its checked source as one static library for arm64 and x86_64 (macOS 11 and later); `tools/ci/build_all.sh mac` builds the program for each processor with Clang and joins them with `lipo` into one universal file. No source changes were needed: the program already sizes the picture from the drawable's pixels (W1.4), so Retina works the same way, and the OpenGL 2.1 path with GLSL 110 is what macOS offers. The `macos` CI job runs on an Apple Silicon runner (`macos-15`) and an Intel runner (`macos-15-intel`): the universal file holds both, `--version`, luatest 79, pathtest 24, luadet (the same hash as Linux and Windows), uitest 186, arttest 33, viewtest --rects 635, --all 179 and --shaders 64 in a real window, and audit A (no ROMs, every setting) in the universal program, 4 of 4 on each processor. Not checked: a real Mac with a Retina screen, a game with ROMs on a Mac (no ROMs in CI), and the app bundle, Mac conventions and disk image (R6.2, R6.3). NAT-PMP finds no gateway on macOS (it reads `/proc/net/route`); R6.4.
+
 ## Phase R7: Android
 
 | ID | Model | Task | Check |
