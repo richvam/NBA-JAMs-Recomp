@@ -13,6 +13,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 
 ### Added
 - An Android build in CI: a debug APK for 64-bit ARM (and x86_64), started on an emulator, where it reaches the game picker (R7.1, not released yet).
+- macOS: the reason shown in the Local Network question, and online help for it and the firewall (R6.4).
 - macOS download: a disk image with the universal app for Apple Silicon and Intel; drag it onto Applications (R6.3). The first start needs Open Anyway, as the read-me in the image says.
 - macOS app bundle with its icon, data in Application Support, Command-key shortcuts (Ctrl+Cmd+F, Cmd+Return, Cmd+V), built and started in CI (R6.2). Still no Mac download (R6.3).
 - A macOS build in CI: one universal program for Apple Silicon and Intel, tested on both (R6.1). There is no Mac download yet; the app bundle and disk image are R6.2 and R6.3.
@@ -165,6 +166,8 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - The README files describe the menus and the pause menu first; the F-keys are shortcuts.
 
 ### Fixed
+- macOS CI: the network test (nattest) has the loopback addresses its simulated routers need.
+- macOS: NAT-PMP and PCP now find the router (the gateway was read from a file macOS does not have).
 - The fullscreen setting follows the window when fullscreen is changed with the window's own control.
 - Lua mods give the same results on every computer (R5.4): `pairs()` visits keys in the same order in every run, `math` functions and `^` give the same bits on Windows, Linux and ARM64, and in an online game `math.random` draws the same numbers on every peer.
 - `make CXXFLAGS=...` no longer drops C++20 and the determinism flags (R5.2).

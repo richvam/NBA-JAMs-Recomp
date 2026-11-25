@@ -27,7 +27,7 @@ case $target in
     lipo -info "$exe_out"
     # the tests, for this Mac's processor
     rm -rf build/mac; ln -s mac-$host build/mac
-    make -j"$j" BUILD=build/mac-$host CXX="clang++ -mmacosx-version-min=11.0" CC="clang -mmacosx-version-min=11.0" build/mac-$host/luatest build/mac-$host/luadet build/mac-$host/pathtest build/mac-$host/uitest build/mac-$host/arttest
+    make -j"$j" BUILD=build/mac-$host CXX="clang++ -mmacosx-version-min=11.0" CC="clang -mmacosx-version-min=11.0" build/mac-$host/luatest build/mac-$host/luadet build/mac-$host/pathtest build/mac-$host/uitest build/mac-$host/arttest build/mac-$host/nattest
     make BUILD=build/mac-$host CXX="clang++ -mmacosx-version-min=11.0" CC="clang -mmacosx-version-min=11.0" SDL2L="$sdl" build/mac-$host/viewtest
     ;;
   win)
@@ -38,5 +38,5 @@ case $target in
     make WIN_OUT=build/win-out SDL2W="$sdl" win
     cp build/win-out/NBAJamRecomp.exe "$exe_out"
     ;;
-  *) echo "usage: $0 <linux|win> <sdl_dir> <exe_out>" >&2; exit 2 ;;
+  *) echo "usage: $0 <linux|win|mac> <sdl_dir> <exe_out>" >&2; exit 2 ;;
 esac

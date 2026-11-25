@@ -224,6 +224,11 @@ jobs:
           build/mac/uitest viewtest-out | tee uitest.log; grep -q ", 0 failed" uitest.log
           build/mac/arttest viewtest-out | tee arttest.log; grep -q ", 0 failed" arttest.log
           build/mac/viewtest --rects | tee rects.log; grep -q ", 0 failed" rects.log
+          # R6.4: netplay over loopback (STUN, punching, UPnP/PCP/NAT-PMP against fakes) and the router found with sysctl
+          # nattest's fake routers use 127.0.1.x and 127.0.2.x; macOS only has 127.0.0.1 on lo0
+          for i in $(seq 1 20); do sudo ifconfig lo0 alias 127.0.1.$i up; done
+          for i in $(seq 1 5); do sudo ifconfig lo0 alias 127.0.2.$i up; done
+          NATTEST_EXPECT_GATEWAY=1 build/mac/nattest | tee nattest.log; grep -q ", 0 failed" nattest.log
 
       - name: Presenter on a test pattern (OpenGL in a window)
         run: |

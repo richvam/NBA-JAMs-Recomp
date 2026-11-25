@@ -32,6 +32,23 @@ Checked in CI on `macos-15` (Apple Silicon) and `macos-15-intel`, unless marked 
 | Retina | Done (the picture is sized in drawable pixels, W1.4; `NSHighResolutionCapable`) | no Retina screen in CI |
 | PlayStation and Xbox controllers, wired or over Bluetooth | Supported by SDL 2.30.9 (Game Controller framework and HIDAPI) | **not checked**: no controller in CI and no Mac here |
 
+## Online (R6.4)
+
+- **Local Network:** macOS 15 and later ask once whether the app may use the local network.
+  Allow it: the home-network search (a broadcast) and the router setup (UPnP, PCP, NAT-PMP)
+  need it. The question gives the reason from `NSLocalNetworkUsageDescription` in
+  `Info.plist`. If it was refused: System Settings, Privacy & Security, Local Network, turn
+  NBA JAM Recomp on.
+- **Firewall:** if the macOS firewall is on, the first hosted game may ask whether NBA JAM
+  Recomp may accept incoming connections. Choose Allow. The firewall is off by default.
+- **Router:** NAT-PMP and PCP are sent to the default gateway, which on a Mac is read from the
+  routing table with `sysctl` (Linux reads `/proc/net/route`, Windows `GetIpForwardTable`).
+  The `macos` CI job runs `nattest` (loopback netplay, STUN, punching, and UPnP, PCP and
+  NAT-PMP against fake routers) and checks that the gateway is found.
+- **Same results as Windows and Linux:** the Mac build gives the same Lua hash (luadet) as the
+  other builds. A game between a Mac and another computer has **not** been played: CI runners
+  cannot reach each other and have no ROMs.
+
 ## Not checked yet
 
 A real Mac: Retina, a controller over Bluetooth, Cmd keys pressed by hand, the green button,
