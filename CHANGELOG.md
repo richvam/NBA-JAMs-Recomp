@@ -161,6 +161,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - The README files describe the menus and the pause menu first; the F-keys are shortcuts.
 
 ### Fixed
+- Lua mods give the same results on every computer (R5.4): `pairs()` visits keys in the same order in every run, `math` functions and `^` give the same bits on Windows, Linux and ARM64, and in an online game `math.random` draws the same numbers on every peer.
 - `make CXXFLAGS=...` no longer drops C++20 and the determinism flags (R5.2).
 - Builds now give the same game on every compiler and processor: no padding in save states, an exact timer division (it used `long double`), a written-out sound table (it used `pow`), and the same rules for integer overflow and floating point everywhere (`docs/DETERMINISM.md`).
 - The build now always uses C++20, also when the environment sets its own compiler flags (as Flatpak builds do).
