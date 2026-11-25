@@ -37,8 +37,7 @@ ed(g, '''ndkBuild {
                 path 'jni/CMakeLists.txt'
             }''')
 ed(g, 'compileSdkVersion 34', 'compileSdkVersion 34\n    ndkVersion "%s"' % ndk)
-ed(p + '/app/src/main/AndroidManifest.xml', 'android:preferMinimalPostProcessing="true"', 'android:preferMinimalPostProcessing="true"
-            android:screenOrientation="sensorLandscape"')
+ed(p + '/app/src/main/AndroidManifest.xml', 'android:preferMinimalPostProcessing="true"', 'android:preferMinimalPostProcessing="true"\n            android:screenOrientation="sensorLandscape"')
 ed(p + '/app/src/main/res/values/strings.xml', '<string name="app_name">Game</string>', '<string name="app_name">NBA JAM Recomp</string>')
 PY
 ( cd "$p" && ./gradlew --no-daemon -q assembleDebug )
