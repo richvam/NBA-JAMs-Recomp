@@ -40,6 +40,13 @@ ed(g, 'compileSdkVersion 34', 'compileSdkVersion 34\n    ndkVersion "%s"' % ndk)
 ed(p + '/app/src/main/AndroidManifest.xml', 'android:preferMinimalPostProcessing="true"', 'android:preferMinimalPostProcessing="true"\n            android:screenOrientation="sensorLandscape"')
 ed(p + '/app/src/main/res/values/strings.xml', '<string name="app_name">Game</string>', '<string name="app_name">NBA JAM Recomp</string>')
 PY
+# the files the other packages ship next to the program, as APK assets with a list of them;
+# the app unpacks them on start (src/app/main.cpp, unpack_android_assets)
+a="$p/app/src/main/assets"; mkdir -p "$a/shipped/roms"
+cp -r dist/NBAJamRecomp/mods dist/NBAJamRecomp/overlays dist/NBAJamRecomp/README.txt "$a/shipped/"
+cp dist/NBAJamRecomp/roms/README.txt "$a/shipped/roms/"
+( cd "$a/shipped" && find . -type f | sed 's#^\./##' | sort ) > "$a/shipped.txt"
+echo "$(wc -l < "$a/shipped.txt") shipped files in the APK"
 ( cd "$p" && ./gradlew --no-daemon -q assembleDebug )
 mkdir -p "$out"
 cp "$p/app/build/outputs/apk/debug/app-debug.apk" "$out/NBAJamRecomp-$ver-android-debug.apk"

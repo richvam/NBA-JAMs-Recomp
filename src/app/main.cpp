@@ -2715,6 +2715,40 @@ bool app::pause_frame()
 // Where the user's files live (R1.4): next to the executable for a portable copy, the
 // per-user folder otherwise. An installed copy that finds an older setup next to the
 // executable offers to move it, once.
+#ifdef __ANDROID__
+// R7.1: the shipped scripts, overlays and read-me files are APK assets (listed in
+// shipped.txt). They are unpacked into <private storage>/shipped on every start, which then
+// plays the part of the program's folder: seed_data_dir copies the scripts the user does
+// not have, as on the desktop.
+static std::string unpack_android_assets(const std::string &user)
+{
+	std::string base = user + "shipped/";
+	SDL_RWops *list = SDL_RWFromFile("shipped.txt", "rb");
+	if (!list) return user;
+	std::string names(size_t(SDL_RWsize(list) > 0 ? SDL_RWsize(list) : 0), '\0');
+	if (!names.empty()) SDL_RWread(list, names.data(), 1, names.size());
+	SDL_RWclose(list);
+	std::error_code ec;
+	size_t pos = 0;
+	while (pos < names.size())
+	{
+		size_t e = names.find('\n', pos);
+		std::string n = names.substr(pos, (e == std::string::npos ? names.size() : e) - pos);
+		pos = e == std::string::npos ? names.size() : e + 1;
+		if (n.empty()) continue;
+		SDL_RWops *in = SDL_RWFromFile(("shipped/" + n).c_str(), "rb");
+		if (!in) continue;
+		std::vector<char> buf(size_t(SDL_RWsize(in) > 0 ? SDL_RWsize(in) : 0));
+		if (!buf.empty()) SDL_RWread(in, buf.data(), 1, buf.size());
+		SDL_RWclose(in);
+		std::filesystem::path dst = std::filesystem::u8path(base + n);
+		std::filesystem::create_directories(dst.parent_path(), ec);
+		std::ofstream(dst, std::ios::binary).write(buf.data(), std::streamsize(buf.size()));
+	}
+	return base;
+}
+#endif
+
 void app::choose_data_folder()
 {
 	char *bp = SDL_GetBasePath();
@@ -2728,7 +2762,7 @@ void app::choose_data_folder()
 #ifdef __ANDROID__
 	// R7.1: an app has no folder of its own beside the program (the working folder is the
 	// system root); everything lives in its private storage, so there is nothing to move
-	if (!user.empty()) exe = user;
+	if (!user.empty()) exe = unpack_android_assets(user);
 #endif
 	m_paths = resolve_paths(exe, user, env);
 	if (legacy_setup_present(m_paths))
@@ -2914,6 +2948,10 @@ int app::run()
 	// system at 150% or 200% display scaling (W1.4)
 	SDL_SetHint("SDL_WINDOWS_DPI_AWARENESS", "permonitorv2");
 	SDL_Log("%s", app_version_line().c_str());
+#ifdef __ANDROID__
+	// R7.1: the game is 4:3 and wider; SDL would otherwise follow the phone (portrait)
+	SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
+#endif
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) != 0)
 	{
 		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "NBA JAM Recomp", SDL_GetError(), nullptr);
