@@ -180,7 +180,7 @@ jobs:
           path: |
             dist-android/*.apk
             android-shots/
-            android-logcat.txt
+            android-logcat*.txt
 
   macos:
     # R6.1: one universal program (Apple Silicon and Intel), built and tested on each processor

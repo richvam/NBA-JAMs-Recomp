@@ -46,7 +46,7 @@ if ! tap_text $name; then
 fi
 sleep 5
 adb exec-out screencap -p > android-shots/after-import.png
-adb logcat -d | grep -E "Added [0-9]+ file" | tail -2 || true
-adb shell run-as $pkg ls -l $d/roms/
-adb shell run-as $pkg ls $d/roms/$name
+# the app reports what it copied (adb's shell cannot list Android/data here)
+adb logcat -d > android-logcat-import.txt || true
+grep -a "Added 1 file" android-logcat-import.txt
 echo "android import: PASS"
