@@ -202,7 +202,20 @@ screen make_settings(const settings_state &st)
 	            toggle(st_save_states, "Save states", st.save_states), label("Save and Load, three slots per game."), label("Offline games only.") };
 	prog.panels = { p };
 
-	s.tabs = { video, sound, game, prog };
+	tab touch;
+	touch.name = "Touch";
+	panel tc;
+	tc.title = "Touch controls in a game";
+	tc.r = { 0.1f, 0.0f, 0.8f, 0.9f };
+	tc.items = { picker(st_touch, "Touch controls", { "Automatic", "On", "Off" }, st.touch_mode),
+	             label("Automatic: shown on a touch screen"), label("while no controller is connected."),
+	             slider(st_touch_size, "Size", st.touch_size, 0.6f, 1.6f, 0.1f),
+	             slider(st_touch_opacity, "Opacity", st.touch_opacity, 0.2f, 1.0f, 0.1f),
+	             button(st_touch_arrange, "Arrange the controls"), label("Drag each one where your thumbs rest."),
+	             button(st_touch_reset, "Put them back where they were") };
+	touch.panels = { tc };
+
+	s.tabs = { video, sound, game, prog, touch };
 	s.fix_focus();
 	return s;
 }
@@ -217,6 +230,7 @@ void show_settings(screen &s, const settings_state &st)
 	tog(st_fullscreen, st.fullscreen); tog(st_tv, st.tv_margins); tog(st_free_play, st.free_play); tog(st_players, st.four_players); tog(st_clips, st.video_clips); tog(st_news, st.news); tog(st_save_states, st.save_states);
 	sli(st_scanlines, st.scanlines); sli(st_volume, st.volume); sli(st_menu_volume, st.menu_volume);
 	tog(st_menu_music, st.menu_music); tog(st_menu_sounds, st.menu_sounds);
+	pick(st_touch, st.touch_mode); sli(st_touch_size, st.touch_size); sli(st_touch_opacity, st.touch_opacity);
 }
 
 void read_settings(const screen &s, settings_state &st)
@@ -229,6 +243,7 @@ void read_settings(const screen &s, settings_state &st)
 	tog(st_fullscreen, st.fullscreen); tog(st_tv, st.tv_margins); tog(st_free_play, st.free_play); tog(st_players, st.four_players); tog(st_clips, st.video_clips); tog(st_news, st.news); tog(st_save_states, st.save_states);
 	sli(st_scanlines, st.scanlines); sli(st_volume, st.volume); sli(st_menu_volume, st.menu_volume);
 	tog(st_menu_music, st.menu_music); tog(st_menu_sounds, st.menu_sounds);
+	pick(st_touch, st.touch_mode); sli(st_touch_size, st.touch_size); sli(st_touch_opacity, st.touch_opacity);
 }
 
 const std::vector<std::string> &pause_button_names()

@@ -70,3 +70,4 @@ adb exec-out screencap -p > android-shots/after-import.png
 adb logcat -d > android-logcat-import.txt || true
 grep -a "Added 1 file" android-logcat-import.txt
 echo "android import: PASS"
+"$(dirname "$0")/android_touch_test.sh"

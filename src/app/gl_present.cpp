@@ -316,6 +316,7 @@ void gl_presenter::present(const uint32_t *px, int w, int h, int shader, const v
 	p_glEnableVertexAttribArray(1);
 	p_glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 	if (side_fill == 2 && m_bezel && m_ov_alpha) draw_overlay(ww, wh);     // a border with an opening goes over it
+	if (m_hud_on && m_hud) draw_hud(ww, wh);                               // the touch controls, over everything
 	if (m_timing && !m_timing_skip)
 	{
 		q_end(GL_TIME_ELAPSED);
@@ -350,6 +351,46 @@ void gl_presenter::draw_overlay(int ww, int wh)
 	p_glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 	if (m_ov_alpha) p_glDisable(GL_BLEND);
 	p_glBindTexture(GL_TEXTURE_2D, m_tex);
+}
+
+void gl_presenter::draw_hud(int ww, int wh)
+{
+	p_glViewport(0, 0, ww, wh);
+	p_glBindTexture(GL_TEXTURE_2D, m_hud);
+	p_glUseProgram(m_ovprog);
+	p_glUniform1i(p_glGetUniformLocation(m_ovprog, "u_tex"), 0);
+	p_glUniform1f(p_glGetUniformLocation(m_ovprog, "u_opt"), 1.0f);
+	static const float q[] = { -1, -1, 0, 1, 1, -1, 1, 1, -1, 1, 0, 0, 1, 1, 1, 0 };
+	p_glVertexAttribPointer(0, 2, GL_FLOAT, 0, 16, q);
+	p_glVertexAttribPointer(1, 2, GL_FLOAT, 0, 16, q + 2);
+	p_glEnableVertexAttribArray(0);
+	p_glEnableVertexAttribArray(1);
+	p_glEnable(GL_BLEND);
+	p_glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	p_glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+	p_glDisable(GL_BLEND);
+	p_glBindTexture(GL_TEXTURE_2D, m_tex);
+}
+
+void gl_presenter::set_hud(const uint8_t *rgba, int w, int h)
+{
+	if (!m_ok) return;
+	if (!rgba || w <= 0 || h <= 0)
+	{
+		if (m_hud) p_glDeleteTextures(1, &m_hud);
+		m_hud = 0;
+		return;
+	}
+	if (!m_hud) p_glGenTextures(1, &m_hud);
+	p_glActiveTexture(GL_TEXTURE0);
+	p_glBindTexture(GL_TEXTURE_2D, m_hud);
+	p_glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+	p_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	p_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	p_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	p_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	p_glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+	if (m_tex) p_glBindTexture(GL_TEXTURE_2D, m_tex);
 }
 
 void gl_presenter::set_overlay(const uint8_t *rgba, int w, int h)

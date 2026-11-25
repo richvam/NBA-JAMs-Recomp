@@ -16,6 +16,7 @@
 #include "ui/ui_sdl.h"
 #include "miniz.h"
 #include "gl_present.h"
+#include "touch_pad.h"
 #include "netplay.h"
 #include "nat.h"
 #include "mods.h"
@@ -119,6 +120,12 @@ struct config
 	int scale = 0;                // window size in multiples of 400x300; 0 = from the screen size
 	bool fullscreen = false;
 	bool tv_margins = false;      // the menus inside a TV's safe area: 5 % in from each edge (U7.2)
+#ifdef __ANDROID__
+	int touch_mode = 0;           // on-screen touch controls (R7.3): 0 automatic, 1 on, 2 off
+#else
+	int touch_mode = 2;
+#endif
+	std::string touch_layout;     // touch_layout::save(); empty = the default places
 	bool smooth = false;          // legacy (SDL renderer fallback)
 	bool scanlines = false;       // legacy
 	int shader = 3;               // 0 sharp, 1 smooth, 2 scanlines, 3 CRT, 4 CRT curved
@@ -181,6 +188,8 @@ static void save_config(const std::string &path, config &c)
 	  << "\n# view: original (4:3), widescreen (more of the court in play; all five games) or stretch (fills the window, distorted).\nview=" << view_shape_id(c.shape)
 	  << "\n# scaling: integer (whole multiples of the game's lines), fit (fills the height, crisp pixels), smooth (fills the height, filtered)\nscaling=" << view_scaling_id(c.scaling) << "\n# frame_time_log=1 writes how long each 120 game frames took to draw to frame_times.log in the data folder\nframe_time_log=" << c.frame_log << "\n# max_view_width: the widest the Widescreen view gets: widest (as wide as the window, up to 1000 columns), 16:9 or 21:9; a wider window gets sides\nmax_view_width=" << (c.max_wide == 1 ? "16:9" : c.max_wide == 2 ? "21:9" : "widest") << "\n# side_fill: around a 4:3 picture on a wider screen: black, blur (the picture, blurred and dimmed), overlay (an image from overlays/ in the data folder)\nside_fill=" << (c.side_fill == 1 ? "blur" : c.side_fill == 2 ? "overlay" : "black") << "\noverlay=" << c.overlay << "\n# overlay_opacity: 0.1 to 1, for overlays with a transparent opening\noverlay_opacity=" << c.overlay_opacity << "\nscanline_strength=" << c.scan_strength
 	  << "\n# opengl=0 uses the basic SDL renderer (no shaders)\nopengl=" << c.use_opengl
+	  << "\n\n[touch]\n# touch_controls: auto (on a touch screen while no controller is connected), on or off\ntouch_controls=" << (c.touch_mode == 1 ? "on" : c.touch_mode == 2 ? "off" : "auto")
+	  << "\n# where each control is (x,y as fractions of the window: stick, shoot, pass, turbo, start, coin), then size and opacity\ntouch_layout=" << c.touch_layout
 	  << "\n\n[audio]\nvolume=" << c.volume
 	  << "\n\n[network]\nport=" << c.net_port << "\ninput_delay=" << c.net_delay << "\nupnp=" << c.net_upnp << "\nstun=" << c.net_stun << "\nstun_server=" << c.net_stun_server << "\nlast_host=" << c.net_host << "\nrecent_hosts=" << [&] { std::string r; for (auto &h : c.net_recent) r += (r.empty() ? "" : ",") + h; return r; }()
 	  << "\n\n[dips]\nfree_play=" << c.dips.free_play << "\nfour_players=" << c.dips.four_players
@@ -225,6 +234,8 @@ static void load_config(const std::string &path, config &c)
 		else if (k == "scale") c.scale = std::clamp(atoi(v.c_str()), 0, 8);
 		else if (k == "fullscreen") c.fullscreen = atoi(v.c_str()) != 0;
 		else if (k == "tv_margins") c.tv_margins = atoi(v.c_str()) != 0;
+		else if (k == "touch_controls") c.touch_mode = v == "on" ? 1 : v == "off" ? 2 : 0;
+		else if (k == "touch_layout") c.touch_layout = v;
 		else if (k == "frame_time_log") c.frame_log = atoi(v.c_str()) != 0;
 		else if (k == "max_view_width") c.max_wide = v == "16:9" ? 1 : v == "21:9" ? 2 : 0;
 		else if (k == "smooth") c.smooth = atoi(v.c_str()) != 0;
@@ -331,7 +342,13 @@ private:
 	const char *screen_name() const;
 	void gallery_loop();
 	void rom_art_loop();
-	enum class screen { menu, settings, net_menu, net_lobby, game, about, mods, mod_detail, controls, news, pause };
+	enum class screen { menu, settings, net_menu, net_lobby, game, about, mods, mod_detail, controls, news, pause, touch_arrange };
+	// on-screen touch controls (R7.3)
+	touch_pad m_touch;
+	std::string m_hud_key;                 // what the touch layer last drawn showed
+	bool touch_shown() const;
+	void update_hud(bool show);
+	void touch_arrange_frame();
 
 	void open_window();
 	void present(const u32 *pixels, int w, int h, bool game);
@@ -770,6 +787,7 @@ void app::present(const u32 *pixels, int w, int h, bool game)
 	{
 		int ww, wh;
 		m_gl.drawable_size(ww, wh);
+		update_hud((game && m_screen == screen::game && touch_shown()) || m_screen == screen::touch_arrange);
 		if (!game)
 		{
 			m_gl.present(pixels, w, h, shader, view_for(ww, wh, w, h, game), m_cfg.scan_strength, true, m_cfg.side_fill);
@@ -843,6 +861,19 @@ void app::poll_events()
 						m_pads.erase(m_pads.begin() + long(i));
 						break;
 					}
+				break;
+			case SDL_FINGERDOWN:
+			case SDL_FINGERMOTION:
+			case SDL_FINGERUP:
+				if ((m_screen == screen::game && touch_shown()) || m_screen == screen::touch_arrange)
+				{
+					int ww = 1, wh = 1;
+					if (m_win) SDL_GetWindowSize(m_win, &ww, &wh);
+					long long id = (long long)e.tfinger.fingerId;
+					if (e.type == SDL_FINGERDOWN) m_touch.down(id, e.tfinger.x, e.tfinger.y, ww, wh);
+					else if (e.type == SDL_FINGERMOTION) m_touch.move(id, e.tfinger.x, e.tfinger.y, ww, wh);
+					else m_touch.up(id);
+				}
 				break;
 			case SDL_DROPBEGIN: m_dropped = 0; m_drop_err.clear(); break;
 #ifdef __ANDROID__
@@ -1031,6 +1062,7 @@ const char *app::screen_name() const
 	case screen::controls: return "controls";
 	case screen::news: return "news";
 	case screen::pause: return "pause";
+	case screen::touch_arrange: return "touch_arrange";
 	}
 	return "?";
 }
@@ -1148,10 +1180,67 @@ cabinet_inputs app::gather_inputs()
 		q.up |= on(A_UP); q.down |= on(A_DOWN); q.left |= on(A_LEFT); q.right |= on(A_RIGHT);
 		q.shoot |= on(A_SHOOT); q.pass |= on(A_PASS); q.turbo |= on(A_TURBO); q.start |= on(A_START); q.coin |= on(A_COIN);
 	}
+	if (touch_shown()) m_touch.apply(in.p[0]);           // the on-screen controls play as player 1 (R7.3)
 	in.test = m_test;
 	in.service = ks[SDL_SCANCODE_9] != 0;
 	add_pulses(in);
 	return in;
+}
+
+// Automatic: on a touch screen, while no controller is connected (a controller hides them,
+// and its prompts take over); On and Off as set
+bool app::touch_shown() const
+{
+	if (m_cfg.touch_mode == 2 || m_scripted) return false;
+	if (m_cfg.touch_mode == 1) return true;
+	return SDL_GetNumTouchDevices() > 0 && m_pads.empty();
+}
+
+void app::update_hud(bool show)
+{
+	m_gl.show_hud(show);
+	if (!show) { m_touch.clear(); return; }   // fingers held when the controls go away are let go
+	int ww, wh;
+	m_gl.drawable_size(ww, wh);
+	// drawn at most 1600 wide (it is stretched to the window, and soft edges hide that)
+	int w = std::min(ww, 1600), h = std::max(1, wh * w / std::max(1, ww));
+	cabinet_inputs::player p{};
+	m_touch.apply(p);
+	std::string key = m_touch.layout.save() + (m_touch.arranging ? "A" : "") + std::to_string(w) + "x" + std::to_string(h) +
+	                  char('0' + p.up) + char('0' + p.down) + char('0' + p.left) + char('0' + p.right) + char('0' + p.shoot) + char('0' + p.pass) +
+	                  char('0' + p.turbo) + char('0' + p.start) + char('0' + p.coin);
+	if (key == m_hud_key) return;
+	m_hud_key = key;
+	std::vector<uint8_t> rgba;
+	m_touch.render(rgba, w, h);
+	m_gl.set_hud(rgba.data(), w, h);
+}
+
+// Settings, Touch, Arrange: the controls over a plain screen; a finger drags them; Back keeps
+// the new places
+void app::touch_arrange_frame()
+{
+	ui_frame_begin();
+	ui::event ev;
+	while (ui_next(ev)) {}
+	if (m_menu_back)
+	{
+		m_touch.arranging = false;
+		m_touch.clear();
+		m_cfg.touch_layout = m_touch.layout.save();
+		save_config(m_cfgpath, m_cfg);
+		SDL_Log("touch layout saved: %s", m_cfg.touch_layout.c_str());
+		message("Touch controls placed", 2500);
+		m_screen = screen::settings;
+		return;
+	}
+	canvas cv(ui::screen::kW, ui::screen::kH);
+	cv.fill(0, 0, cv.w, cv.h, 0xff1a1a24);
+	cv.text(120, 136, "Drag the controls", 0xffffffff);
+	cv.text(96, 150, "where your thumbs rest.", 0xffffffff);
+	cv.text(88, 172, "Swipe back (or Esc) to keep them.", 0xffa0a0b0);
+	present(cv.px.data(), cv.w, cv.h, false);
+	SDL_Delay(8);
 }
 
 // Coins and service credits from the pause menu go in as short presses, one after the
@@ -1621,6 +1710,7 @@ ui::settings_state app::settings_now()
 	st.save_states = m_cfg.save_states;
 	st.pause_buttons = m_cfg.pause_buttons;
 	st.menu_music = m_cfg.menu_music; st.menu_sounds = m_cfg.menu_sounds; st.menu_volume = m_cfg.menu_volume;
+	st.touch_mode = m_cfg.touch_mode; st.touch_size = m_touch.layout.size; st.touch_opacity = m_touch.layout.opacity;
 	return st;
 }
 
@@ -1640,6 +1730,10 @@ void app::apply_settings(const ui::settings_state &want)
 	m_cfg.save_states = want.save_states;
 	m_cfg.menu_music = want.menu_music; m_cfg.menu_sounds = want.menu_sounds; m_cfg.menu_volume = std::clamp(want.menu_volume, 0.0f, 1.0f);
 	m_cfg.tv_margins = want.tv_margins;
+	m_cfg.touch_mode = std::clamp(want.touch_mode, 0, 2);
+	m_touch.layout.size = std::clamp(want.touch_size, touch_layout::kMinSize, touch_layout::kMaxSize);
+	m_touch.layout.opacity = std::clamp(want.touch_opacity, touch_layout::kMinOpacity, touch_layout::kMaxOpacity);
+	m_cfg.touch_layout = m_touch.layout.save();
 	if (want.fullscreen != had.fullscreen)
 	{
 		m_cfg.fullscreen = want.fullscreen;
@@ -1675,6 +1769,15 @@ void app::settings_frame()
 	{
 		ui::result r = m_settings.handle(ev);
 		if (r.what == ui::result::back) { save_config(m_cfgpath, m_cfg); m_screen = m_back_to; return; }
+		if (r.what == ui::result::activated && r.id == ui::st_touch_arrange) { m_touch.clear(); m_touch.arranging = true; m_screen = screen::touch_arrange; return; }
+		if (r.what == ui::result::activated && r.id == ui::st_touch_reset)
+		{
+			touch_layout d = touch_layout::defaults();
+			d.size = m_touch.layout.size; d.opacity = m_touch.layout.opacity;
+			m_touch.layout = d;
+			m_cfg.touch_layout = d.save();
+			message("Touch controls back in their places", 2500);
+		}
 		if (r.what == ui::result::changed)
 		{
 			ui::settings_state want = settings_now();
@@ -3030,6 +3133,7 @@ int app::run()
 	choose_data_folder();
 	m_cfgpath = path_join(m_base, "nbajam_recomp.ini");
 	load_config(m_cfgpath, m_cfg);
+	if (!m_cfg.touch_layout.empty()) m_touch.layout.load(m_cfg.touch_layout);   // the saved places (R7.3); defaults otherwise
 	if (m_cfg.news) m_news.start();          // background; the menu never waits for it
 	m_cat = std::make_unique<game_catalog>(m_base);
 	m_mods.scan(path_join(m_base, "mods"), path_join(m_base, "mods.ini"));
@@ -3085,6 +3189,7 @@ int app::run()
 			case screen::mods: mods_frame(); next = clock::now(); continue;
 			case screen::mod_detail: m_screen = screen::mods; continue;
 			case screen::controls: controls_frame(); next = clock::now(); continue;
+			case screen::touch_arrange: touch_arrange_frame(); next = clock::now(); continue;
 			case screen::game: case screen::pause: break;
 		}
 		bool ran = m_screen == screen::pause ? pause_frame() : game_frame();

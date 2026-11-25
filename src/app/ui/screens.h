@@ -77,9 +77,11 @@ struct settings_state
 	int pause_buttons = 0;               // what is held on a controller for the pause menu: index into pause_button_names()
 	bool menu_music = true, menu_sounds = true;   // in the menus, from the highlighted game's sound board (U6)
 	float menu_volume = 0.6f;
+	int touch_mode = 2;                  // on-screen touch controls (R7.3): 0 automatic, 1 on, 2 off
+	float touch_size = 1.0f, touch_opacity = 0.5f;
 };
 
-enum settings_id { st_shape = 1, st_scaling, st_shader, st_scanlines, st_sides, st_fullscreen, st_volume, st_free_play, st_players, st_country, st_clips, st_news, st_pause, st_menu_music, st_menu_sounds, st_menu_volume, st_tv, st_save_states, st_max_wide };
+enum settings_id { st_shape = 1, st_scaling, st_shader, st_scanlines, st_sides, st_fullscreen, st_volume, st_free_play, st_players, st_country, st_clips, st_news, st_pause, st_menu_music, st_menu_sounds, st_menu_volume, st_tv, st_save_states, st_max_wide, st_touch, st_touch_size, st_touch_opacity, st_touch_arrange, st_touch_reset };
 
 // The controller buttons held for half a second to open the pause menu (U5.1). There is no
 // "none": Esc and the Guide button always open it as well, so it can never be unbound.

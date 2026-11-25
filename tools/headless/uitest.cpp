@@ -714,7 +714,11 @@ int main(int argc, char **argv)
 		show_settings(se, ss);
 		read_settings(se, back2);
 		CHECK(back2.max_wide == 2, "settings: the widest view (W5.2) goes to its widget and back");
-		CHECK(se.tabs.size() == 4 && se.tabs[0].name == "Video" && se.tabs[1].name == "Sound" && se.tabs[2].name == "Game", "settings: Video, Sound, Game and Program tabs");
+		CHECK(se.tabs.size() == 5 && se.tabs[0].name == "Video" && se.tabs[1].name == "Sound" && se.tabs[2].name == "Game" && se.tabs[4].name == "Touch", "settings: Video, Sound, Game, Program and Touch tabs");
+		ss.touch_mode = 1; ss.touch_size = 1.3f; ss.touch_opacity = 0.7f;
+		show_settings(se, ss);
+		read_settings(se, back2);
+		CHECK(back2.touch_mode == 1 && std::fabs(back2.touch_size - 1.3f) < 0.01f && std::fabs(back2.touch_opacity - 0.7f) < 0.01f, "settings: touch controls (R7.3) go to their widgets and back");
 
 		// pictures
 		theme th2;
