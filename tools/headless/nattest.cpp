@@ -782,11 +782,14 @@ int main(int argc, char **argv)
 		CHECK(a.ping_h >= 48 && a.ping_h <= 75 && a.ping_c >= 48 && a.ping_c <= 75 && a.direct,
 		      "report: both see a ping of the two routers' delays (20 + 30 ms) and a direct path");
 		report_result b = report(full_cone, restricted, 10, 10, 30);
+		// GitHub's Apple Silicon runner adds 5 to 7 ms of jitter of its own, with or without the
+		// spread, so there the comparison means nothing: NATTEST_LOOSE_TIMING=1 skips it
+		const bool loose = getenv("NATTEST_LOOSE_TIMING") != nullptr;
 		printf("  full cone host, restricted player, 10 + 10 ms, 0..30 ms spread: host %s, player %s, ping %d ms, jitter %d ms (and %d without spread)\n",
 		       netplay::conn_name(b.host), netplay::conn_name(b.player), b.ping_c, b.jit_c, a.jit_c);
-		CHECK(b.host == ct::moderate && b.player == ct::moderate && b.jit_c >= 4 && b.jit_c <= 30 && a.jit_c <= 6,
+		CHECK(b.host == ct::moderate && b.player == ct::moderate && (loose || (b.jit_c >= 4 && a.jit_c <= 4)) && b.jit_c <= 30,
 		      "report: cone routers are moderate; jitter follows the spread the router adds (about 10 ms for 0..30) and is near 0 without");
-		// "near 0": up to 6 ms, the scheduling noise of a busy CI machine (5 ms on GitHub's Apple Silicon runner)
+		if (loose) printf("  (NATTEST_LOOSE_TIMING: the jitter is printed, not compared; this machine's own noise is as large)\n");
 	}
 	// ---- mesh (N2.5) ----
 	{
