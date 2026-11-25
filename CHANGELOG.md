@@ -170,7 +170,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - The README files describe the menus and the pause menu first; the F-keys are shortcuts.
 
 ### Fixed
-* Android: a TV remote's centre key now chooses in the menus.
+- Android: a TV remote's centre key now chooses in the menus.
 - Android: online play could not make a socket (the app did not ask for network access); the home-network search keeps Wi-Fi from dropping broadcasts, and NAT-PMP and PCP find the router.
 - macOS CI: the network test (nattest) has the loopback addresses its simulated routers need.
 - macOS: NAT-PMP and PCP now find the router (the gateway was read from a file macOS does not have).
