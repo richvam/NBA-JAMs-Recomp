@@ -33,9 +33,11 @@ for n in ET.parse('ui.xml').iter('node'):
         break
 PY
 )
-  [ -n "$xy" ] || return 1
+  [ -n "$xy" ] || { echo "not on screen: $1"; return 1; }
+  echo "tap '$1' at $xy"
   adb shell input tap $xy
 }
+picker_open() { adb shell dumpsys window | grep -i mCurrentFocus | grep -q documentsui; }
 
 grep -q documentsui <(adb shell dumpsys window | grep -i mCurrentFocus) || { echo "the file picker did not open"; adb shell dumpsys window | grep -i mCurrentFocus; exit 1; }
 # the file may be under Recent; if not, open Downloads from the side list
@@ -43,6 +45,12 @@ if ! tap_text $name; then
   tap_text "Show roots" || true; sleep 2
   tap_text "Downloads" || tap_text "Download"; sleep 3
   tap_text $name
+fi
+sleep 3
+# with several files allowed, a tap may only select the file: then confirm with Select
+if picker_open; then
+  adb exec-out screencap -p > android-shots/picker-selected.png
+  tap_text "Select" || tap_text "SELECT" || tap_text "Open" || tap_text "OPEN" || true
 fi
 sleep 5
 adb exec-out screencap -p > android-shots/after-import.png
