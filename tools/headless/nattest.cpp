@@ -779,17 +779,19 @@ int main(int argc, char **argv)
 		       netplay::conn_name(a.host), netplay::conn_name(a.player), a.ping_h, a.ping_c, a.jit_c);
 		CHECK(a.host == ct::moderate && a.player == ct::strict && a.host_fw == ct::open,
 		      "report: a restricted router is moderate, a symmetric one strict, a forwarded port open");
-		CHECK(a.ping_h >= 48 && a.ping_h <= 75 && a.ping_c >= 48 && a.ping_c <= 75 && a.direct,
+		// GitHub's Apple Silicon runner adds delay and jitter of its own (5 to 7 ms of jitter with or
+		// without the spread, pings past 75 ms at times), so there the timing means little:
+		// NATTEST_LOOSE_TIMING=1 keeps only a wide bound on the ping and skips the jitter comparison
+		const bool loose = getenv("NATTEST_LOOSE_TIMING") != nullptr;
+		const int ping_max = loose ? 150 : 75;
+		CHECK(a.ping_h >= 48 && a.ping_h <= ping_max && a.ping_c >= 48 && a.ping_c <= ping_max && a.direct,
 		      "report: both see a ping of the two routers' delays (20 + 30 ms) and a direct path");
 		report_result b = report(full_cone, restricted, 10, 10, 30);
-		// GitHub's Apple Silicon runner adds 5 to 7 ms of jitter of its own, with or without the
-		// spread, so there the comparison means nothing: NATTEST_LOOSE_TIMING=1 skips it
-		const bool loose = getenv("NATTEST_LOOSE_TIMING") != nullptr;
 		printf("  full cone host, restricted player, 10 + 10 ms, 0..30 ms spread: host %s, player %s, ping %d ms, jitter %d ms (and %d without spread)\n",
 		       netplay::conn_name(b.host), netplay::conn_name(b.player), b.ping_c, b.jit_c, a.jit_c);
 		CHECK(b.host == ct::moderate && b.player == ct::moderate && (loose || (b.jit_c >= 4 && a.jit_c <= 4)) && b.jit_c <= 30,
 		      "report: cone routers are moderate; jitter follows the spread the router adds (about 10 ms for 0..30) and is near 0 without");
-		if (loose) printf("  (NATTEST_LOOSE_TIMING: the jitter is printed, not compared; this machine's own noise is as large)\n");
+		if (loose) printf("  (NATTEST_LOOSE_TIMING: the jitter is printed, not compared, and pings up to 150 ms pass; this machine's own noise is as large)\n");
 	}
 	// ---- mesh (N2.5) ----
 	{
