@@ -76,7 +76,9 @@ fi
 if [ -n "$ks" ]; then
   ( cd "$p" && ./gradlew --no-daemon -q assembleRelease )
   bt=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
-  un=$p/app/build/outputs/apk/release/app-release-unsigned.apk
+  ls -la "$p/app/build/outputs/apk/release/"
+  un=$(ls "$p"/app/build/outputs/apk/release/*.apk | head -1)
+  echo "release build: $un, build tools $bt"
   "$bt/zipalign" -f -p 4 "$un" "$p/aligned.apk"
   apk="$out/NBAJamRecomp-$name-android$suffix.apk"
   "$bt/apksigner" sign --ks "$ks" --ks-pass env:ANDROID_KEYSTORE_PASSWORD --ks-key-alias "$ANDROID_KEY_ALIAS"     --key-pass env:ANDROID_KEY_PASSWORD --out "$apk" "$p/aligned.apk"
