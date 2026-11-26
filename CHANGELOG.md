@@ -199,6 +199,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - With a controller in use, moving or resizing the window under a still mouse pointer no longer takes the focus away from the controller.
 
 ### Online
+- An online game goes on when a player's network changes mid-game (a phone moving from Wi-Fi to mobile data), when the other side's router lets the new address in.
 - Widescreen and 4:3 players can play each other online: each player's choice only changes
   their own picture, never the game.
 - Hosting opens the router's port by PCP or NAT-PMP too, when the router has no UPnP.

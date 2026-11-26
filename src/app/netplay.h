@@ -136,6 +136,9 @@ public:
 	net_addr relay_candidate() const;             // host: the member to name, or none (ip and port 0)
 	bool relayed() const { return m_relay_on; }  // player: talking to the host through a member
 	u32 relayed_bytes() const { return m_relayed; }   // member: bytes forwarded for others
+	// R7.7: how often a player (or the host) was found again at a new address, as when a
+	// phone moves from Wi-Fi to mobile data during a game
+	int moves() const { return m_moves; }
 	u32 relay_after_ms = 3000;
 
 	// --- mesh for four players (roadmap N2.5) ---
@@ -231,6 +234,12 @@ private:
 	bool m_got_start = false;
 	std::string m_game_id;
 	u32 m_fp = 0;
+	// R7.7: the session key (the host makes it, a player gets it in the welcome). A side that
+	// has heard nothing for MOVED_AFTER_MS sends 'R' (its seat and the key) from wherever it
+	// is now; the other side takes the new address when the key matches.
+	u32 m_key = 0, m_moved_t = 0;
+	int m_moves = 0;
+	void send_moved(const net_addr &to, int slot, u32 now);
 	dip_settings m_dips;
 	std::vector<u8> m_nv;          // the NVRAM, then the mods description (m_nvlen bytes of NVRAM)
 	size_t m_nvlen = 0;

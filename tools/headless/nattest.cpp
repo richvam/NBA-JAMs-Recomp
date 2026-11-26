@@ -79,6 +79,7 @@ struct nat_box
 	u32 rng = 99;
 	struct held { u32 due; int fd; net_addr to; std::vector<u8> d; };
 	std::vector<held> queue;
+	bool down = false;                // R7.7: the network is gone (a phone left this Wi-Fi): nothing passes
 	nat_box(nat_kind k, u32 public_ip) : kind(k), pub(public_ip) { inside = udp_bind(ip4(127, 0, 0, 1), 0); }
 	~nat_box() { close(inside); for (auto &m : maps) close(m.fd); }
 	net_addr inside_addr() const { return local_of(inside); }
@@ -95,6 +96,12 @@ struct nat_box
 		u8 b[4096];
 		net_addr from;
 		int n;
+		if (down)
+		{
+			while (recv_from(inside, from, b, sizeof b) >= 0) {}
+			for (auto &m : maps) while (recv_from(m.fd, from, b, sizeof b) >= 0) {}
+			return;
+		}
 		while ((n = recv_from(inside, from, b, sizeof b)) >= 6)
 		{
 			net_addr to{ u32(b[0]) << 24 | u32(b[1]) << 16 | u32(b[2]) << 8 | b[3], u16(b[4] << 8 | b[5]) };
@@ -297,6 +304,66 @@ static relay_result relay_play()
 		close(raw);
 	}
 	host.stop(); rl.stop(); cl.stop();
+	return res;
+}
+
+// R7.7: a game in which one side moves to another network (a phone from Wi-Fi to mobile data):
+// mid-game its packets start leaving through another router with another public address.
+// who = 1: the player moves (the host's router lets anyone in: full cone); who = 0: the host moves.
+struct move_result { bool joined = false, played = false; int moves = 0; };
+static move_result move_play(int who)
+{
+	move_result res;
+	stun_server st;
+	nat_box hn(who == 1 ? full_cone : restricted, ip4(127, 0, 1, 1)), cn(who == 1 ? restricted : full_cone, ip4(127, 0, 1, 2));
+	nat_box moved(restricted, ip4(127, 0, 1, 4));
+	netplay host, cl;
+	std::string err;
+	if (!host.host(0, err)) return res;
+	host.socket().via = hn.inside_addr();
+	auto pump = [&] { st.pump(); hn.pump(); cn.pump(); moved.pump(); host.poll(); if (cl.active()) cl.poll(); };
+	auto until = [&](auto done, int ms) { auto t0 = net_now_ms(); while (!done() && net_now_ms() - t0 < u32(ms)) { pump(); sleep_ms(2); } return done(); };
+	host.stun_begin(st.addr());
+	if (!until([&] { return host.stun_status() == netplay::stun_state::found; }, 4000)) return res;
+	if (!cl.join(net_code(host.public_addr()), 0, err)) return res;
+	cl.socket().via = cn.inside_addr();
+	cl.stun_begin(st.addr());
+	if (!until([&] { return cl.stun_status() == netplay::stun_state::found; }, 4000)) return res;
+	host.invite(cl.public_addr());
+	res.joined = until([&] { return cl.active() && cl.local_slot() == 1 && host.players() == 2; }, 6000);
+	if (!res.joined) return res;
+	host.host_start("movetest", 1, dip_settings(), std::vector<u8>(64, 7), 4);
+	bool ready = until([&] { return cl.start_received(); }, 8000);
+	cl.client_ready(true, "");
+	ready = ready && until([&] { return host.all_ready(); }, 8000);
+	if (!ready) return res;
+	netplay *all[2] = { &host, &cl };
+	cabinet_inputs::player in{};
+	bool switched = false;
+	auto t0 = net_now_ms();
+	while (net_now_ms() - t0 < 30000)
+	{
+		pump();
+		bool done = true;
+		for (netplay *n : all)
+		{
+			if (n->frame() < 600 && n->can_run()) { n->frame_inputs(in); n->frame_done(n->frame() * 2654435761u); }
+			done = done && n->frame() >= 600;
+		}
+		if (!switched && host.frame() >= 200 && cl.frame() >= 200)
+		{
+			(who == 1 ? cl : host).socket().via = moved.inside_addr();   // the new network
+			(who == 1 ? cn : hn).down = true;                            // and the old one is gone
+			switched = true;
+		}
+		if (done || !host.active() || !cl.active()) break;
+		sleep_ms(1);
+	}
+	res.moves = host.moves() + cl.moves();
+	res.played = switched && host.active() && cl.active() && host.frame() >= 600 && cl.frame() >= 600 && !host.desynced() && !cl.desynced();
+	printf("  %s moved at frame 200: %s, frames %u / %u, found again %d time(s)\n", who == 1 ? "the player" : "the host",
+	       res.played ? "the game went on" : "the game stopped", host.frame(), cl.frame(), res.moves);
+	host.stop(); cl.stop();
 	return res;
 }
 
@@ -793,6 +860,12 @@ int main(int argc, char **argv)
 		      "report: cone routers are moderate; jitter follows the spread the router adds (about 10 ms for 0..30) and is near 0 without");
 		if (loose) printf("  (NATTEST_LOOSE_TIMING: the jitter is printed, not compared, and pings up to 150 ms pass; this machine's own noise is as large)\n");
 	}
+	// ---- a network change mid-game (R7.7) ----
+	{
+		move_result p = move_play(1), h = move_play(0);
+		CHECK(p.joined && p.played && p.moves >= 1, "network change: a player whose address changes mid-game is found again and the game goes on, in step");
+		CHECK(h.joined && h.played && h.moves >= 1, "network change: so is a host whose address changes");
+	}
 	// ---- mesh (N2.5) ----
 	{
 		// joining four peers through the simulated routers can miss in a busy WSL; only a
@@ -801,7 +874,10 @@ int main(int argc, char **argv)
 		mesh_result hub = run(false), mesh = run(true);
 		printf("  four peers, 40/5/40/5 ms: through the host %.0f ms per 4 frames, with the mesh %.0f ms (%u frames merged by players)\n", hub.ms_per4, mesh.ms_per4, mesh.mesh_frames);
 		CHECK(hub.ok && mesh.ok, "mesh: four players play 300 frames of lockstep without a desync, with and without the mesh");
-		CHECK(mesh.ms_per4 >= 30 && mesh.ms_per4 <= 60 && hub.ms_per4 >= 70 && mesh.mesh_frames > 0,
+		// the Apple Silicon runner's own delay (NATTEST_LOOSE_TIMING) can push the mesh past 60 ms:
+		// there it only has to be clearly faster than through the host
+		const bool loose_mesh = getenv("NATTEST_LOOSE_TIMING") != nullptr;
+		CHECK(mesh.ms_per4 >= 30 && (loose_mesh ? mesh.ms_per4 < hub.ms_per4 - 15 : mesh.ms_per4 <= 60) && hub.ms_per4 >= 70 && mesh.mesh_frames > 0,
 		      "mesh: the delay follows the worst direct pair (40 ms), not the sum through the host (80 ms)");
 	}
 	// ---- peer relay (N2.3) ----

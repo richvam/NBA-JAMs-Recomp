@@ -1,5 +1,6 @@
 // netplay.cpp - see netplay.h
 #include "netplay.h"
+#include <random>
 #include "nat.h"
 
 #include <algorithm>
@@ -33,6 +34,7 @@ static constexpr u8 MAGIC = 0x4a;
 static constexpr u16 DEFAULT_PORT = 7845;   // the home-network search also asks here
 static constexpr u16 VERSION = 2;      // online protocol version, independent of the program version (version.h)
 static constexpr u32 TIMEOUT_MS = 10000;
+static constexpr u32 MOVED_AFTER_MS = 600;     // R7.7: silence before "here I am now" is sent
 static constexpr int CHUNK = 1024;
 
 u32 net_now_ms()
@@ -354,11 +356,32 @@ bool netplay::host(u16 port, std::string &err)
 	m_phase = phase::lobby;
 	m_slot = 0;
 	m_nplayers = 1;
+	m_moves = 0;
+	m_moved_t = 0;
+	{
+		std::random_device rd;
+		m_key = rd() ^ (net_now_ms() * 2654435761u);
+		if (!m_key) m_key = 1;
+	}
 	return true;
+}
+
+void netplay::send_moved(const net_addr &to, int slot, u32 now)
+{
+	if (!m_key || slot < 0 || to.port == 0) return;
+	std::vector<u8> b{ u8('R'), MAGIC };
+	for (int s = 0; s < 32; s += 8) b.push_back(u8(now >> s));        // little-endian, as wbuf
+	for (int i = 0; i < 4; i++) b.push_back(0);
+	b.push_back(u8(slot));
+	for (int s = 0; s < 32; s += 8) b.push_back(u8(m_key >> s));
+	send_raw(to, b);
 }
 
 bool netplay::join(const std::string &host, u16 port, std::string &err)
 {
+	m_key = 0;
+	m_moves = 0;
+	m_moved_t = 0;
 	stop();
 	net_addr a, a6, relay;
 	if (!net_code_parse(host, a, &a6, &relay) && !udp_socket::resolve(host, port, a, err)) return false;
@@ -803,6 +826,26 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 	peer *pp = nullptr;
 	for (auto &q : m_peers) if (q.addr == from) pp = &q;
 
+	if (type == 'R')
+	{
+		// R7.7: "here I am now", with the seat and the session key
+		int slot = r.u8_();
+		u32 key = r.u32_();
+		if (!r.ok || !m_key || key != m_key) return;
+		peer *who = nullptr;
+		if (m_mode == mode::host) { for (auto &q : m_peers) if (q.slot == slot && slot > 0) who = &q; }
+		else if (slot == 0 && !m_peers.empty() && m_slot >= 0) who = &m_peers[0];
+		if (!who) return;
+		if (!(who->addr == from))
+		{
+			who->addr = from;
+			m_moves++;
+			if (m_mode == mode::client) m_target6 = {};
+			if (m_mode == mode::host) m_roster_t = 0;   // tell the others where it is now
+		}
+		who->last_seen = now;
+		return;
+	}
 	if (m_mode == mode::host)
 	{
 		if (type == 'q')
@@ -840,6 +883,7 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 			wbuf w;
 			w.u8_('w'); w.u8_(MAGIC); w.u32_(now); w.u32_(tsend);
 			w.u8_(u8(pp->slot)); w.u8_(u8(m_nplayers));
+			w.u32_(m_key);                     // R7.7: to be found again after a network change
 			send_raw(from, w.b);
 		}
 		if (!pp) return;
@@ -965,7 +1009,7 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 		}
 		case 'r': stop(("rejected: " + r.str()).c_str()); return;
 		case 'b': stop(m_phase == phase::running ? "the host has closed the game" : "the host has cancelled"); return;
-		case 'w': m_slot = r.u8_(); m_nplayers = r.u8_(); break;
+		case 'w': { m_slot = r.u8_(); m_nplayers = r.u8_(); u32 k = r.u32_(); if (r.ok) m_key = k; break; }
 		case 'l': { m_nplayers = r.u8_(); m_slot = r.u8_(); std::string mods = r.str(); if (r.ok) m_lobby_mods = mods; break; }
 		case 's':
 		{
@@ -1030,6 +1074,13 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 // ---------------------------------------------------------------------------
 void netplay::tick_host(u32 now)
 {
+	// R7.7: a player silent for a moment: perhaps the host moved; say where it is now
+	if (m_key && m_phase != phase::lobby && now - m_moved_t >= 250)
+	{
+		bool any = false;
+		for (auto &q : m_peers) if (now - q.last_seen > MOVED_AFTER_MS) { send_moved(q.addr, 0, now); any = true; }
+		if (any) m_moved_t = now;
+	}
 	for (size_t i = 0; i < m_peers.size(); i++)
 		if (now - m_peers[i].last_seen > TIMEOUT_MS)
 		{
@@ -1134,6 +1185,13 @@ void netplay::tick_client(u32 now)
 	{
 		stop(m_slot < 0 ? "no answer from the host (address, port, or a router that lets nothing in?)" : "lost the connection with the host");
 		return;
+	}
+	// R7.7: nothing from the host for a moment: we may have moved (a phone's network changed);
+	// say where we are now, a few times a second, until the host is heard again
+	if (m_slot > 0 && m_key && now - h.last_seen > MOVED_AFTER_MS && now - m_moved_t >= 250)
+	{
+		m_moved_t = now;
+		send_moved(h.addr, m_slot, now);
 	}
 	bool fast = now - m_last_tick >= 8;
 	bool slow = now - m_hello_t >= 100;
