@@ -48,6 +48,7 @@ grep -a "screen: " android-logcat-remote.txt | sed 's/.*screen: //' | tr -d '\r'
 echo "android remote: PASS"
 # R7.5: put away with Home and brought back: the app logs both and is still the same process
 # (a game kept and resumed is checked with ROMs by tools/audit/h_lifecycle.pad)
+pkg=io.github.richvam.NBA_JAMs_Recomp
 pid1=$(adb shell pidof $pkg | tr -d '\r')
 adb logcat -c
 key HOME; sleep 3
