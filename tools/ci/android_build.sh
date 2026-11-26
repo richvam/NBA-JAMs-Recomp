@@ -79,10 +79,11 @@ if [ -n "$ks" ]; then
   ls -la "$p/app/build/outputs/apk/release/"
   un=$(ls "$p"/app/build/outputs/apk/release/*.apk | head -1)
   echo "release build: $un, build tools $bt"
-  "$bt/zipalign" -f -p 4 "$un" "$p/aligned.apk"
+  "$bt/zipalign" -f -p 4 "$un" "$p/aligned.apk" || { echo "zipalign failed: $?"; exit 1; }
   apk="$out/NBAJamRecomp-$name-android$suffix.apk"
   "$bt/apksigner" sign --ks "$ks" --ks-pass env:ANDROID_KEYSTORE_PASSWORD --ks-key-alias "$ANDROID_KEY_ALIAS"     --key-pass env:ANDROID_KEY_PASSWORD --out "$apk" "$p/aligned.apk"
   rm -f "$ks"
-  "$bt/apksigner" verify --print-certs "$apk" | grep -E "Signer #1 certificate (DN|SHA-256)"
+  echo "aligned and signed: $apk"
+  "$bt/apksigner" verify --verbose --print-certs "$apk" | head -12
 fi
 ls -la "$out"
