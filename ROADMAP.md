@@ -1219,6 +1219,8 @@ green on its processor.
 | R8.2 | Sonnet | One tag builds everything: Windows installer and zip, Linux AppImage and archive, macOS disk image, Android APK, checksums, and the release page from R2.2. |
 | R8.3 | Haiku | README, in-app help and the online guide checked against the released build on each platform, in both languages. |
 
+**Status (R8.2):** a `v*` tag builds every package (Windows installer and zip, Linux AppImages, archives and Flatpak, the macOS disk image) and now the Android APK, and the draft release has them all with `SHA256SUMS.txt` and the page from the changelog (R2.2), which lists the APK and how to add ROMs on Android. The release APK is built in release mode, aligned and signed with the project's key from four CI secrets (`docs/ANDROID.md` has the commands for the owner); a tag without the key stops the release instead of shipping an APK signed with another key. Every branch build signs a `-testkey` APK with a throwaway key, so the signing steps are tested without the secret. Not done: the owner's key (so no tag has been built with it yet).
+
 **Gate:** advisor sign-off on the matrix, then publish.
 
 ## Limits to expect

@@ -12,6 +12,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 ## Unreleased
 
 ### Added
+- Releases include the Android APK (64-bit ARM, Android 5 or later), listed on the release page with how to add ROMs on Android.
 - Settings, Video: "Log frame times" writes how long frames take, late frames and the audio delay to frame_times.log. On Android the CRT looks now step down by themselves on a slow phone, and the battery saver keeps the picture at Smooth.
 - Android: putting the app away pauses the game and stops its sound; if Android closes the app meanwhile, the game goes on from the same place on the next start. An online game is left instead of freezing the others.
 - On-screen touch controls in a game: stick, Shoot, Pass, Turbo, Start and Coin, shown on a touch screen while no controller is connected; size, opacity and places in Settings, Touch (R7.3).
