@@ -165,6 +165,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - The README files describe the menus and the pause menu first; the F-keys are shortcuts.
 
 ### Fixed
+- nattest: on the Apple Silicon CI runner the jitter is printed but not compared and the ping bound is wider (the runner adds delay and jitter of its own); Linux and Intel Macs still check both.
 - macOS CI: the network test (nattest) has the loopback addresses its simulated routers need.
 - macOS: NAT-PMP and PCP now find the router (the gateway was read from a file macOS does not have).
 - The fullscreen setting follows the window when fullscreen is changed with the window's own control.
