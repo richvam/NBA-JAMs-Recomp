@@ -63,6 +63,17 @@ public class NBAJamActivity extends SDLActivity {
 
     // The router (default gateway) as an IPv4 address in host order, or 0; NAT-PMP and PCP are
     // sent there. An app cannot read /proc/net/route on Android 10 and later.
+    // Android's battery saver (R7.6): the picture is kept cheap while it is on
+    public static boolean powerSaveMode() {
+        try {
+            Context c = getContext();
+            android.os.PowerManager pm = c == null ? null : (android.os.PowerManager) c.getSystemService(Context.POWER_SERVICE);
+            return pm != null && pm.isPowerSaveMode();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     public static int defaultGateway() {
         try {
             Context c = getContext();

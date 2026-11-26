@@ -148,8 +148,20 @@ bool gl_presenter::init(SDL_Window *win, std::string &err)
 	q_end = (PFN_glEndQuery)SDL_GL_GetProcAddress("glEndQuery");
 	q_geti = (PFN_glGetQueryObjectiv)SDL_GL_GetProcAddress("glGetQueryObjectiv");
 	q_get64 = (PFN_glGetQueryObjectui64v)SDL_GL_GetProcAddress("glGetQueryObjectui64v");
-	m_timing = q_gen && q_del && q_begin && q_end && q_geti && q_get64 &&
-	           (SDL_GL_ExtensionSupported("GL_ARB_timer_query") || SDL_GL_ExtensionSupported("GL_EXT_timer_query"));
+	bool ext = SDL_GL_ExtensionSupported("GL_ARB_timer_query") || SDL_GL_ExtensionSupported("GL_EXT_timer_query");
+	// OpenGL ES (phones, R7.6): the same queries under EXT names
+	if (!ext && SDL_GL_ExtensionSupported("GL_EXT_disjoint_timer_query"))
+	{
+		ext = true;
+		q_gen = (PFN_glGenQueries)SDL_GL_GetProcAddress("glGenQueriesEXT");
+		q_del = (PFN_glDeleteQueries)SDL_GL_GetProcAddress("glDeleteQueriesEXT");
+		q_begin = (PFN_glBeginQuery)SDL_GL_GetProcAddress("glBeginQueryEXT");
+		q_end = (PFN_glEndQuery)SDL_GL_GetProcAddress("glEndQueryEXT");
+		q_geti = (PFN_glGetQueryObjectiv)SDL_GL_GetProcAddress("glGetQueryObjectivEXT");
+		q_get64 = (PFN_glGetQueryObjectui64v)SDL_GL_GetProcAddress("glGetQueryObjectui64vEXT");
+	}
+	m_timing = q_gen && q_del && q_begin && q_end && q_geti && q_get64 && ext;
+	SDL_Log("OpenGL: GPU timing %s", m_timing ? "on" : "not available (the shader guard is off)");
 	if (m_timing)
 	{
 		q_gen(4, m_query);

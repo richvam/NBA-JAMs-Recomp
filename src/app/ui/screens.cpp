@@ -156,6 +156,7 @@ screen make_settings(const settings_state &st)
 		picker(st_sides, "Sides of a 4:3 picture", st.side_names, st.sides),
 		toggle(st_fullscreen, "Fullscreen", st.fullscreen),
 		toggle(st_tv, "Menus inside a TV's safe area", st.tv_margins),
+		toggle(st_frame_log, "Log frame times", st.frame_log),
 	};
 	panel vk;
 	vk.r = { 0.1f, 0.66f, 0.8f, 0.3f };
@@ -227,7 +228,7 @@ void show_settings(screen &s, const settings_state &st)
 	auto sli = [&](int id, float v) { if (item *i = s.find(id)) i->value = std::clamp(v, i->min, i->max); };
 	if (item *i = s.find(st_sides)) i->choices = st.side_names;
 	pick(st_shape, st.shape); pick(st_max_wide, st.max_wide); pick(st_scaling, st.scaling); pick(st_shader, st.shader); pick(st_sides, st.sides); pick(st_country, st.country); pick(st_pause, st.pause_buttons);
-	tog(st_fullscreen, st.fullscreen); tog(st_tv, st.tv_margins); tog(st_free_play, st.free_play); tog(st_players, st.four_players); tog(st_clips, st.video_clips); tog(st_news, st.news); tog(st_save_states, st.save_states);
+	tog(st_fullscreen, st.fullscreen); tog(st_tv, st.tv_margins); tog(st_frame_log, st.frame_log); tog(st_free_play, st.free_play); tog(st_players, st.four_players); tog(st_clips, st.video_clips); tog(st_news, st.news); tog(st_save_states, st.save_states);
 	sli(st_scanlines, st.scanlines); sli(st_volume, st.volume); sli(st_menu_volume, st.menu_volume);
 	tog(st_menu_music, st.menu_music); tog(st_menu_sounds, st.menu_sounds);
 	pick(st_touch, st.touch_mode); sli(st_touch_size, st.touch_size); sli(st_touch_opacity, st.touch_opacity);
@@ -240,7 +241,7 @@ void read_settings(const screen &s, settings_state &st)
 	auto tog = [&](int id, bool &v) { if (const item *i = m.find(id)) v = i->on; };
 	auto sli = [&](int id, float &v) { if (const item *i = m.find(id)) v = std::round(i->value * 10.0f) / 10.0f; };
 	pick(st_shape, st.shape); pick(st_max_wide, st.max_wide); pick(st_scaling, st.scaling); pick(st_shader, st.shader); pick(st_sides, st.sides); pick(st_country, st.country); pick(st_pause, st.pause_buttons);
-	tog(st_fullscreen, st.fullscreen); tog(st_tv, st.tv_margins); tog(st_free_play, st.free_play); tog(st_players, st.four_players); tog(st_clips, st.video_clips); tog(st_news, st.news); tog(st_save_states, st.save_states);
+	tog(st_fullscreen, st.fullscreen); tog(st_tv, st.tv_margins); tog(st_frame_log, st.frame_log); tog(st_free_play, st.free_play); tog(st_players, st.four_players); tog(st_clips, st.video_clips); tog(st_news, st.news); tog(st_save_states, st.save_states);
 	sli(st_scanlines, st.scanlines); sli(st_volume, st.volume); sli(st_menu_volume, st.menu_volume);
 	tog(st_menu_music, st.menu_music); tog(st_menu_sounds, st.menu_sounds);
 	pick(st_touch, st.touch_mode); sli(st_touch_size, st.touch_size); sli(st_touch_opacity, st.touch_opacity);

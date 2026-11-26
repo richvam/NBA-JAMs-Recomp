@@ -1350,6 +1350,10 @@ int main(int argc, char **argv)
 		show_settings(s, a);
 		read_settings(s, b);
 		CHECK(s.find(st_tv) && b.tv_margins, "Settings: the TV safe area switch round-trips (U7.2)");
+		a.frame_log = true;
+		show_settings(s, a);
+		read_settings(s, b);
+		CHECK(s.find(st_frame_log) && b.frame_log, "Settings: the frame time log switch round-trips (R7.6)");
 
 		// "Music on" at the right of the status line, only when it is set
 		theme th5;

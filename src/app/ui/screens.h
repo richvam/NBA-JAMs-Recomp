@@ -69,6 +69,7 @@ struct settings_state
 	std::vector<std::string> side_names; // "Black", "Blurred picture", then one per overlay image
 	bool fullscreen = false;
 	bool tv_margins = false;              // the menus kept inside the safe area of a TV (U7.2)
+	bool frame_log = false;               // frame_times.log in the data folder (W5.3, R7.6)
 	float volume = 0.8f;
 	bool free_play = true, four_players = true, video_clips = true;
 	int country = 0;
@@ -81,7 +82,7 @@ struct settings_state
 	float touch_size = 1.0f, touch_opacity = 0.5f;
 };
 
-enum settings_id { st_shape = 1, st_scaling, st_shader, st_scanlines, st_sides, st_fullscreen, st_volume, st_free_play, st_players, st_country, st_clips, st_news, st_pause, st_menu_music, st_menu_sounds, st_menu_volume, st_tv, st_save_states, st_max_wide, st_touch, st_touch_size, st_touch_opacity, st_touch_arrange, st_touch_reset };
+enum settings_id { st_shape = 1, st_scaling, st_shader, st_scanlines, st_sides, st_fullscreen, st_volume, st_free_play, st_players, st_country, st_clips, st_news, st_pause, st_menu_music, st_menu_sounds, st_menu_volume, st_tv, st_save_states, st_max_wide, st_touch, st_touch_size, st_touch_opacity, st_touch_arrange, st_touch_reset, st_frame_log };
 
 // The controller buttons held for half a second to open the pause menu (U5.1). There is no
 // "none": Esc and the Guide button always open it as well, so it can never be unbound.

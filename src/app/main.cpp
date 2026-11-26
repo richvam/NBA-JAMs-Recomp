@@ -499,6 +499,18 @@ private:
 	std::unique_ptr<wide_view> m_wide;
 	frame_guard m_guard;               // steps the shader down when drawing is too slow (W5.3)
 	void guard_frame(double ms, int ww, int wh, int used);
+	// R7.6: what a frame costs, in frame_times.log every 120 game frames (frame_time_log=1)
+	struct perf_window
+	{
+		int frames = 0, late = 0;
+		double emu_sum = 0, emu_max = 0, gap_sum = 0, gap_max = 0;
+		std::chrono::steady_clock::time_point last{};
+	} m_perf;
+	int m_audio_dev_ms = 0;            // the audio device's own buffer
+	bool m_power_save = false;         // Android's battery saver: the shader is kept at Smooth at most
+	unsigned m_power_checked = 0;
+	void perf_frame(double emu_ms, double hz);
+	void check_power_save();
 	bool m_wide_possible = false;      // the running game can draw it (its symbols are there)
 	bool m_presenting_wide = false;    // the picture being presented is the wide one
 	int wide_columns() const;          // the view width that fills the window's shape
@@ -801,6 +813,74 @@ void app::guard_frame(double ms, int ww, int wh, int used)
 		}
 }
 
+void app::perf_frame(double emu_ms, double hz)
+{
+	auto now = std::chrono::steady_clock::now();
+	perf_window &p = m_perf;
+	if (p.last != std::chrono::steady_clock::time_point{})
+	{
+		double gap = std::chrono::duration<double, std::milli>(now - p.last).count();
+		if (gap < 250)          // not across a pause or the app put away
+		{
+			p.gap_sum += gap; p.gap_max = std::max(p.gap_max, gap);
+			if (gap > 1500.0 / hz) p.late++;     // half a frame later than the game's rate
+			p.emu_sum += emu_ms; p.emu_max = std::max(p.emu_max, emu_ms);
+			p.frames++;
+		}
+	}
+	p.last = now;
+	if (p.frames < frame_guard::kWindow) return;
+	const int queued = m_audio ? int(SDL_GetQueuedAudioSize(m_audio) / sizeof(float) * 1000 / 48000) : 0;
+	int ww = 0, wh = 0;
+	if (m_gl.ok()) m_gl.drawable_size(ww, wh);
+	char line[400];
+	snprintf(line, sizeof line, "%dx%d %s%s: emulation and drawing %.2f ms average, %.2f longest; frames %.2f ms apart (game %.2f), longest %.2f, %d late of %d; GPU %s; audio %d ms queued + %d ms device",
+	         ww, wh, shader_name(m_power_save ? std::min(m_guard.shader(m_cfg.shader), 1) : m_guard.shader(m_cfg.shader)), m_power_save ? " (battery saver)" : "",
+	         p.emu_sum / p.frames, p.emu_max, p.gap_sum / p.frames, 1000.0 / hz, p.gap_max, p.late, p.frames,
+	         m_gl.gpu_timing() ? (std::to_string(m_guard.last_avg).substr(0, 5) + " ms average").c_str() : "not measured", queued, m_audio_dev_ms);
+	if (m_cfg.frame_log)
+	{
+		if (FILE *f = fopen(path_join(m_base, "frame_times.log").c_str(), "a")) { fprintf(f, "%s\n", line); fclose(f); }
+		SDL_Log("frame times: %s", line);
+	}
+	const auto last = p.last;
+	p = perf_window{};
+	p.last = last;
+}
+
+#ifdef __ANDROID__
+static bool android_power_save()
+{
+	JNIEnv *env = static_cast<JNIEnv *>(SDL_AndroidGetJNIEnv());
+	jobject act = static_cast<jobject>(SDL_AndroidGetActivity());
+	if (!env || !act) return false;
+	jclass cls = env->GetObjectClass(act);
+	jmethodID m = env->GetStaticMethodID(cls, "powerSaveMode", "()Z");
+	bool on = m && env->CallStaticBooleanMethod(cls, m);
+	if (env->ExceptionCheck()) { env->ExceptionClear(); on = false; }
+	env->DeleteLocalRef(cls);
+	env->DeleteLocalRef(act);
+	return on;
+}
+#endif
+
+// every two seconds in a game: Android's battery saver keeps the picture cheap (R7.6)
+void app::check_power_save()
+{
+#ifdef __ANDROID__
+	const unsigned now = SDL_GetTicks();
+	if (m_power_checked && now - m_power_checked < 2000) return;
+	m_power_checked = now ? now : 1;
+	const bool on = android_power_save();
+	if (on != m_power_save)
+	{
+		m_power_save = on;
+		SDL_Log("battery saver %s", on ? "on" : "off");
+		if (on && m_cfg.shader > 1) message("Battery saver: the picture uses Smooth", 4000);
+	}
+#endif
+}
+
 void app::present(const u32 *pixels, int w, int h, bool game)
 {
 	int shader = game ? m_cfg.shader : 0;
@@ -816,7 +896,7 @@ void app::present(const u32 *pixels, int w, int h, bool game)
 			return;
 		}
 		// a game frame: timed, and drawn with the shader the guard allows (W5.3)
-		int const used = m_guard.shader(shader);
+		int const used = m_power_save ? std::min(m_guard.shader(shader), 1) : m_guard.shader(shader);
 		m_gl.present(pixels, w, h, used, view_for(ww, wh, w, h, game), m_cfg.scan_strength, true, m_cfg.side_fill);
 		if (m_gl.gpu_timing() && m_gl.gpu_ms() >= 0) guard_frame(m_gl.gpu_ms(), ww, wh, used);
 		return;
@@ -1760,6 +1840,7 @@ ui::settings_state app::settings_now()
 		for (size_t i = 0; i < m_overlays.size(); i++) if (m_overlays[i].name == m_cfg.overlay) st.sides = int(i) + 2;
 	st.fullscreen = m_cfg.fullscreen;
 	st.tv_margins = m_cfg.tv_margins;
+	st.frame_log = m_cfg.frame_log;
 	st.volume = m_cfg.volume;
 	st.free_play = m_cfg.dips.free_play; st.four_players = m_cfg.dips.four_players; st.video_clips = m_cfg.dips.video_clips; st.country = m_cfg.dips.country;
 	st.news = m_cfg.news;
@@ -1786,6 +1867,7 @@ void app::apply_settings(const ui::settings_state &want)
 	m_cfg.save_states = want.save_states;
 	m_cfg.menu_music = want.menu_music; m_cfg.menu_sounds = want.menu_sounds; m_cfg.menu_volume = std::clamp(want.menu_volume, 0.0f, 1.0f);
 	m_cfg.tv_margins = want.tv_margins;
+	m_cfg.frame_log = want.frame_log;
 	m_cfg.touch_mode = std::clamp(want.touch_mode, 0, 2);
 	m_touch.layout.size = std::clamp(want.touch_size, touch_layout::kMinSize, touch_layout::kMaxSize);
 	m_touch.layout.opacity = std::clamp(want.touch_opacity, touch_layout::kMinOpacity, touch_layout::kMaxOpacity);
@@ -3306,6 +3388,7 @@ int app::run()
 	want.channels = 1;
 	want.samples = 1024;
 	m_audio = SDL_OpenAudioDevice(nullptr, 0, &want, &have, 0);
+	if (m_audio && have.freq > 0) m_audio_dev_ms = int(have.samples * 1000 / have.freq);
 	if (m_audio) SDL_PauseAudioDevice(m_audio, 0);
 	if (m_audio)
 		m_msound = std::make_unique<menu_sound>(
@@ -3352,7 +3435,11 @@ int app::run()
 			case screen::touch_arrange: touch_arrange_frame(); next = clock::now(); continue;
 			case screen::game: case screen::pause: break;
 		}
+		check_power_save();
+		auto const t0 = clock::now();
 		bool ran = m_screen == screen::pause ? pause_frame() : game_frame();
+		if (ran && m_screen == screen::game && m_mach)
+			perf_frame(std::chrono::duration<double, std::milli>(clock::now() - t0).count(), m_mach->refresh_hz());
 		if (m_screen != screen::game && m_screen != screen::pause) continue;
 		if (m_net_game && !ran)
 		{
