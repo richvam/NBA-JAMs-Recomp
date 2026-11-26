@@ -74,6 +74,38 @@ public class NBAJamActivity extends SDLActivity {
         }
     }
 
+    // R7.8: what the menus keep clear of, in pixels (left, top, right, bottom): a camera cut-out
+    // inside the window, and a third of each rounded corner (enough for its curve to miss the
+    // menu's corner)
+    public static int[] safeInsets() {
+        int[] r = new int[4];
+        try {
+            if (Build.VERSION.SDK_INT < 28 || !(getContext() instanceof android.app.Activity)) return r;
+            android.view.View v = ((android.app.Activity) getContext()).getWindow().getDecorView();
+            android.view.WindowInsets wi = v.getRootWindowInsets();
+            if (wi == null) return r;
+            android.view.DisplayCutout c = wi.getDisplayCutout();
+            if (c != null) {
+                r[0] = c.getSafeInsetLeft(); r[1] = c.getSafeInsetTop();
+                r[2] = c.getSafeInsetRight(); r[3] = c.getSafeInsetBottom();
+            }
+            if (Build.VERSION.SDK_INT >= 31) {
+                int[][] edges = { { android.view.RoundedCorner.POSITION_TOP_LEFT, 0, 1 }, { android.view.RoundedCorner.POSITION_TOP_RIGHT, 2, 1 },
+                                  { android.view.RoundedCorner.POSITION_BOTTOM_RIGHT, 2, 3 }, { android.view.RoundedCorner.POSITION_BOTTOM_LEFT, 0, 3 } };
+                for (int[] e : edges) {
+                    android.view.RoundedCorner rc = wi.getRoundedCorner(e[0]);
+                    if (rc == null) continue;
+                    int d = rc.getRadius() * 3 / 10;
+                    r[e[1]] = Math.max(r[e[1]], d);
+                    r[e[2]] = Math.max(r[e[2]], d);
+                }
+            }
+        } catch (Exception e) {
+            // no insets known: the whole window
+        }
+        return r;
+    }
+
     public static int defaultGateway() {
         try {
             Context c = getContext();

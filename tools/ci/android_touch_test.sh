@@ -60,3 +60,19 @@ grep -aq "lifecycle: put away, on menu" android-logcat-life.txt
 grep -aq "lifecycle: back, on menu" android-logcat-life.txt
 [ "$(adb shell pidof $pkg | tr -d '\r')" = "$pid1" ]
 echo "android lifecycle: PASS"
+# R7.8: three phone shapes (wm size is portrait: width x height of the phone held upright)
+# - 720x1280 (an older 16:9 phone), 1080x2340 (a tall phone such as an S24+), 1080x1920
+# (16:9 at 1080p, a handheld such as the Thor); the app keeps running, draws the menu, logs the
+# safe area it keeps clear
+adb logcat -c
+for s in 720x1280:320 1080x2340:420 1080x1920:400; do
+  sz=${s%:*}; dpi=${s#*:}
+  adb shell wm size $sz; adb shell wm density $dpi; sleep 4
+  adb exec-out screencap -p > android-shots/phone-$sz.png
+  [ "$(adb shell pidof $pkg | tr -d '\r')" = "$pid1" ]
+  bytes=$(wc -c < android-shots/phone-$sz.png); echo "phone $sz: $bytes bytes"; [ "$bytes" -gt 20000 ]
+done
+adb shell wm size reset; adb shell wm density reset; sleep 3
+adb logcat -d > android-logcat-sizes.txt || true
+grep -a "safe area:" android-logcat-sizes.txt | sed 's/.*safe area/safe area/' | sort -u
+echo "android phone sizes: PASS"

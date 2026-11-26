@@ -419,7 +419,19 @@ private:
 	view_rect view_for(int win_w, int win_h, int w, int h, bool game) const
 	{
 		if (game) return compute_view(win_w, win_h, w, h, m_cfg.shape, m_cfg.scaling, m_presenting_wide);
-		return menu_view(win_w, win_h, w, h, m_cfg.tv_margins);
+		return menu_rect(win_w, win_h, w, h);
+	}
+	// R7.8: the edges a phone's rounded corners or camera cut into, in drawable pixels
+	// (left, top, right, bottom); the menus stay inside them
+	int m_safe[4] = { 0, 0, 0, 0 };
+	void read_safe_area();
+	view_rect menu_rect(int win_w, int win_h, int w, int h) const
+	{
+		const int l = m_safe[0], t = m_safe[1], r = m_safe[2], b = m_safe[3];
+		if (!(l | t | r | b) || win_w - l - r < w || win_h - t - b < h) return menu_view(win_w, win_h, w, h, m_cfg.tv_margins);
+		view_rect v = menu_view(win_w - l - r, win_h - t - b, w, h, m_cfg.tv_margins);
+		v.x += l; v.y += t;
+		return v;
 	}
 	void say_view(bool scaling_changed);
 	// overlays / borders (overlay.h)
@@ -864,6 +876,29 @@ static bool android_power_save()
 }
 #endif
 
+void app::read_safe_area()
+{
+#ifdef __ANDROID__
+	JNIEnv *env = static_cast<JNIEnv *>(SDL_AndroidGetJNIEnv());
+	jobject act = static_cast<jobject>(SDL_AndroidGetActivity());
+	if (!env || !act) return;
+	jclass cls = env->GetObjectClass(act);
+	jmethodID m = env->GetStaticMethodID(cls, "safeInsets", "()[I");
+	jintArray a = m ? static_cast<jintArray>(env->CallStaticObjectMethod(cls, m)) : nullptr;
+	if (env->ExceptionCheck()) { env->ExceptionClear(); a = nullptr; }
+	if (a && env->GetArrayLength(a) == 4)
+	{
+		jint v[4];
+		env->GetIntArrayRegion(a, 0, 4, v);
+		for (int i = 0; i < 4; i++) m_safe[i] = std::max(0, int(v[i]));
+		SDL_Log("safe area: %d %d %d %d (left, top, right, bottom)", m_safe[0], m_safe[1], m_safe[2], m_safe[3]);
+	}
+	if (a) env->DeleteLocalRef(a);
+	env->DeleteLocalRef(cls);
+	env->DeleteLocalRef(act);
+#endif
+}
+
 // every two seconds in a game: Android's battery saver keeps the picture cheap (R7.6)
 void app::check_power_save()
 {
@@ -1089,6 +1124,7 @@ void app::poll_events()
 			case SDL_WINDOWEVENT:
 				// fullscreen chosen with the window's own control (the green button on a Mac,
 				// which gives the game its own Space): the setting follows
+				if (e.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) read_safe_area();
 				if (e.window.event == SDL_WINDOWEVENT_SIZE_CHANGED && m_win)
 					m_cfg.fullscreen = (SDL_GetWindowFlags(m_win) & SDL_WINDOW_FULLSCREEN_DESKTOP) == SDL_WINDOW_FULLSCREEN_DESKTOP;
 				break;
@@ -2049,7 +2085,11 @@ void app::kbd_open(ui::layout l, const std::string &title, const std::string &st
 {
 	m_kbd.open(l, title, start, max_len);
 	m_editing = true;
+#ifndef __ANDROID__
 	SDL_StartTextInput();
+#endif
+	// on Android, SDL would open the system keyboard over this one (R7.8); a keyboard that is
+	// plugged in types without it
 }
 
 int app::kbd_step()
@@ -3243,7 +3283,7 @@ void app::gallery_loop()
 		if (m_gl.ok()) m_gl.drawable_size(dw, dh); else if (m_ren) SDL_GetRendererOutputSize(m_ren, &dw, &dh);
 		SDL_GetWindowSize(m_win, &ww, &wh);
 		// the menu picture's place, in the units the mouse reports (window points, not pixels)
-		view_rect shown = menu_view(dw, dh, ui::screen::kW, ui::screen::kH, m_cfg.tv_margins);
+		view_rect shown = menu_rect(dw, dh, ui::screen::kW, ui::screen::kH);
 		if (dw > 0 && dh > 0)
 		{
 			shown.x = shown.x * ww / dw; shown.w = shown.w * ww / dw;
@@ -3405,6 +3445,7 @@ int app::run()
 	// start on the first available game
 	for (size_t i = 0; i < m_avail.size(); i++) if (m_avail[i]) { m_sel = int(i); break; }
 
+	read_safe_area();
 	if (!m_script_path.empty() && !start_pad_script()) return 2;
 #ifdef __ANDROID__
 	g_bg_done = SDL_CreateSemaphore(0);

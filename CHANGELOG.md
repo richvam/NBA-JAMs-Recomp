@@ -134,6 +134,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - New Lua mod cpu_vs_cpu.lua (every game): whole games between two computer teams, one after another, for watching.
 
 ### Changed
+- Android: the menus keep clear of rounded screen corners and camera cut-outs, and typing a name or code uses the game's own keyboard without the phone's keyboard opening over it.
 - Online codes: with both IPv4 and IPv6 (most phones) the code to type is the short 10-character one again; the longer code with the IPv6 address is shown under it, for when the short one does not connect.
 - Save states are now the same bytes on every build (R5.1). States saved by earlier versions do not load.
 - The pause menu opens by holding Start for one second on a controller (a quick press still joins
