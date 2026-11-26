@@ -8,5 +8,5 @@ mkdir -p "$DATA"
 LOG=$(mktemp)
 NBAJAM_DATA_DIR="$DATA" SDL_AUDIODRIVER=dummy timeout 600 \
 	xvfb-run -a -s "-screen 0 ${SIZE}x24" "$APP" --pad-script "$PAD" > "$LOG" 2>&1
-grep -aE "pad script|open folder:|Copied [0-9]" "$LOG"
+grep -aE "pad script|open folder:|Copied [0-9]|lifecycle:" "$LOG"
 ! grep -aq "FAIL" "$LOG"

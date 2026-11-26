@@ -410,7 +410,7 @@ private:
 	void apply_setup(const import_result &r);
 	bool game_frame();                 // returns true when an emulated frame was run
 	bool start_game(int index, bool net_client = false);
-	void stop_game();
+	void stop_game(bool keep_resume = false);
 	void poll_events();
 	cabinet_inputs gather_inputs();
 	void draw_overlay(canvas &cv);
@@ -522,6 +522,14 @@ private:
 	void read_slots();
 	void save_slot(int n);
 	bool load_slot(int n);
+	bool write_state(const std::string &path, std::string &err, u32 &hash);
+	bool read_state(const std::string &path, std::string &err, u32 &saved, u32 &now);
+	// R7.5: the app put away and brought back (phones); the game is kept in states/resume.state
+	// in case the system closes the app meanwhile, and goes on from there on the next start
+	std::string resume_path() const;
+	void went_background();
+	void came_foreground();
+	void resume_saved_game();
 
 	// Lua mods
 	mod_manager m_mods;
@@ -843,8 +851,27 @@ void app::present(const u32 *pixels, int w, int h, bool game)
 	SDL_RenderPresent(m_ren);
 }
 
+#ifdef __ANDROID__
+// SDL sends "will enter background" on Android's own thread, just before it holds the main
+// loop: the watch waits (a short time) for the main loop to keep the game first
+static SDL_atomic_t g_bg_asked;
+static SDL_sem *g_bg_done;
+static int SDLCALL lifecycle_watch(void *, SDL_Event *e)
+{
+	if (e->type == SDL_APP_WILLENTERBACKGROUND && g_bg_done)
+	{
+		SDL_AtomicSet(&g_bg_asked, 1);
+		SDL_SemWaitTimeout(g_bg_done, 2000);
+	}
+	return 1;
+}
+#endif
+
 void app::poll_events()
 {
+#ifdef __ANDROID__
+	if (SDL_AtomicGet(&g_bg_asked)) { went_background(); SDL_AtomicSet(&g_bg_asked, 0); SDL_SemPost(g_bg_done); }
+#endif
 	m_menu_up = m_menu_down = m_menu_left = m_menu_right = m_menu_ok = m_menu_back = m_menu_net = m_menu_clear = m_menu_guide = false;
 	if (m_scripted) script_tick();
 	// each screen change goes to the log (the Android tests follow the menus by it)
@@ -867,6 +894,10 @@ void app::poll_events()
 		switch (e.type)
 		{
 			case SDL_QUIT: m_quit = true; break;
+			case SDL_APP_DIDENTERFOREGROUND: came_foreground(); break;
+#ifndef __ANDROID__
+			case SDL_APP_WILLENTERBACKGROUND: went_background(); break;   // iOS and others: from the queue
+#endif
 			case SDL_CONTROLLERDEVICEADDED:
 				if (SDL_GameController *c = SDL_GameControllerOpen(e.cdevice.which)) m_pads.push_back(c);
 				break;
@@ -1127,6 +1158,8 @@ void app::script_tick()
 			break;
 		}
 		case pad_script::action::log: SDL_Log("pad script line %d: %s", a.line, a.text.c_str()); break;
+		case pad_script::action::background: went_background(); break;
+		case pad_script::action::foreground: came_foreground(); break;
 		case pad_script::action::quit: m_quit = true; break;
 		case pad_script::action::drop:
 		{
@@ -1372,8 +1405,9 @@ bool app::start_game(int index, bool net_client)
 	return true;
 }
 
-void app::stop_game()
+void app::stop_game(bool keep_resume)
 {
+	if (!keep_resume) std::remove(resume_path().c_str());
 	m_wide.reset();
 	m_wide_possible = false;
 	m_presenting_wide = false;
@@ -2713,47 +2747,132 @@ void app::read_slots()
 	}
 }
 
-void app::save_slot(int n)
+bool app::write_state(const std::string &path, std::string &err, u32 &hash)
 {
 	std::vector<u8> mach, scripts, file;
-	std::string err;
-	if (!m_mach->save_state_to(mach)) { message("Could not save: " + m_mach->state_error(), 4000); return; }
-	if (!m_mods.save_state(scripts, err)) { message("Could not save: " + err, 4000); return; }
+	if (!m_mach->save_state_to(mach)) { err = m_mach->state_error(); return false; }
+	if (!m_mods.save_state(scripts, err)) return false;
 	state_file::header h;
 	h.build = app_version();
 	h.game = game_list()[size_t(m_cur_game)].id;
 	h.saved_at = int64_t(std::time(nullptr));
-	h.hash = m_mach->state_hash();
-	if (!state_file::pack(h, mach, scripts, file) || !write_whole_file(slot_path(n), file)) { message("Could not write " + slot_path(n), 4000); return; }
-	SDL_Log("save state: slot %d saved, game state %08x, %zu bytes", n + 1, h.hash, file.size());
+	h.hash = hash = m_mach->state_hash();
+	if (!state_file::pack(h, mach, scripts, file) || !write_whole_file(path, file)) { err = "could not write " + path; return false; }
+	return true;
+}
+
+void app::save_slot(int n)
+{
+	std::string err;
+	u32 hash = 0;
+	if (!write_state(slot_path(n), err, hash)) { message("Could not save: " + err, 4000); return; }
+	SDL_Log("save state: slot %d saved, game state %08x", n + 1, hash);
 	message("Saved in slot " + std::to_string(n + 1), 2000);
 	read_slots();
 }
 
-bool app::load_slot(int n)
+// into the running game; err is empty when there is no file
+bool app::read_state(const std::string &path, std::string &err, u32 &saved, u32 &now)
 {
 	std::vector<u8> file, mach, scripts, before;
-	std::string err;
 	state_file::header h;
-	if (!read_whole_file(slot_path(n), file)) { message("Slot " + std::to_string(n + 1) + " is empty", 2000); return false; }
-	if (!state_file::unpack(file, h, mach, scripts, err)) { message("Could not load: " + err, 4000); return false; }
-	if (h.game != game_list()[size_t(m_cur_game)].id) { message("Could not load: a state of another game", 4000); return false; }
-	if (h.build != app_version()) { message("Could not load: saved by another version (" + h.build + ")", 4000); return false; }
+	err.clear();
+	if (!read_whole_file(path, file)) return false;
+	if (!state_file::unpack(file, h, mach, scripts, err)) return false;
+	if (h.game != game_list()[size_t(m_cur_game)].id) { err = "a state of another game"; return false; }
+	if (h.build != app_version()) { err = "saved by another version (" + h.build + ")"; return false; }
 	// a machine load that fails part way leaves the machine changed: keep it as it is now
-	if (!m_mach->save_state_to(before)) { message("Could not load: " + m_mach->state_error(), 4000); return false; }
+	if (!m_mach->save_state_to(before)) { err = m_mach->state_error(); return false; }
 	bool mach_ok = true;
 	if (!m_mods.load_state(scripts, err, [&] { mach_ok = m_mach->load_state(mach); if (!mach_ok) err = m_mach->state_error(); return mach_ok; }))
 	{
 		if (!mach_ok) m_mach->load_state(before);
-		message("Could not load: " + err, 4000);
+		if (err.empty()) err = "the state could not be loaded";
 		return false;
 	}
 	if (m_audio) SDL_ClearQueuedAudio(m_audio);
 	m_join.jump();
-	const u32 now = m_mach->state_hash();
-	SDL_Log("save state: slot %d loaded, game state %08x%s", n + 1, now, now == h.hash ? ", as saved" : ", NOT as saved");
+	saved = h.hash;
+	now = m_mach->state_hash();
+	return true;
+}
+
+bool app::load_slot(int n)
+{
+	std::string err;
+	u32 saved = 0, now = 0;
+	if (!read_state(slot_path(n), err, saved, now))
+	{
+		message(err.empty() ? "Slot " + std::to_string(n + 1) + " is empty" : "Could not load: " + err, err.empty() ? 2000 : 4000);
+		return false;
+	}
+	SDL_Log("save state: slot %d loaded, game state %08x%s", n + 1, now, now == saved ? ", as saved" : ", NOT as saved");
 	message("Loaded slot " + std::to_string(n + 1), 2000);
 	return true;
+}
+
+// ---------------------------------------------------------------- put away and brought back (R7.5)
+std::string app::resume_path() const
+{
+	return path_join(path_join(m_base, "states"), "resume.state");
+}
+
+// Called on the main thread before the system stops the app (on Android the main loop is
+// then held until the app comes back, and the system may close it meanwhile without warning).
+void app::went_background()
+{
+	SDL_Log("lifecycle: put away, on %s", screen_name());
+	if (m_audio) { SDL_ClearQueuedAudio(m_audio); SDL_PauseAudioDevice(m_audio, 1); }
+	if (!m_mach || m_cur_game < 0) return;
+	if (m_net_game)
+	{
+		// the others cannot wait for a phone that is put away: the game is left, as with
+		// Leave, so their side ends at once instead of freezing (no seat is held: N4.7)
+		SDL_Log("lifecycle: online game left");
+		stop_game();
+		message("You left the online game when the app was put away", 6000);
+		return;
+	}
+	if (m_screen == screen::game) open_pause();
+	std::string err;
+	u32 hash = 0;
+	if (write_state(resume_path(), err, hash)) SDL_Log("lifecycle: game kept, game state %08x", hash);
+	else SDL_Log("lifecycle: the game could not be kept: %s", err.c_str());
+}
+
+void app::came_foreground()
+{
+	SDL_Log("lifecycle: back, on %s", screen_name());
+	if (m_audio) SDL_PauseAudioDevice(m_audio, 0);
+	std::remove(resume_path().c_str());      // the app was not closed: the game is still here
+}
+
+// On start: a game kept when the app was put away and then closed by the system goes on,
+// paused, from where it was.
+void app::resume_saved_game()
+{
+	std::vector<u8> file, mach, scripts;
+	state_file::header h;
+	std::string err;
+	const std::string path = resume_path();
+	if (!read_whole_file(path, file)) return;
+	bool ok = state_file::unpack(file, h, mach, scripts, err);
+	int index = -1;
+	for (size_t i = 0; ok && i < game_list().size(); i++)
+		if (game_list()[i].id == h.game && i < m_avail.size() && m_avail[i]) index = int(i);
+	u32 saved = 0, now = 0;
+	if (index >= 0 && start_game(index, false) && read_state(path, err, saved, now))
+	{
+		SDL_Log("lifecycle: game resumed, game state %08x%s", now, now == saved ? ", as kept" : ", NOT as kept");
+		open_pause();
+		message("Your game goes on from where you left it", 4000);
+	}
+	else
+	{
+		if (m_mach) stop_game();
+		SDL_Log("lifecycle: the kept game could not go on: %s", err.empty() ? "its game is not ready" : err.c_str());
+	}
+	std::remove(path.c_str());
 }
 
 // ---------------------------------------------------------------- pause menu (U5)
@@ -3204,6 +3323,11 @@ int app::run()
 	for (size_t i = 0; i < m_avail.size(); i++) if (m_avail[i]) { m_sel = int(i); break; }
 
 	if (!m_script_path.empty() && !start_pad_script()) return 2;
+#ifdef __ANDROID__
+	g_bg_done = SDL_CreateSemaphore(0);
+	SDL_AddEventWatch(lifecycle_watch, nullptr);
+#endif
+	if (!m_gallery && !m_rom_art) resume_saved_game();
 	if (m_gallery) { gallery_loop(); m_quit = true; }
 	if (m_rom_art) { rom_art_loop(); m_quit = true; }
 
@@ -3246,7 +3370,7 @@ int app::run()
 		if (next > now && !behind) std::this_thread::sleep_for(next - now);
 		else if (now - next > std::chrono::milliseconds(100)) next = now;
 	}
-	if (m_mach) stop_game();
+	if (m_mach) stop_game(true);            // a game kept when put away stays kept (R7.5)
 	m_net.stop();
 	save_config(m_cfgpath, m_cfg);
 	for (auto *c : m_pads) SDL_GameControllerClose(c);

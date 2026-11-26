@@ -46,3 +46,16 @@ adb logcat -d > android-logcat-remote.txt || true
 grep -a "screen: " android-logcat-remote.txt | sed 's/.*screen: /screen: /'
 grep -a "screen: " android-logcat-remote.txt | sed 's/.*screen: //' | tr -d '\r' | tr '\n' ' ' | grep -q "menu settings menu controls menu"
 echo "android remote: PASS"
+# R7.5: put away with Home and brought back: the app logs both and is still the same process
+# (a game kept and resumed is checked with ROMs by tools/audit/h_lifecycle.pad)
+pid1=$(adb shell pidof $pkg | tr -d '\r')
+adb logcat -c
+key HOME; sleep 3
+adb shell monkey -p $pkg -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 4
+adb exec-out screencap -p > android-shots/after-home.png
+adb logcat -d > android-logcat-life.txt || true
+grep -a "lifecycle:" android-logcat-life.txt | sed 's/.*lifecycle: /lifecycle: /'
+grep -aq "lifecycle: put away, on menu" android-logcat-life.txt
+grep -aq "lifecycle: back, on menu" android-logcat-life.txt
+[ "$(adb shell pidof $pkg | tr -d '\r')" = "$pid1" ]
+echo "android lifecycle: PASS"
