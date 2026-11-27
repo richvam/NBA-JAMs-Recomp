@@ -147,6 +147,23 @@ public:
 	// R7.7: how often a player (or the host) was found again at a new address, as when a
 	// phone moves from Wi-Fi to mobile data during a game
 	int moves() const { return m_moves; }
+
+	// --- reconnect (roadmap N4.7) ---
+	// A player silent for timeout_ms during a game is not dropped: the host holds the seat for
+	// hold_ms and the game waits. The player is back either by itself (its packets arrive
+	// again, as after a phone was put away) or by joining again with the code (after the app
+	// was closed): the host then sends a save state of the game where it stands, with the
+	// inputs merged since, and the player catches up and plays on in step.
+	u32 timeout_ms = 10000;
+	u32 hold_ms = 60000;
+	int away_slot() const;                        // host: the seat being held, or -1
+	u32 away_left_ms() const;                     // host: how long it is still held
+	bool wants_state() const { return m_want_state; }   // host: a player joins again: give_state() now
+	void give_state(const std::vector<u8> &state);      // host: the game's save state before frame()
+	bool resuming() const { return m_resume; }    // player: the start is a game in progress
+	const std::vector<u8> &resume_state() const { return m_resume_state; }
+	void woke_up();                               // the app was held (a phone put away): forget that silence
+	int rejoins() const { return m_rejoins; }     // host: players taken back by joining again
 	u32 relay_after_ms = 3000;
 
 	// --- mesh for four players (roadmap N2.5) ---
@@ -190,6 +207,12 @@ private:
 		bool start_acked = false;
 		int ping = 0, jitter = 0, last_rtt = 0;
 		u8 platform = 0;         // R8.1: as it said in its hello
+		bool away = false;       // N4.7: silent in a game; its seat is held
+		bool rejoin = false;     // N4.7: joined again; the game is being sent to it
+		u32 away_since = 0;
+		u32 res_base = 0;        // N4.7: chunks below this received, and the next 64 as bits
+		u64 res_mask = 0;
+		u32 res_t = 0;
 	};
 	u8 m_plat[4] = { 0, 0, 0, 0 };   // R8.1: each seat's platform
 	void reset_state();
@@ -248,6 +271,11 @@ private:
 	// has heard nothing for MOVED_AFTER_MS sends 'R' (its seat and the key) from wherever it
 	// is now; the other side takes the new address when the key matches.
 	u32 m_key = 0, m_moved_t = 0;
+	// N4.7
+	bool m_want_state = false, m_resume = false, m_resume_parsed = false;
+	std::vector<u8> m_resume_blob, m_resume_state;
+	int m_rejoins = 0;
+	void parse_resume();
 	int m_moves = 0;
 	void send_moved(const net_addr &to, int slot, u32 now);
 	dip_settings m_dips;

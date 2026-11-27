@@ -429,6 +429,7 @@ void netplay::reset_state()
 	m_got_start = false; m_game_id.clear(); m_fp = 0; m_dips = dip_settings(); m_nv.clear(); m_nvlen = 0; m_lobby_mods.clear();
 	m_nchunks = m_chunks_ok = 0; m_chunk_have.clear();
 	m_client_ready_sent = m_client_ok = false; m_client_why.clear();
+	m_want_state = m_resume = m_resume_parsed = false; m_resume_blob.clear(); m_resume_state.clear(); m_rejoins = 0;
 	m_delay = 4; m_frame = 0;
 	for (auto &m : m_in) m.clear();
 	m_merged.clear(); m_merged_upto = 0; m_stall_since = 0; m_hash.clear();
@@ -708,6 +709,74 @@ void netplay::host_start(const std::string &game_id, u32 fingerprint, const dip_
 	if (m_peers.empty()) m_phase = phase::running;
 }
 
+int netplay::away_slot() const
+{
+	if (m_mode != mode::host) return -1;
+	for (auto &p : m_peers) if (p.away) return p.slot;
+	return -1;
+}
+
+u32 netplay::away_left_ms() const
+{
+	u32 now = net_now_ms();
+	for (auto &p : m_peers)
+		if (p.away) { u32 gone = now - p.away_since; return gone >= hold_ms ? 0 : hold_ms - gone; }
+	return 0;
+}
+
+void netplay::woke_up()
+{
+	u32 now = net_now_ms();
+	for (auto &p : m_peers) p.last_seen = now;
+}
+
+// Host, N4.7: the game for a player who joined again. The blob: the frame the state is
+// before (F), the first frame not merged yet (R), the merged inputs F..R-1, the player's own
+// inputs R..R+delay-1 (what its earlier self sent, or neutral), the Lua mods description, and
+// the save state. The player runs F..R-1 to catch up and plays on from R.
+void netplay::give_state(const std::vector<u8> &state)
+{
+	m_want_state = false;
+	peer *p = nullptr;
+	for (auto &q : m_peers) if (q.rejoin) p = &q;
+	if (!p) return;
+	const u32 F = m_frame, R = m_merged_upto;
+	wbuf w;
+	w.u32_(F); w.u32_(R);
+	for (u32 f = F; f < R; f++) { auto it = m_merged.find(f); w.u64_(it == m_merged.end() ? 0 : it->second); }
+	for (u32 f = R; f < R + u32(m_delay); f++)
+	{
+		if (!has_input(p->slot, f)) m_in[p->slot][f] = 0;
+		w.u16_(input_of(p->slot, f));
+	}
+	std::string mods = m_nvlen < m_nv.size() ? std::string(m_nv.begin() + long(m_nvlen), m_nv.end()) : std::string();
+	w.u32_(u32(mods.size())); w.bytes(reinterpret_cast<const u8 *>(mods.data()), mods.size());
+	w.bytes(state.data(), state.size());
+	m_resume_blob = w.b;
+}
+
+// Player, N4.7: the received blob into the history (see give_state)
+void netplay::parse_resume()
+{
+	m_resume_parsed = true;
+	rbuf r{ m_nv.data(), int(m_nv.size()) };
+	u32 F = r.u32_(), R = r.u32_();
+	if (!r.ok || R < F || R - F > 100000) { m_client_why = "the game in progress could not be read"; return; }
+	m_merged.clear();
+	for (u32 f = F; f < R && r.ok; f++) m_merged[f] = r.u64_();
+	for (auto &m : m_in) m.clear();
+	for (u32 f = R; f < R + u32(m_delay) && r.ok; f++) m_in[m_slot][f] = r.u16_();
+	u32 ml = r.u32_();
+	if (!r.ok || !r.need(int(ml))) { m_client_why = "the game in progress could not be read"; return; }
+	std::string mods(reinterpret_cast<const char *>(m_nv.data()) + r.i, ml);
+	r.i += int(ml);
+	m_resume_state.assign(m_nv.begin() + r.i, m_nv.end());
+	m_frame = F;
+	m_hash.clear();
+	m_nv.assign(mods.begin(), mods.end());   // start_mods() reads it; there is no NVRAM to set
+	m_nvlen = 0;
+}
+
 bool netplay::all_ready() const
 {
 	for (auto &p : m_peers) if (!p.ready) return false;
@@ -889,18 +958,37 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 			if (!pp)
 			{
 				wbuf w;
-				if (ver != VERSION || m_phase != phase::lobby || m_nplayers >= 4)
+				// N4.7: a game in progress with a held seat: this player takes it
+				peer *held = nullptr;
+				if (ver == VERSION && m_phase == phase::running && !m_want_state && m_resume_blob.empty())
+					for (auto &q : m_peers) if (q.away && !q.rejoin && !held) held = &q;
+				if (held)
+				{
+					held->addr = from;
+					held->rejoin = true;
+					held->start_acked = false;
+					held->ready = false;
+					held->res_base = 0; held->res_mask = 0; held->res_t = 0;
+					held->acked_merged = 0;
+					held->last_seen = now;
+					m_want_state = true;
+					pp = held;
+				}
+				else if (ver != VERSION || m_phase != phase::lobby || m_nplayers >= 4)
 				{
 					w.u8_('r'); w.u8_(MAGIC); w.u32_(now); w.u32_(tsend);
 					w.str(ver != VERSION ? "different NBA JAM Recomp version" : m_phase != phase::lobby ? "the game has already started" : "the game is full (4)");
 					send_raw(from, w.b);
 					return;
 				}
-				peer np;
-				np.addr = from;
-				np.slot = m_nplayers++;
-				m_peers.push_back(np);
-				pp = &m_peers.back();
+				else
+				{
+					peer np;
+					np.addr = from;
+					np.slot = m_nplayers++;
+					m_peers.push_back(np);
+					pp = &m_peers.back();
+				}
 			}
 			wbuf w;
 			w.u8_('w'); w.u8_(MAGIC); w.u32_(now); w.u32_(tsend);
@@ -911,9 +999,30 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 		}
 		if (!pp) return;
 		pp->last_seen = now;
+		if (pp->away && !pp->rejoin) pp->away = false;   // N4.7: back by itself
 		pp->echo = tsend;
 		pp->echo_at = now;
 		if (techo) sample(pp->ping, pp->jitter, pp->last_rtt, int(now - techo));
+		if (type == 'A' && pp->rejoin)
+		{
+			// N4.7: what the player has of the game being sent, and whether it is loaded
+			pp->start_acked = r.u8_() != 0;
+			u32 base = r.u32_();
+			u64 mask = r.u64_();
+			u8 ready = r.u8_();
+			if (!r.ok) return;
+			pp->res_base = base; pp->res_mask = mask;
+			if (ready == 2) { pp->rejoin = false; pp->away_since = now; m_resume_blob.clear(); return; }   // could not load it: still held
+			if (ready == 1)
+			{
+				pp->rejoin = false;
+				pp->away = false;
+				pp->ready = true;
+				m_rejoins++;
+				m_resume_blob.clear();
+			}
+			return;
+		}
 		if (type == 'o')
 		{
 			// what the player sees as our address (N2.4)
@@ -947,6 +1056,15 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 		}
 		if (type == 'i' && m_phase == phase::running)
 		{
+			// N4.7: inputs from a player who joined again: it has loaded the game and plays
+			if (pp->rejoin && !m_want_state && !m_resume_blob.empty())
+			{
+				pp->rejoin = false;
+				pp->away = false;
+				pp->ready = true;
+				m_rejoins++;
+				m_resume_blob.clear();
+			}
 			int slot = r.u8_();
 			u32 acked = r.u32_();
 			u32 first = r.u32_();
@@ -1066,9 +1184,45 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 			for (int f = 0; f < m_delay; f++) m_merged[u32(f)] = 0;
 			break;
 		}
+		case 'S':
+		{
+			// N4.7: we joined a game in progress (our seat was held)
+			if (m_got_start) break;
+			m_game_id = r.str();
+			m_fp = r.u32_();
+			m_dips.free_play = r.u8_(); m_dips.four_players = r.u8_(); m_dips.country = r.u8_(); m_dips.video_clips = r.u8_();
+			m_delay = r.u8_();
+			u32 size = r.u32_(), n = r.u32_();
+			m_nplayers = r.u8_();
+			m_slot = r.u8_();
+			if (!r.ok || size > 64u * 1024 * 1024 || n != (size + CHUNK - 1) / CHUNK || m_delay < 1) break;
+			m_nv.assign(size, 0);
+			m_nchunks = int(n);
+			m_chunk_have.assign(n, false);
+			m_chunks_ok = 0;
+			m_got_start = true;
+			m_resume = true;
+			m_resume_parsed = false;
+			m_phase = phase::transfer;
+			break;
+		}
+		case 'C':
+		{
+			if (!m_got_start || !m_resume) break;
+			u32 idx = r.u32_();
+			int len = r.u16_();
+			if (!r.ok || idx >= u32(m_nchunks) || !r.need(len) || size_t(idx) * CHUNK + size_t(len) > m_nv.size()) break;
+			if (!m_chunk_have[idx])
+			{
+				std::memcpy(&m_nv[size_t(idx) * CHUNK], p + r.i, size_t(len));
+				m_chunk_have[idx] = true;
+				if (++m_chunks_ok == m_nchunks) parse_resume();
+			}
+			break;
+		}
 		case 'c':
 		{
-			if (!m_got_start) break;
+			if (!m_got_start || m_resume) break;
 			int idx = r.u16_(), len = r.u16_();
 			if (!r.ok || idx >= m_nchunks || !r.need(len) || size_t(idx) * CHUNK + size_t(len) > m_nv.size()) break;
 			if (!m_chunk_have[size_t(idx)])
@@ -1115,8 +1269,15 @@ void netplay::tick_host(u32 now)
 		if (any) m_moved_t = now;
 	}
 	for (size_t i = 0; i < m_peers.size(); i++)
-		if (now - m_peers[i].last_seen > TIMEOUT_MS)
+		if (now - m_peers[i].last_seen > timeout_ms)
 		{
+			// N4.7: in a game the seat is held and the game waits for the player
+			if (m_phase != phase::lobby)
+			{
+				peer &q = m_peers[i];
+				if (!q.away) { q.away = true; q.away_since = now; q.rejoin = false; }
+				if (now - q.away_since <= hold_ms) continue;
+			}
 			if (m_phase == phase::lobby)
 			{
 				m_peers.erase(m_peers.begin() + long(i));
@@ -1177,6 +1338,30 @@ void netplay::tick_host(u32 now)
 					send_raw(p.addr, w.b);
 				}
 		}
+		if (p.rejoin && !m_resume_blob.empty() && now - p.res_t >= 20)
+		{
+			// N4.7: the game in progress, 32 chunks of the window at a time
+			p.res_t = now;
+			u32 n = u32((m_resume_blob.size() + CHUNK - 1) / CHUNK);
+			if (!p.start_acked)
+			{
+				wbuf w; hdr(w, 'S');
+				w.str(m_game_id); w.u32_(m_fp);
+				w.u8_(m_dips.free_play); w.u8_(m_dips.four_players); w.u8_(u8(m_dips.country)); w.u8_(m_dips.video_clips);
+				w.u8_(u8(m_delay)); w.u32_(u32(m_resume_blob.size())); w.u32_(n); w.u8_(u8(m_nplayers)); w.u8_(u8(p.slot));
+				send_raw(p.addr, w.b);
+			}
+			else
+				for (u32 c = p.res_base, sent = 0; c < n && c < p.res_base + 64 && sent < 32; c++)
+				{
+					if (p.res_mask >> (c - p.res_base) & 1) continue;
+					wbuf w; hdr(w, 'C');
+					size_t off = size_t(c) * CHUNK, len = std::min<size_t>(CHUNK, m_resume_blob.size() - off);
+					w.u32_(c); w.u16_(u16(len)); w.bytes(&m_resume_blob[off], len);
+					send_raw(p.addr, w.b);
+					sent++;
+				}
+		}
 		if (mesh && (m_phase == phase::transfer || m_phase == phase::running) && roster_due)
 		{
 			// the players reached directly (not through a relay), for the mesh (N2.5)
@@ -1216,7 +1401,9 @@ void netplay::tick_client(u32 now)
 {
 	peer &h = m_peers[0];
 	// before the first answer the host may still have to let us in by our code: wait 2 minutes
-	if (now - h.last_seen > (m_slot < 0 ? 120000u : TIMEOUT_MS))
+	// in a game the host may be away for a while (a phone put away, N4.7): wait as long as it
+	// would hold our seat
+	if (now - h.last_seen > (m_slot < 0 ? 120000u : m_phase == phase::running ? std::max(timeout_ms, hold_ms) : timeout_ms))
 	{
 		stop(m_slot < 0 ? "no answer from the host (address, port, or a router that lets nothing in?)" : "lost the connection with the host");
 		return;
@@ -1271,6 +1458,21 @@ void netplay::tick_client(u32 now)
 			if (m_target6.v6 && now - m_target6_t > 1500) m_target6 = {};
 			send_raw(m_target6.v6 && m_slot < 0 ? m_target6 : h.addr, w.b);
 		}
+		return;
+	}
+	if (m_phase == phase::transfer && m_resume && now - m_hello_t >= 20)
+	{
+		// N4.7: what we have of the game in progress (the first missing chunk, and the 64 from it)
+		m_hello_t = now;
+		u32 base = 0;
+		while (base < u32(m_nchunks) && m_chunk_have[base]) base++;
+		u64 mask = 0;
+		for (u32 c = base; c < base + 64 && c < u32(m_nchunks); c++) if (m_chunk_have[c]) mask |= u64(1) << (c - base);
+		wbuf w; hdr(w, 'A');
+		w.u8_(1); w.u32_(base); w.u64_(mask);
+		w.u8_(m_client_ready_sent ? (m_client_ok ? 1 : 2) : 0);
+		send_raw(h.addr, w.b);
+		if (m_client_ready_sent && !m_client_ok) stop(m_client_why.c_str());
 		return;
 	}
 	if (m_phase == phase::transfer && slow)

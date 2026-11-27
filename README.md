@@ -335,9 +335,10 @@ Good to know:
   stopping with "Waiting for the network...", raise it (on the Online screen or in the lobby).
 * The pause menu opens online too, but the game goes on for everybody while it is open.
 * If a player's network changes during a game (a phone moving from Wi-Fi to mobile data), the
-  game goes on at the new address, as long as the other side's router lets it in; otherwise
-  the game ends after 10 seconds. On Android, switching to another app leaves the online game,
-  so the others are not left waiting.
+  game goes on at the new address, as long as the other side's router lets it in.
+* A player who drops out (lost connection, app closed, phone put away) has a minute to come
+  back: the game waits, and the host's screen counts down. They join again with the same code
+  and go on from where the game is; a phone brought back in time just goes on.
 * If "DESYNC" appears, leave (pause menu, "Leave the online game") and host the game again.
 * Lua mods: the host's mods run on every computer, with the host's options, whatever each
   player has switched on (their own settings come back afterwards). The lobby lists them.
