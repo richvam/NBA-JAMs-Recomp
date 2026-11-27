@@ -65,7 +65,8 @@ cp "$p/app/build/outputs/apk/debug/app-debug.apk" "$out/NBAJamRecomp-$ver-androi
 # ---- the release APK (R8.2) ----
 name=$ver; [ "${GITHUB_REF_TYPE:-}" = tag ] && name=v$ver
 ks=""; suffix=""
-if [ -n "${ANDROID_KEYSTORE_B64:-}" ]; then
+# the project key needs all of its secrets; with one missing a branch build uses the throwaway key
+if [ -n "${ANDROID_KEYSTORE_B64:-}" ] && [ -n "${ANDROID_KEYSTORE_PASSWORD:-}" ] && [ -n "${ANDROID_KEY_ALIAS:-}" ] && [ -n "${ANDROID_KEY_PASSWORD:-}" ]; then
   ks=$(mktemp -d)/release.jks
   printf '%s' "$ANDROID_KEYSTORE_B64" | base64 -d > "$ks"
 elif [ "${ANDROID_TEST_KEY:-}" = 1 ]; then

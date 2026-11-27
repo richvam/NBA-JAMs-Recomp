@@ -173,10 +173,10 @@ jobs:
       - name: A release needs the project's signing key (R8.2)
         if: github.ref_type == 'tag'
         env:
-          HAS_KEY: ${{ secrets.ANDROID_KEYSTORE_B64 != '' }}
+          HAS_KEY: ${{ secrets.ANDROID_KEYSTORE_B64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' && secrets.ANDROID_KEY_ALIAS != '' && secrets.ANDROID_KEY_PASSWORD != '' }}
         run: |
           if [ "$HAS_KEY" != true ]; then
-            echo "::error::the ANDROID_KEYSTORE_B64 secret is not set: a release APK must be signed with the project's own key (docs/ANDROID.md)"
+            echo "::error::the Android signing secrets are not all set (ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD): a release APK must be signed with the project's own key (docs/ANDROID.md)"
             exit 1
           fi
       - name: Build the APK (debug, and release signed with the project's key or, on a branch, a throwaway one)
