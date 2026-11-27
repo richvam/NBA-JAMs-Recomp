@@ -19,6 +19,8 @@ src/app/pad_script.h.
   h_lifecycle.pad, then h_resume.pad on the same data folder: the app put away during a
                  game (R7.5), quit as the system would, started again: the log says
                  "lifecycle: game resumed, ..., as kept"
+  i_replay.pad   a replay (N5.4): a game for 21 seconds, quit, Replays, the newest one watched
+                 to the end; the log says "replay: ended at frame ..., as recorded"
   f_states.pad   save states (N1.4): with save_states=1 in the data folder's ini, Save in
                  slot 1, play on, Load; the log says "as saved"
 
