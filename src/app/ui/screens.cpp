@@ -27,10 +27,10 @@ screen make_picker(const picker_state &st)
 	// R7.2: the system file picker brings ROMs in (files, or a whole folder)
 	menu.items = { button(pk_online, "Online game"), button(pk_settings, "Settings"), button(pk_mods, "Lua mods"), button(pk_controls, "Controls"),
 	               button(pk_news, "News"), button(pk_about, "About"), button(pk_romdir, "Add ROMs"), button(pk_romtree, "Add a ROM folder"),
-	               button(pk_rescan, "Look for ROMs again"), button(pk_quit, "Quit") };
+	               button(pk_rescan, "Look for ROMs again"), button(pk_replays, "Replays"), button(pk_quit, "Quit") };
 #else
 	menu.items = { button(pk_online, "Online game"), button(pk_settings, "Settings"), button(pk_mods, "Lua mods"), button(pk_controls, "Controls"),
-	               button(pk_news, "News"), button(pk_about, "About"), button(pk_romdir, "Open my ROM folder"), button(pk_rescan, "Look for ROMs again"), button(pk_quit, "Quit") };
+	               button(pk_news, "News"), button(pk_about, "About"), button(pk_romdir, "Open my ROM folder"), button(pk_rescan, "Look for ROMs again"), button(pk_replays, "Replays"), button(pk_quit, "Quit") };
 #endif
 	panel info;
 	info.r = { 0.52f, 0.0f, 0.48f, 1.0f };
@@ -717,6 +717,31 @@ void update_about(screen &s, const about_state &st)
 }
 
 // ---------------------------------------------------------------- News
+screen make_replays(const replays_state &st)
+{
+	screen s;
+	s.title = "REPLAYS";
+	tab t;
+	t.name = "Recorded games";
+	panel p;
+	p.r = { 0.0f, 0.0f, 1.0f, 1.0f };
+	const int px = screen::kW - 16 - 30;
+	if (st.rows.empty())
+		add_text(p.items, "No replays yet. Every game that lasts ten seconds or more is kept here when it ends, offline and online (the last 20 of each game).", px);
+	else
+		for (size_t i = 0; i < st.rows.size(); i++) p.items.push_back(button(int(rp_item0 + i), fit_px(st.rows[i], px, face::list)));
+	p.items.push_back(label(""));
+#ifdef __ANDROID__
+	add_text(p.items, "While watching: tap or A pauses, right on a controller plays faster, left normal speed, the back gesture opens the menu.", px, 2);
+#else
+	add_text(p.items, "While watching: A or Enter pauses, Right plays faster, Left plays at normal speed, Back or Esc opens the menu.", px, 2);
+#endif
+	t.panels = { p };
+	s.tabs = { t };
+	s.fix_focus();
+	return s;
+}
+
 screen make_news(const news_state &st)
 {
 	screen s;

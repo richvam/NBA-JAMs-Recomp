@@ -22,7 +22,7 @@ set(APP_SRC
   src/app/controls.cpp src/app/mods.cpp src/app/menu_sound.cpp src/app/pad_script.cpp src/app/version.cpp src/app/paths.cpp
   src/app/news.cpp src/app/view.cpp src/app/png_read.cpp src/app/overlay.cpp src/app/ui/ui.cpp src/app/ui/gallery.cpp
   src/app/ui/lettering.cpp src/app/ui/themes.cpp src/app/ui/screens.cpp src/app/ui/keyboard.cpp src/app/ui/art_view.cpp
-  src/app/rom_art.cpp src/app/touch_pad.cpp)
+  src/app/rom_art.cpp src/app/touch_pad.cpp src/app/replay.cpp)
 list(TRANSFORM CORE_SRC PREPEND ${R}/)
 list(TRANSFORM APP_SRC PREPEND ${R}/)
 

@@ -43,7 +43,7 @@ struct picker_state
 	std::string news_tag, version, roms_dir;
 };
 
-enum picker_id { pk_game0 = 1, pk_online = 50, pk_settings, pk_mods, pk_controls, pk_news, pk_about, pk_romdir, pk_rescan, pk_quit, pk_romtree };
+enum picker_id { pk_game0 = 1, pk_online = 50, pk_settings, pk_mods, pk_controls, pk_news, pk_about, pk_romdir, pk_rescan, pk_quit, pk_romtree, pk_replays };
 
 screen make_picker(const picker_state &st);
 // The game the screen is about: the focused one, or the one last focused while focus is in
@@ -223,6 +223,14 @@ struct news_state
 };
 
 screen make_news(const news_state &st);
+
+// ---------------------------------------------------------------- Replays (N5.4)
+struct replays_state
+{
+	std::vector<std::string> rows;       // newest first: game, when, size
+};
+enum replays_id { rp_item0 = 1 };
+screen make_replays(const replays_state &st);
 
 // ---------------------------------------------------------------- pause menu (U5)
 // Over the running game. Offline the game is paused while it is open; online it keeps

@@ -345,6 +345,15 @@ Good to know:
   Every player needs the same mod files; if one differs or is missing, that player is told
   which.
 
+### Replays
+
+Every game that lasts ten seconds or more, offline or online, is kept as a replay when it
+ends: the game's start and every button press, a few hundred KB at most, in the `replays`
+folder (the 20 newest of each game). **Replays** in the main menu lists them. While one plays,
+A or Enter pauses, Right plays faster (up to eight times), Left plays at normal speed, and Back
+opens the pause menu. A replay runs with the Lua mods it was recorded with, and only on the
+version of the program that recorded it.
+
 ## 6. Lua mods
 
 Scripts in the `mods` folder appear in the main menu under **Lua mods**. X (Delete) turns
