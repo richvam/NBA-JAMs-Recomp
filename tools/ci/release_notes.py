@@ -99,6 +99,7 @@ def render(version, summary, sections, online, repo_files=None):
         "| macOS 11 or later (Apple Silicon and Intel), disk image | `NBAJamRecomp-v%s-macos-universal.dmg` |" % v,
         "| Linux on ARM 64-bit, AppImage | `NBAJamRecomp-v%s-linux-aarch64.AppImage` |" % v,
         "| Linux on ARM 64-bit, portable | `NBAJamRecomp-v%s-linux-arm64.tar.gz` |" % v,
+        "| Android 5 or later, 64-bit ARM (phones, tablets, handhelds), APK | `NBAJamRecomp-v%s-android.apk` |" % v,
         "",
         "`SHA256SUMS.txt` lists the checksum of each file. Windows may show a SmartScreen warning because "
         "the program is not signed: choose \"More info\", then \"Run anyway\". On a Mac, drag the app onto "
@@ -111,6 +112,11 @@ def render(version, summary, sections, online, repo_files=None):
         "`%APPDATA%\\NBAJamRecomp\\roms` (the Start menu has a shortcut to it), with the archive it is in the unpacked folder (MAME zips or the source repository zips; see "
         "`README.txt` for the list). No game data is included.",
         "3. Run `NBAJamRecomp`. Pick a game with the arrows and Enter, or a controller.",
+        "",
+        "On Android: open the APK on the phone and allow installing from that app when asked. In NBA "
+        "JAM Recomp choose \"Add ROMs\" (or \"Add a ROM folder\") and pick your ROM zips; they are copied "
+        "into the app's folder, `Android/data/io.github.richvam.NBA_JAMs_Recomp/files/roms`, which a "
+        "computer also sees over USB.",
         "",
         "Updating from an older version: unpack over the old folder, or into a new one and copy `roms`, "
         "`saves` and `nbajam_recomp.ini` across. The archives keep everything in their own folder.",
@@ -173,7 +179,7 @@ def self_test():
     except SystemExit:
         ok(True, "cut twice is refused")
     page = render("1.1.0", summary, secs, online_line("1", "1", "v1.0.0"))
-    ok("NBAJamRecomp-v1.1.0-windows-x64-setup.exe" in page and "NBAJamRecomp-v1.1.0-windows-x64.zip" in page and "NBAJamRecomp-v1.1.0-linux-x64.tar.gz" in page and "NBAJamRecomp-v1.1.0-linux-x86_64.AppImage" in page and "NBAJamRecomp-v1.1.0-linux-aarch64.AppImage" in page and "NBAJamRecomp-v1.1.0-linux-arm64.tar.gz" in page and "NBAJamRecomp-v1.1.0-linux-x86_64.flatpak" in page, "page names every download")
+    ok("NBAJamRecomp-v1.1.0-windows-x64-setup.exe" in page and "NBAJamRecomp-v1.1.0-windows-x64.zip" in page and "NBAJamRecomp-v1.1.0-linux-x64.tar.gz" in page and "NBAJamRecomp-v1.1.0-linux-x86_64.AppImage" in page and "NBAJamRecomp-v1.1.0-linux-aarch64.AppImage" in page and "NBAJamRecomp-v1.1.0-linux-arm64.tar.gz" in page and "NBAJamRecomp-v1.1.0-linux-x86_64.flatpak" in page and "NBAJamRecomp-v1.1.0-android.apk" in page, "page names every download")
     ok("## First run" in page and "**Plays online with v1.0.0**" in page, "page has first-run steps and the online line")
     ok("Does not play online" in online_line("2", "1", "v1.0.0"), "protocol change is announced")
     ok("first release" in online_line("1", None, None), "no previous version")

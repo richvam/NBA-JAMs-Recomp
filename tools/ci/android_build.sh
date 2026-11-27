@@ -3,7 +3,11 @@
 # Puts SDL's own Android project (from the pinned SDL source, tools/ci/fetch_sdl.sh android)
 # around the program and builds a debug APK for 64-bit ARM, plus x86_64 for the emulator in CI.
 # Needs ANDROID_HOME and ANDROID_NDK_HOME (preinstalled on GitHub's Ubuntu runners) and JDK 17.
-# The APK is signed with the Android debug key; the project's own release key is not set up yet.
+# The debug APK is signed with the Android debug key (for CI's emulator). R8.2: a release APK is
+# built too and signed with the project's own key when ANDROID_KEYSTORE_B64 (the keystore,
+# base64), ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD are set (CI
+# secrets, never in the repository); with ANDROID_TEST_KEY=1 instead, a throwaway key made here
+# signs it, to test the steps (that APK is named -testkey and is never released).
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 root=$PWD; sdl=$(realpath "$1"); out=$2
@@ -57,4 +61,30 @@ echo "$(wc -l < "$a/shipped.txt") shipped files in the APK"
 ( cd "$p" && ./gradlew --no-daemon -q assembleDebug )
 mkdir -p "$out"
 cp "$p/app/build/outputs/apk/debug/app-debug.apk" "$out/NBAJamRecomp-$ver-android-debug.apk"
+
+# ---- the release APK (R8.2) ----
+name=$ver; [ "${GITHUB_REF_TYPE:-}" = tag ] && name=v$ver
+ks=""; suffix=""
+# the project key needs all of its secrets; with one missing a branch build uses the throwaway key
+if [ -n "${ANDROID_KEYSTORE_B64:-}" ] && [ -n "${ANDROID_KEYSTORE_PASSWORD:-}" ] && [ -n "${ANDROID_KEY_ALIAS:-}" ] && [ -n "${ANDROID_KEY_PASSWORD:-}" ]; then
+  ks=$(mktemp -d)/release.jks
+  printf '%s' "$ANDROID_KEYSTORE_B64" | base64 -d > "$ks"
+elif [ "${ANDROID_TEST_KEY:-}" = 1 ]; then
+  ks=$(mktemp -d)/test.jks; suffix=-testkey
+  export ANDROID_KEYSTORE_PASSWORD=testpass ANDROID_KEY_ALIAS=test ANDROID_KEY_PASSWORD=testpass
+  keytool -genkeypair -keystore "$ks" -storepass testpass -keypass testpass -alias test -keyalg RSA -keysize 2048 -validity 1     -dname "CN=NBA JAM Recomp test key" >/dev/null 2>&1
+fi
+if [ -n "$ks" ]; then
+  ( cd "$p" && ./gradlew --no-daemon -q assembleRelease )
+  bt=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+  ls -la "$p/app/build/outputs/apk/release/"
+  un=$(ls "$p"/app/build/outputs/apk/release/*.apk | head -1)
+  echo "release build: $un, build tools $bt"
+  "$bt/zipalign" -f -p 4 "$un" "$p/aligned.apk" || { echo "zipalign failed: $?"; exit 1; }
+  apk="$out/NBAJamRecomp-$name-android$suffix.apk"
+  "$bt/apksigner" sign --ks "$ks" --ks-pass env:ANDROID_KEYSTORE_PASSWORD --ks-key-alias "$ANDROID_KEY_ALIAS"     --key-pass env:ANDROID_KEY_PASSWORD --out "$apk" "$p/aligned.apk"
+  rm -f "$ks"
+  echo "aligned and signed: $apk"
+  "$bt/apksigner" verify --verbose --print-certs "$apk" | head -12
+fi
 ls -la "$out"

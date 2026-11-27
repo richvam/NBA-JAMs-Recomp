@@ -170,7 +170,22 @@ jobs:
           restore-keys: gradle-android-
       - name: Fetch SDL2 source
         run: tools/ci/fetch_sdl.sh android deps/sdl2src
-      - name: Build the APK
+      - name: A release needs the project's signing key (R8.2)
+        if: github.ref_type == 'tag'
+        env:
+          HAS_KEY: ${{ secrets.ANDROID_KEYSTORE_B64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' && secrets.ANDROID_KEY_ALIAS != '' && secrets.ANDROID_KEY_PASSWORD != '' }}
+        run: |
+          if [ "$HAS_KEY" != true ]; then
+            echo "::error::the Android signing secrets are not all set (ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD): a release APK must be signed with the project's own key (docs/ANDROID.md)"
+            exit 1
+          fi
+      - name: Build the APK (debug, and release signed with the project's key or, on a branch, a throwaway one)
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_TEST_KEY: ${{ github.ref_type != 'tag' && '1' || '' }}
         run: tools/ci/android_build.sh deps/sdl2src dist-android
       - name: Save Gradle downloads (as soon as the APK builds, whatever the tests do)
         if: steps.gradle-cache.outputs.cache-hit != 'true'
@@ -197,9 +212,17 @@ jobs:
         with:
           name: test-android-output
           path: |
-            dist-android/*.apk
+            dist-android/*-debug.apk
+            dist-android/*-testkey.apk
             android-shots/
             android-logcat*.txt
+      - name: The APK for the release (signed with the project's key)
+        if: github.ref_type == 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: dist-android/*-android.apk
+          if-no-files-found: error
 
   macos:
     # R6.1: one universal program (Apple Silicon and Intel), built and tested on each processor
@@ -522,7 +545,7 @@ jobs:
   release:
     name: Draft GitHub Release
     if: github.ref_type == 'tag'
-    needs: [repo-check, linux, windows, windows-installer, linux-appimage, flatpak, macos, macos-dmg]
+    needs: [repo-check, linux, windows, windows-installer, linux-appimage, flatpak, macos, macos-dmg, android]
     runs-on: ubuntu-22.04
     permissions:
       contents: write          # create the release
