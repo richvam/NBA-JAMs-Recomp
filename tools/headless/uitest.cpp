@@ -1367,6 +1367,25 @@ int main(int argc, char **argv)
 				if (on.px[size_t(y) * screen::kW + size_t(x)] != off.px[size_t(y) * screen::kW + size_t(x)]) (x > screen::kW / 2 ? diff_right : diff_left)++;
 		CHECK(diff_right > 20 && diff_left == 0, "status line: \"Music on\" is drawn at the right when the music plays, and nothing else moves");
 		write_png(out, "settings_sound_music_on.png", on);
+		// with the mouse (or touch) the Back button is in that corner: "Music on" stays left of it
+		{
+			theme th6;
+			canvas m_off(screen::kW, screen::kH), m_on(screen::kW, screen::kH);
+			s.draw(m_off, th6, device::mouse, 0);
+			th6.note = "Music on";
+			s.draw(m_on, th6, device::mouse, 0);
+			rectf bb = screen::back_button();
+			int in_button = 0, changed = 0;
+			for (int y = screen::kH - 30; y < screen::kH; y++)
+				for (int x = 0; x < screen::kW; x++)
+					if (m_on.px[size_t(y) * screen::kW + size_t(x)] != m_off.px[size_t(y) * screen::kW + size_t(x)])
+					{
+						changed++;
+						if (bb.has(float(x), float(y))) in_button++;
+					}
+			CHECK(changed > 20 && in_button == 0, "status line: with the Back button shown, \"Music on\" is drawn beside it, not over it");
+			write_png(out, "settings_sound_music_on_mouse.png", m_on);
+		}
 	}
 
 	printf("\n%d checks, %d failed\n", g_run, g_fail);

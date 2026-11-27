@@ -712,11 +712,12 @@ void screen::draw(canvas &cv, const theme &th, device dev, unsigned now_ms) cons
 	}
 	const int line = cv.w - 16 - (back_btn ? 60 : 0);
 	const int note_w = th.note.empty() ? 0 : text_w(th.note, face::note) + 12;
+	const int note_x = cv.w - 8 - (back_btn ? 60 : 0) - note_w + 12;   // left of the Back button when it is shown
 	if (text_w(st, face::note) <= line)
 	{
 		put(8, cv.h - 14, st, th.status, face::note);
 		// the note beside the prompts, or on the free line above them
-		if (note_w) put(cv.w - 8 - note_w + 12, text_w(st, face::note) + note_w <= line ? cv.h - 14 : cv.h - 25, th.note, th.header, face::note);
+		if (note_w) put(note_x, text_w(st, face::note) + note_w <= line ? cv.h - 14 : cv.h - 25, th.note, th.header, face::note);
 	}
 	else
 	{
@@ -727,7 +728,7 @@ void screen::draw(canvas &cv, const theme &th, device dev, unsigned now_ms) cons
 		if (cut == std::string::npos) cut = st.size() / 2;
 		put(8, cv.h - 24, fit_px(st.substr(0, cut), line, face::note), th.status, face::note);
 		put(8, cv.h - 13, fit_px(st.substr(std::min(st.size(), cut + 2)), line, face::note), th.status, face::note);
-		if (note_w && text_w(st.substr(std::min(st.size(), cut + 2)), face::note) + note_w <= line) put(cv.w - 8 - note_w + 12, cv.h - 13, th.note, th.header, face::note);
+		if (note_w && text_w(st.substr(std::min(st.size(), cut + 2)), face::note) + note_w <= line) put(note_x, cv.h - 13, th.note, th.header, face::note);
 	}
 
 	if (!m_toast.empty() && now_ms < m_toast_until)
