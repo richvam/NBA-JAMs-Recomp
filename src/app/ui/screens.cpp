@@ -660,6 +660,7 @@ screen make_about(const about_state &st)
 	static const char *const kTouch[][2] = {
 		{ "Choose in a menu", "Tap, or A on a controller" }, { "Back", "Back gesture, < Back, or B" },
 		{ "Pause menu, in a game", "Back gesture, or hold Start" }, { "Picture, sound, game", "Settings in the menu" },
+		{ "Touch controls", "Settings, Touch tab" }, { "Add ROMs", "Add ROMs in the menu" },
 	};
 	for (auto &r : kTouch) k.items.push_back(row(r[0], r[1]));
 	add_text(k.items, "With a keyboard attached, the desktop keys (Esc, F1 to F12) work too.", px, 2);

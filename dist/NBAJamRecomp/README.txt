@@ -165,6 +165,12 @@ ONLINE PLAY
     screen. When both routers are of the strictest kind (mobile networks,
     some workplaces), forward UDP port 7845 by hand or use a virtual LAN
     (Tailscale, ZeroTier, Radmin VPN).
+  * Windows, Linux, macOS and Android play together; the lobby shows what
+    each player plays on. With an IPv6 address the host also gets a longer
+    code: send it if the short one does not connect (often on mobile data).
+  * A phone moving from Wi-Fi to mobile data mid-game goes on at its new
+    address when the other side's router lets it in. On Android, switching
+    to another app leaves the online game.
   * The pause menu opens online too; the game goes on for everybody.
   * If "DESYNC" appears, leave (pause menu, "Leave the online game") and host
     the game again.
@@ -182,6 +188,22 @@ LUA MODS
     CPU, random matchups, auto initials) do nothing in an online game.
   * Scripts that change a game keep it out of the players' saved records
     ("Protect records", on by default).
+
+
+ANDROID
+-------
+  * Install the APK on the phone (allow installing from that app when asked).
+  * ROMs: main menu, "Add ROMs" (files or zips) or "Add a ROM folder", in the
+    phone's file picker. They are copied into the app's folder:
+    Android/data/io.github.richvam.NBA_JAMs_Recomp/files (seen over USB too).
+    Uninstalling deletes that folder: copy it first to keep ROMs and saves.
+  * Touch: tap to choose, the back gesture or "< Back" goes back; in a game
+    the back gesture opens the pause menu. Touch controls (stick, Shoot,
+    Pass, Turbo, Start, Coin) show while no controller is connected;
+    Settings -> Touch moves, resizes and fades them. A TV remote works the
+    menus.
+  * Switching to another app pauses the game; if Android closes the app
+    meanwhile, the next start goes on from the same moment.
 
 
 FOLDERS
@@ -212,6 +234,7 @@ This package is portable: the file portable.txt next to the program makes it kee
 settings, saves, screenshots, controller profiles, mods and roms in this folder.
 Without portable.txt the program uses your user folder instead
 (Windows: %APPDATA%\NBAJamRecomp, Linux: ~/.local/share/NBAJamRecomp,
-Mac: ~/Library/Application Support/NBAJamRecomp), so it can be
+Mac: ~/Library/Application Support/NBAJamRecomp; on Android always
+Android/data/io.github.richvam.NBA_JAMs_Recomp/files), so it can be
 installed somewhere it cannot write. If it then finds an older setup next to the
 program it offers to move it. The About screen shows the folder in use.

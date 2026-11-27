@@ -1,8 +1,8 @@
 # NBA JAM Recomp
 
 Midway's NBA JAM arcade games, **rebuilt from their original source code**, in one program
-for Windows, Linux and macOS: a game picker, CRT shaders, remappable controllers, Lua mods and
-online play for up to four players.
+for Windows, Linux, macOS and Android: a game picker, CRT shaders, remappable controllers,
+touch controls, Lua mods and online play for up to four players on any mix of them.
 
 Created by **Pocket_lucho** with **Claude** (Anthropic).
 If you want to support me, go to https://buymeacoffee.com/pocket_lucho
@@ -37,6 +37,7 @@ Get the latest version from the **[Releases page](https://github.com/richvam/NBA
 | Linux, 64-bit (x86-64), portable | `NBAJamRecomp-<version>-linux-x64.tar.gz` |
 | macOS 11 or later, Apple Silicon and Intel, disk image | `NBAJamRecomp-<version>-macos-universal.dmg` (from the next release on) |
 | Linux on ARM 64-bit (Raspberry Pi 4/5 with a 64-bit system, ARM laptops), AppImage or portable | `NBAJamRecomp-<version>-linux-aarch64.AppImage`, `NBAJamRecomp-<version>-linux-arm64.tar.gz` (from the next release on) |
+| Android 5 or later, 64-bit ARM (phones, tablets, handhelds such as the AYN Thor), APK | `NBAJamRecomp-<version>-android.apk` (from the next release on) |
 
 The Windows installer needs no administrator rights: it installs for your user, adds a Start
 menu entry (and a desktop one if you tick it), and keeps your ROMs, settings and saves in
@@ -60,6 +61,12 @@ then in System Settings, Privacy & Security, click **Open Anyway** next to "NBA 
 blocked". On macOS 11 to 14: Control-click the app in Applications, choose Open, then Open.
 After that it opens normally. The disk image has these steps in a read-me too.
 
+On Android, open the APK on the phone and allow installing from the app you opened it with
+when Android asks (it is not in the Play Store). The app turns to landscape. It keeps your
+ROMs, settings and saves in `Android/data/io.github.richvam.NBA_JAMs_Recomp/files`, a folder a
+computer also sees over USB. Uninstalling the app deletes that folder, ROMs and saves
+included: copy it first if you want to keep them.
+
 **Checking a download.** The program and installer are not signed yet, so Windows cannot
 say who made them. Each release lists the SHA-256 checksum of every file in
 `SHA256SUMS.txt`. In PowerShell, `Get-FileHash .\NBAJamRecomp-<version>-windows-x64-setup.exe`
@@ -78,6 +85,13 @@ The easiest way: **drag your ROM files, zips or a folder of them onto the progra
 while the game list is shown. They are copied into the `roms` folder and the games are
 looked for again at once. **Open my ROM folder** in the main menu opens the folder itself;
 after copying files there by hand, choose **Look for ROMs again**.
+
+On Android, choose **Add ROMs** in the main menu and pick one or more files (zips too) in
+the phone's file picker, or **Add a ROM folder** to pick a whole folder. They are copied into
+the app's `roms` folder (a file that is already there is not copied twice) and the games are
+looked for again; the message says how many games are ready. No storage permission is asked
+for. Files copied into `Android/data/io.github.richvam.NBA_JAMs_Recomp/files/roms` from a
+computer over USB work too.
 
 | Game | What to put in `roms` |
 |---|---|
@@ -103,6 +117,11 @@ Repository ZIPs are downloaded on GitHub with "Code", then "Download ZIP".
 Everything works with a controller alone: menus, settings, button binding, Lua mods, online
 games (the host's address is typed on an on-screen keyboard), the pause menu.
 
+On Android everything works by touch as well: tap to choose, tap a tab to switch, and the
+back gesture (or the **< Back** button in the corner) goes back; in a game the back gesture
+opens the pause menu. Switching to another app pauses the game; if Android closes the app
+while it is away, the next start goes on with that game, paused, from the same moment.
+
 The downloads are **portable**: settings, saves, screenshots, controller profiles, mods and
 ROMs all stay in the unpacked folder, because it contains a file called `portable.txt`.
 Without that file the program keeps them in your user folder instead
@@ -120,7 +139,14 @@ be switched off there).
 In the menus: the directions move, A (Enter) chooses, B (Esc) goes back, the shoulder
 buttons (Q and E) change tab, X (Delete) is the extra action a screen names at the bottom.
 The mouse and touch work too. The bottom line always says which button does what, in the
-names of the device you used last.
+names of the device you used last. A TV remote works the menus: its arrows move, the centre
+key chooses and Back goes back.
+
+**Touch controls** (Android, or any touch screen): a stick and Shoot, Pass, Turbo, Start and
+Coin buttons are drawn over the game for player 1. A finger can slide from one button to the
+next. On Android they show by default while no controller is connected and hide when one
+is; on a computer they are off until switched on. **Settings**, tab **Touch**: Automatic, On or Off, their size and opacity, **Arrange**
+(drag each one where you want it; kept for next time) and back to the default places.
 
 In a game, by default:
 
@@ -144,8 +170,8 @@ Keyboard keys are changed in `nbajam_recomp.ini`.
 
 **Settings** (main menu, or "Video and sound" in the pause menu) has the picture (shape,
 scaling, look, scanlines, what fills the sides of a 4:3 picture, fullscreen, the TV safe
-area), the sound (volume, the menus' music and sounds), the cabinet switches and the
-program's own options. The menus play the highlighted game's own music and sounds, from its
+area, a log of frame times), the sound (volume, the menus' music and sounds), the touch
+controls, the cabinet switches and the program's own options. The menus play the highlighted game's own music and sounds, from its
 ROMs; without them they are silent.
 
 The keyboard also has shortcuts for what is in those menus:
@@ -274,14 +300,17 @@ and special combos do nothing there.
 
 ## 5. Online
 
-Up to four players, each on their own computer.
+Up to four players, each on their own computer or phone: Windows, Linux, macOS and Android
+play together. The lobby shows what each player plays on.
 
 1. Highlight the game and choose **Online game** in the menu (or press X on a controller,
    or `N`).
 2. One player chooses **Host a game** and waits in the lobby, which lists who has joined,
    then chooses **Start the game**. They are player 1.
 3. The host's lobby shows a **code** such as `6BR0E-7C2YD`. **Copy my code** puts it on the
-   clipboard to send in a chat.
+   clipboard to send in a chat. When the host also has an IPv6 address, a longer code is shown
+   under it: send that one if the short code does not connect (often the case on mobile
+   data).
 4. The others choose **Join a game** and type the code (or, on the same network, the host's
    address), on the on-screen keyboard with a controller or on the keyboard (Ctrl+V
    pastes). They become players 2, 3 and 4 in the order they arrive. A host joined before
@@ -305,6 +334,10 @@ Good to know:
 * Input delay: 3 to 4 on a home network, 5 to 7 over the internet. If the game keeps
   stopping with "Waiting for the network...", raise it (on the Online screen or in the lobby).
 * The pause menu opens online too, but the game goes on for everybody while it is open.
+* If a player's network changes during a game (a phone moving from Wi-Fi to mobile data), the
+  game goes on at the new address, as long as the other side's router lets it in; otherwise
+  the game ends after 10 seconds. On Android, switching to another app leaves the online game,
+  so the others are not left waiting.
 * If "DESYNC" appears, leave (pause menu, "Leave the online game") and host the game again.
 * Lua mods: the host's mods run on every computer, with the host's options, whatever each
   player has switched on (their own settings come back afterwards). The lobby lists them.
@@ -365,6 +398,8 @@ nothing. To write your own, see [`mods/README.txt`](dist/NBAJamRecomp/mods/READM
 | Borders on every side | That is Integer scaling, which only grows in whole steps. Press F5 until it says "Fit". |
 | The program closes by itself (Windows) | It writes a report in the `crashes` folder of its data folder (About shows which folder): a `.txt` and a `.dmp`. Attach both to an issue on GitHub. |
 | A controller does nothing | Open **Controls**: the top line shows the pad the program sees. Select an action and press the button you want. |
+| Android: the new APK does not install over the old one | A test build may be signed with another key than the one you have. Copy `Android/data/io.github.richvam.NBA_JAMs_Recomp/files` to a computer, uninstall, install the new one, and copy the folder back. Releases are all signed with one key and install over each other. |
+| Android: the touch controls are missing | They hide while a controller is connected. **Settings**, **Touch**: set them to On. |
 | I cannot find my saves or settings | Open **About**: the "Data" line shows the folder. |
 | Online: "your ROMs (or Lua mods) are not the same as the host's" | Use the same ROM files. |
 | Online: "your Lua mod ... is not the same as the host's" | Copy the host's file (and the `mods/lib/` files it uses) into your `mods` folder. |
