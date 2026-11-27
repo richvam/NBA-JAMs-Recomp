@@ -1272,11 +1272,25 @@ int main(int argc, char **argv)
 		screen on = make_pause(po);
 		walk(on, "Pause menu (online)");
 		bool greyed = true;
-		for (int id : { (int)ps_reset, (int)ps_test, (int)ps_service, (int)ps_video, (int)ps_controls, (int)ps_help, ps_coin0 + 1, ps_coin0 + 2, ps_coin0 + 3 }) greyed = greyed && on.find(id)->disabled;
+		for (int id : { (int)ps_video, (int)ps_controls, (int)ps_help, ps_coin0 + 1, ps_coin0 + 2, ps_coin0 + 3 }) greyed = greyed && on.find(id)->disabled;
+		// N6.3: online the cabinet panel (reset, TEST switch, service: never online) is the chat
+		const bool no_cabinet = !on.find(ps_reset) && !on.find(ps_test) && !on.find(ps_service);
 		bool open = true;
-		for (int id : { (int)ps_resume, (int)ps_volume, (int)ps_shot, (int)ps_quit, (int)ps_coin0 }) open = open && !on.find(id)->disabled;
-		CHECK(greyed && open && on.find(ps_quit)->label == "Leave the online game" && on.find(ps_coin0)->label == "You" && on.tabs[0].panels[0].title == "Online game: still running",
-		      "Pause menu online: reset, TEST switch, mods, the full settings and the others' coins are greyed; resume, volume, screenshot, your coin and leave are not");
+		for (int id : { (int)ps_resume, (int)ps_volume, (int)ps_shot, (int)ps_quit, (int)ps_coin0, (int)ps_say }) open = open && on.find(id) && !on.find(id)->disabled;
+		for (int k = 0; k < 8; k++) open = open && on.find(ps_phrase0 + k) && !on.find(ps_phrase0 + k)->disabled;
+		CHECK(greyed && no_cabinet && open && on.find(ps_quit)->label == "Leave the online game" && on.find(ps_coin0)->label == "You" && on.tabs[0].panels[0].title == "Online game: still running" &&
+		      on.find(ps_phrase0 + 1)->label == "Nice shot!" && on.tabs[0].panels[2].title == "Say",
+		      "Pause menu online: mods, the full settings and the others' coins are greyed; the cabinet panel is the chat (eight phrases, Type a message); resume, volume, screenshot, your coin and leave are open");
+		{
+			// the chat panel keeps its items through updates (update_pause trims the cabinet panel)
+			update_pause(on, po);
+			update_pause(on, po);
+			CHECK(on.find(ps_say) && on.find(ps_phrase0 + 7), "Pause menu online: the chat items stay after updates");
+			canvas cv(screen::kW, screen::kH);
+			theme thc;
+			on.draw(cv, thc, device::xbox, 0);
+			write_png(out, "pause_online_chat.png", cv);
+		}
 		// N1.4: save states only when they are on, and never online
 		{
 			pause_state s0 = ps;
@@ -1354,6 +1368,10 @@ int main(int argc, char **argv)
 		show_settings(s, a);
 		read_settings(s, b);
 		CHECK(s.find(st_frame_log) && b.frame_log, "Settings: the frame time log switch round-trips (R7.6)");
+		a.chat = 1; a.chat_filter = false;
+		show_settings(s, a);
+		read_settings(s, b);
+		CHECK(s.find(st_chat) && s.find(st_chat_filter) && b.chat == 1 && !b.chat_filter, "Settings: who the chat is shown from and the word filter round-trip (N6.4)");
 
 		// "Music on" at the right of the status line, only when it is set
 		theme th5;

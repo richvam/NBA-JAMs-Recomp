@@ -170,6 +170,8 @@ ONLINE PLAY
     code: send it if the short one does not connect (often on mobile data).
   * A phone moving from Wi-Fi to mobile data mid-game goes on at its new
     address when the other side's router lets it in.
+  * Chat: the pause menu of an online game has quick phrases and "Type a
+    message...". Settings -> Program: who you see it from, and a word filter.
   * Joining a game that has already started, with the host's code, lets you
     watch it (up to 8 watchers).
   * A player who drops out has a minute to come back: the game waits, and

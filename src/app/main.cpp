@@ -141,6 +141,8 @@ struct config
 	bool use_opengl = true;
 	float volume = 0.8f;
 	bool news = true;             // ask the Releases feed for the latest version at start (R2.3)
+	int chat = 0;                 // N6.4: online chat shown from 0 everyone, 1 the players only, 2 nobody
+	bool chat_filter = true;      // N6.4: rude words masked
 	bool save_states = false;     // N1.4: Save and Load in the pause menu, offline only
 	int net_port = 7845;
 	int net_delay = 4;
@@ -184,7 +186,7 @@ static SDL_Scancode *key_slot(key_map &k, int i)
 static void save_config(const std::string &path, config &c)
 {
 	std::ofstream f(path);
-	f << "# NBA JAM Recomp - configuration\n[general]\n# news=1 asks github.com once at start for the latest release (only to tell you; nothing is downloaded)\nnews=" << c.news << "\n# pause_button: held on a controller for the pause menu (Esc and Guide always work): start (one second; a quick press still goes to the game), start+back or l3+r3 (half a second)\npause_button=" << (c.pause_buttons == 2 ? "l3+r3" : c.pause_buttons == 1 ? "start+back" : "start") << "\n# save_states=1 adds Save and Load (three slots per game) to the pause menu of an offline game\nsave_states=" << c.save_states << "\n# the menus play the highlighted game's own music and sounds, from its ROMs\nmenu_music=" << c.menu_music << "\nmenu_sounds=" << c.menu_sounds << "\nmenu_volume=" << c.menu_volume << "\n\n[video]\n# scale: size of the window in multiples of 400x300; 0 = chosen from the screen size\nscale=" << c.scale << "\nfullscreen=" << c.fullscreen << "\n# tv_margins=1 keeps the menus 5% in from each edge, for TVs that cut the edges off\ntv_margins=" << c.tv_margins
+	f << "# NBA JAM Recomp - configuration\n[general]\n# news=1 asks github.com once at start for the latest release (only to tell you; nothing is downloaded)\nnews=" << c.news << "\n# pause_button: held on a controller for the pause menu (Esc and Guide always work): start (one second; a quick press still goes to the game), start+back or l3+r3 (half a second)\npause_button=" << (c.pause_buttons == 2 ? "l3+r3" : c.pause_buttons == 1 ? "start+back" : "start") << "\n# save_states=1 adds Save and Load (three slots per game) to the pause menu of an offline game\nsave_states=" << c.save_states << "\n# chat: online chat shown from 0 everyone, 1 the players only (not watchers), 2 nobody; chat_filter=1 masks rude words\nchat=" << c.chat << "\nchat_filter=" << c.chat_filter << "\n# the menus play the highlighted game's own music and sounds, from its ROMs\nmenu_music=" << c.menu_music << "\nmenu_sounds=" << c.menu_sounds << "\nmenu_volume=" << c.menu_volume << "\n\n[video]\n# scale: size of the window in multiples of 400x300; 0 = chosen from the screen size\nscale=" << c.scale << "\nfullscreen=" << c.fullscreen << "\n# tv_margins=1 keeps the menus 5% in from each edge, for TVs that cut the edges off\ntv_margins=" << c.tv_margins
 	  << "\n# shader: 0 sharp, 1 smooth, 2 scanlines, 3 CRT, 4 curved CRT\nshader=" << c.shader
 	  << "\n# view: original (4:3), widescreen (more of the court in play; all five games) or stretch (fills the window, distorted).\nview=" << view_shape_id(c.shape)
 	  << "\n# scaling: integer (whole multiples of the game's lines), fit (fills the height, crisp pixels), smooth (fills the height, filtered)\nscaling=" << view_scaling_id(c.scaling) << "\n# frame_time_log=1 writes how long each 120 game frames took to draw to frame_times.log in the data folder\nframe_time_log=" << c.frame_log << "\n# max_view_width: the widest the Widescreen view gets: widest (as wide as the window, up to 1000 columns), 16:9 or 21:9; a wider window gets sides\nmax_view_width=" << (c.max_wide == 1 ? "16:9" : c.max_wide == 2 ? "21:9" : "widest") << "\n# side_fill: around a 4:3 picture on a wider screen: black, blur (the picture, blurred and dimmed), overlay (an image from overlays/ in the data folder)\nside_fill=" << (c.side_fill == 1 ? "blur" : c.side_fill == 2 ? "overlay" : "black") << "\noverlay=" << c.overlay << "\n# overlay_opacity: 0.1 to 1, for overlays with a transparent opening\noverlay_opacity=" << c.overlay_opacity << "\nscanline_strength=" << c.scan_strength
@@ -226,6 +228,8 @@ static void load_config(const std::string &path, config &c)
 		std::string k = trim(line.substr(0, eq)), v = trim(line.substr(eq + 1));
 		if (k == "language") continue;       // from older versions: the program is English only for now
 		else if (k == "news") c.news = atoi(v.c_str()) != 0;
+		else if (k == "chat") c.chat = std::clamp(atoi(v.c_str()), 0, 2);
+		else if (k == "chat_filter") c.chat_filter = atoi(v.c_str()) != 0;
 		else if (k == "save_states") c.save_states = atoi(v.c_str()) != 0;
 		else if (k == "pause_button") c.pause_buttons = v == "l3+r3" ? 2 : v == "start+back" ? 1 : 0;
 		else if (k == "pause_buttons") c.pause_buttons = v == "l3+r3" ? 2 : 0;   // before: start+back (the default then, which opens a Windows menu) becomes Start
@@ -554,6 +558,12 @@ private:
 	static std::vector<u8> squeeze(const std::vector<u8> &raw);
 	static bool unsqueeze(const std::vector<u8> &in, std::vector<u8> &raw);
 	unsigned m_away_msg_t = 0;
+	// N6: chat lines over the game (the newest last) and typing one from the pause menu
+	struct chat_line { std::string text; unsigned until; };
+	std::vector<chat_line> m_chat;
+	bool m_chat_typing = false;
+	void chat_show(const std::string &who, const std::string &text);
+	std::string chat_who(int from) const;
 	int m_watchers_seen = 0;
 	// N5.4: replays. Every game is recorded from its first frame (a save state, then each
 	// frame's inputs, as an online game shares them) and kept in replays/<game>/ when it ends.
@@ -1553,6 +1563,8 @@ void app::stop_game(bool keep_resume)
 	if (!m_playing) rec_save();
 	m_rec_on = false;
 	m_watchers_seen = 0;
+	m_chat.clear();
+	m_chat_typing = false;
 	m_rec = replay();
 	m_playing = false;
 	m_play = replay();
@@ -1629,6 +1641,19 @@ void app::draw_overlay(canvas &cv)
 			}
 	}
 	if (m_paused) { std::string pt = "PAUSED"; cv.text(cv.w / 2 - cv.text_w(pt, 2) / 2, cv.h / 2 - 8, pt, 0xffffff40, 2); }
+	{
+		// N6.3: the newest chat lines, at the top, for eight seconds each
+		const unsigned now = SDL_GetTicks();
+		while (!m_chat.empty() && now >= m_chat.front().until) m_chat.erase(m_chat.begin());
+		int y = 2;
+		for (const chat_line &l : m_chat)
+		{
+			const std::string t = l.text.substr(0, size_t(std::max(8, (cv.w - 8) / 8)));
+			cv.blend(0, y - 1, std::min(cv.w, cv.text_w(t) + 8), 11, 0xff000000, 150);
+			cv.text(4, y, t, 0xffffffa0);
+			y += 11;
+		}
+	}
 	if (!m_message.empty() && SDL_GetTicks() < m_message_until)
 	{
 		cv.blend(0, cv.h - 14, cv.w, 14, 0xff000000, 170);
@@ -1914,6 +1939,8 @@ ui::settings_state app::settings_now()
 	st.volume = m_cfg.volume;
 	st.free_play = m_cfg.dips.free_play; st.four_players = m_cfg.dips.four_players; st.video_clips = m_cfg.dips.video_clips; st.country = m_cfg.dips.country;
 	st.news = m_cfg.news;
+	st.chat = m_cfg.chat;
+	st.chat_filter = m_cfg.chat_filter;
 	st.save_states = m_cfg.save_states;
 	st.pause_buttons = m_cfg.pause_buttons;
 	st.menu_music = m_cfg.menu_music; st.menu_sounds = m_cfg.menu_sounds; st.menu_volume = m_cfg.menu_volume;
@@ -1947,6 +1974,8 @@ void app::apply_settings(const ui::settings_state &want)
 		m_cfg.fullscreen = want.fullscreen;
 		SDL_SetWindowFullscreen(m_win, m_cfg.fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
 	}
+	m_cfg.chat = std::clamp(want.chat, 0, 2);
+	m_cfg.chat_filter = want.chat_filter;
 	if (want.news != had.news)
 	{
 		m_cfg.news = want.news;
@@ -2841,6 +2870,12 @@ bool app::step_game(bool menu_open)
 			}
 			else SDL_Log("online: no state for the player joining again: %s", err.c_str());
 		}
+		// N6: chat, shown as the settings say
+		for (const netplay::chat_msg &c : m_net.take_chat())
+		{
+			if (m_cfg.chat == 2 || (m_cfg.chat == 1 && c.from >= 100)) continue;
+			chat_show(chat_who(c.from), c.phrase ? netplay::phrase_text(c.phrase_id) : c.text);
+		}
 		// N5.1: the host hears who watches
 		if (m_net.role() == netplay::mode::host && m_net.watchers() != m_watchers_seen)
 		{
@@ -3069,6 +3104,35 @@ bool app::load_slot(int n)
 	m_rec_on = false;                    // the recording starts again from here
 	message("Loaded slot " + std::to_string(n + 1), 2000);
 	return true;
+}
+
+// ---------------------------------------------------------------- chat (N6)
+std::string app::chat_who(int from) const
+{
+	if (from >= 100) return "Watcher " + std::to_string(from - 99);
+	std::string w = "P" + std::to_string(from + 1);
+	const char *p = netplay::platform_name(m_net.platform_of(from));
+	return *p ? w + " (" + p + ")" : w;
+}
+
+// rude words as ****, whole or inside others ("words masked", N6.4); a short list, English
+static std::string chat_filtered(std::string s)
+{
+	static const char *const bad[] = { "fuck", "shit", "cunt", "bitch", "asshole", "bastard", "dick", "nigger", "nigga", "faggot", "fag", "retard", "whore", "slut", "twat", "wank" };
+	std::string low = s;
+	for (char &c : low) c = char(std::tolower((unsigned char)c));
+	for (const char *b : bad)
+		for (size_t at = low.find(b); at != std::string::npos; at = low.find(b, at + 1))
+			for (size_t k = 0; k < std::strlen(b); k++) s[at + k] = '*';
+	return s;
+}
+
+void app::chat_show(const std::string &who, const std::string &text)
+{
+	std::string t = m_cfg.chat_filter ? chat_filtered(text) : text;
+	SDL_Log("chat: %s: %s", who.c_str(), t.c_str());
+	m_chat.push_back({ who + ": " + t, SDL_GetTicks() + 8000 });
+	if (m_chat.size() > 4) m_chat.erase(m_chat.begin());
 }
 
 // ---------------------------------------------------------------- replays (N5.4)
@@ -3360,6 +3424,20 @@ bool app::pause_frame()
 		for (int n = 0; n < 3; n++) st.slots[n] = m_slot_info[n];
 		return st;
 	};
+	if (m_chat_typing)
+	{
+		// N6.3: a message on the on-screen keyboard (or a keyboard)
+		int k = kbd_step();
+		if (k)
+		{
+			m_chat_typing = false;
+			std::string t = netplay::chat_clean(m_edit);
+			if (k == 1 && !t.empty() && m_net_game) { m_net.say(t); chat_show("You", t); resume_game(); return ran; }
+		}
+		ui::update_pause(m_pause_scr, state());
+		ui_show(m_pause_scr);
+		return ran;
+	}
 	if (m_menu_guide || pause_shortcut()) { resume_game(); return ran; }
 	ui::event ev;
 	while (ui_next(ev))
@@ -3378,6 +3456,11 @@ bool app::pause_frame()
 		switch (r.id)
 		{
 		case ui::ps_resume: resume_game(); return ran;
+		case ui::ps_say: if (m_net_game) { m_chat_typing = true; kbd_open(ui::layout::text, "Your message", "", size_t(netplay::CHAT_LEN)); } break;
+		case ui::ps_phrase0: case ui::ps_phrase0 + 1: case ui::ps_phrase0 + 2: case ui::ps_phrase0 + 3:
+		case ui::ps_phrase0 + 4: case ui::ps_phrase0 + 5: case ui::ps_phrase0 + 6: case ui::ps_phrase0 + 7:
+			if (m_net_game) { m_net.say_phrase(r.id - ui::ps_phrase0); chat_show("You", netplay::phrase_text(r.id - ui::ps_phrase0)); resume_game(); return ran; }
+			break;
 		case ui::ps_shot:
 		{
 			int w = m_mach->width(), h = m_mach->height();

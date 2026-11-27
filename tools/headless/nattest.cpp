@@ -548,6 +548,60 @@ static watch_result watch_play()
 	return res;
 }
 
+// N6.1: chat in a game of a host, a player and a watcher. A message is cleaned and reaches
+// the others once; a quick phrase arrives as a phrase; a flood of 50 from the player is cut
+// to the limit while the game runs on, in step, to frame 400.
+struct chat_result { bool clean = false, relayed = false, phrase = false, cut = false, flood_limited = false, game_ok = false; int got_flood = 0, dropped = 0; };
+static chat_result chat_play()
+{
+	chat_result res;
+	netplay host, cl, wt;
+	std::string err;
+	if (!host.host(0, err)) return res;
+	net_addr ha{ ip4(127, 0, 0, 1), host.socket().local_port() };
+	if (!cl.join(net_code(ha), 0, err)) return res;
+	auto pump = [&] { host.poll(); if (cl.active()) cl.poll(); if (wt.active()) wt.poll(); };
+	auto until = [&](auto done, int ms) { auto t0 = net_now_ms(); while (!done() && net_now_ms() - t0 < u32(ms)) { pump(); sleep_ms(2); } return done(); };
+	if (!until([&] { return cl.local_slot() == 1 && host.players() == 2; }, 4000)) return res;
+	host.host_start("chattest", 3, dip_settings(), std::vector<u8>(64, 1), 4, "");
+	if (!until([&] { return cl.start_received(); }, 5000)) return res;
+	cl.client_ready(true, "");
+	if (!until([&] { return host.all_ready(); }, 5000)) return res;
+	auto step = [](netplay &n) { if (!n.can_run()) return; cabinet_inputs::player mine{}; mine.left = n.frame() % 9 < 4; n.frame_inputs(mine); n.frame_done(n.frame() * 7 + 1); };
+	// a watcher, so that relaying reaches it too
+	if (!wt.join(net_code(ha), 0, err)) return res;
+	bool given = false;
+	until([&] { step(host); step(cl); if (host.wants_state() && !given) { host.give_state(std::vector<u8>(16, 1)); given = true; }
+	            if (wt.start_received() && wt.resuming()) { wt.client_ready(true, ""); return true; } return false; }, 6000);
+	std::vector<netplay::chat_msg> at_host, at_cl, at_wt;
+	auto collect = [&] { for (auto &m : host.take_chat()) at_host.push_back(m); for (auto &m : cl.take_chat()) at_cl.push_back(m); for (auto &m : wt.take_chat()) at_wt.push_back(m); };
+	auto run = [&](int ms) { auto t0 = net_now_ms(); while (net_now_ms() - t0 < u32(ms)) { pump(); step(host); step(cl); step(wt); collect(); sleep_ms(1); } };
+	cl.say("  Hello\tthere \x01\x7f  friends ");
+	run(400);
+	res.clean = at_host.size() == 1 && at_host[0].from == 1 && at_host[0].text == "Hello there friends";
+	res.relayed = at_wt.size() == 1 && at_wt[0].from == 1 && at_wt[0].text == "Hello there friends" && at_cl.empty();
+	host.say_phrase(1);
+	run(400);
+	res.phrase = at_cl.size() == 1 && at_cl[0].from == 0 && at_cl[0].phrase && at_cl[0].phrase_id == 1 && std::string(netplay::phrase_text(1)) == "Nice shot!";
+	run(3000);                                          // the burst fills up again
+	at_host.clear();
+	for (int i = 0; i < 50; i++) cl.say("flood " + std::to_string(i));
+	run(600);
+	res.got_flood = int(at_host.size());
+	res.dropped = host.chat_dropped();
+	res.flood_limited = res.got_flood >= 1 && res.got_flood <= netplay::CHAT_BURST + 1 && res.dropped >= 40;
+	at_host.clear();
+	run(1500);
+	cl.say(std::string(200, 'x'));
+	run(600);
+	res.cut = !at_host.empty() && at_host.back().text.size() == size_t(netplay::CHAT_LEN);
+	while ((host.frame() < 400 || cl.frame() < 400) && host.active()) run(50);
+	res.game_ok = host.frame() >= 400 && cl.frame() >= 400 && !host.desynced() && !cl.desynced();
+	printf("  chat: flood of 50 -> %d shown, %d dropped; game at frames %u / %u%s\n", res.got_flood, res.dropped, host.frame(), cl.frame(), res.game_ok ? ", in step" : "");
+	wt.stop(); cl.stop(); host.stop();
+	return res;
+}
+
 // The connection report (N2.4): host behind hk, player behind ck, each router delaying what
 // leaves it by its delay (and spread). Waits until the reports settled, then reads them.
 struct report_result { netplay::conn_type host = netplay::conn_type::unknown, player = netplay::conn_type::unknown, host_fw = netplay::conn_type::unknown; int ping_h = 0, ping_c = 0, jit_c = 0; bool direct = false; };
@@ -1068,6 +1122,14 @@ int main(int argc, char **argv)
 		for (int s = 1; s < 4 && seen; s++) for (int t = s + 1; t < 4; t++) distinct = distinct && h.platform_of(s) != h.platform_of(t);
 		CHECK(seen && distinct, "platforms: four players on Android, Windows, Linux and macOS each see every seat's platform in the lobby (R8.1)");
 		h.stop(); for (auto &x : c) x.stop();
+	}
+	// ---- chat (N6.1) ----
+	{
+		chat_result c = chat_play();
+		CHECK(c.clean && c.relayed, "chat: a message is cleaned (spaces, control characters) and reaches the host and the watcher once, not its sender");
+		CHECK(c.phrase, "chat: a quick phrase arrives as a phrase");
+		CHECK(c.flood_limited && c.cut, "chat: a flood is cut to the limit and a long message to 80 characters");
+		CHECK(c.game_ok, "chat: the game runs on in step through all of it");
 	}
 	// ---- spectating (N5.1) ----
 	{

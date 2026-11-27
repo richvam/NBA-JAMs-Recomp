@@ -74,6 +74,8 @@ struct settings_state
 	bool free_play = true, four_players = true, video_clips = true;
 	int country = 0;
 	bool news = true;
+	int chat = 0;                         // N6.4: chat shown from everyone, the players only, or nobody
+	bool chat_filter = true;              // N6.4: words masked
 	bool save_states = false;            // N1.4: Save and Load in the pause menu of an offline game
 	int pause_buttons = 0;               // what is held on a controller for the pause menu: index into pause_button_names()
 	bool menu_music = true, menu_sounds = true;   // in the menus, from the highlighted game's sound board (U6)
@@ -82,7 +84,7 @@ struct settings_state
 	float touch_size = 1.0f, touch_opacity = 0.5f;
 };
 
-enum settings_id { st_shape = 1, st_scaling, st_shader, st_scanlines, st_sides, st_fullscreen, st_volume, st_free_play, st_players, st_country, st_clips, st_news, st_pause, st_menu_music, st_menu_sounds, st_menu_volume, st_tv, st_save_states, st_max_wide, st_touch, st_touch_size, st_touch_opacity, st_touch_arrange, st_touch_reset, st_frame_log };
+enum settings_id { st_shape = 1, st_scaling, st_shader, st_scanlines, st_sides, st_fullscreen, st_volume, st_free_play, st_players, st_country, st_clips, st_news, st_pause, st_menu_music, st_menu_sounds, st_menu_volume, st_tv, st_save_states, st_max_wide, st_touch, st_touch_size, st_touch_opacity, st_touch_arrange, st_touch_reset, st_frame_log, st_chat, st_chat_filter };
 
 // The controller buttons held for half a second to open the pause menu (U5.1). There is no
 // "none": Esc and the Guide button always open it as well, so it can never be unbound.
@@ -251,7 +253,7 @@ struct pause_state
 };
 
 enum pause_id { ps_resume = 1, ps_volume, ps_shot, ps_video, ps_controls, ps_mods, ps_help, ps_quit, ps_coin0 = 20, ps_service = 30, ps_test, ps_reset,
-                ps_slot = 40, ps_state_save, ps_state_load };
+                ps_slot = 40, ps_state_save, ps_state_load, ps_say = 60, ps_phrase0 = 61 };
 
 screen make_pause(const pause_state &st);
 void update_pause(screen &s, const pause_state &st);

@@ -336,6 +336,10 @@ Good to know:
 * The pause menu opens online too, but the game goes on for everybody while it is open.
 * If a player's network changes during a game (a phone moving from Wi-Fi to mobile data), the
   game goes on at the new address, as long as the other side's router lets it in.
+* **Chat:** the pause menu of an online game has quick phrases ("Nice shot!", "One more?"...)
+  and **Type a message...**; messages show at the top of the picture for a few seconds.
+  Settings, Program: show chat from everyone, the players only, or nobody, and a word filter
+  (on by default). Chat travels apart from the game and cannot slow it down.
 * Joining a game that has already started, with the host's code, lets you **watch** it (up
   to 8 watchers). A watcher's buttons do nothing, and a watcher cannot slow the game down.
 * A player who drops out (lost connection, app closed, phone put away) has a minute to come
