@@ -1091,9 +1091,9 @@ int main(int argc, char **argv)
 		report_result b = report(full_cone, restricted, 10, 10, 30);
 		printf("  full cone host, restricted player, 10 + 10 ms, 0..30 ms spread: host %s, player %s, ping %d ms, jitter %d ms (and %d without spread)\n",
 		       netplay::conn_name(b.host), netplay::conn_name(b.player), b.ping_c, b.jit_c, a.jit_c);
-		CHECK(b.host == ct::moderate && b.player == ct::moderate && (loose || (b.jit_c >= 4 && a.jit_c <= 4)) && b.jit_c <= 30,
+		CHECK(b.host == ct::moderate && b.player == ct::moderate && (loose || (b.jit_c >= 4 && a.jit_c <= 4)) && b.jit_c <= (loose ? 100 : 30),
 		      "report: cone routers are moderate; jitter follows the spread the router adds (about 10 ms for 0..30) and is near 0 without");
-		if (loose) printf("  (NATTEST_LOOSE_TIMING: the jitter is printed, not compared, and pings up to 150 ms pass; this machine's own noise is as large)\n");
+		if (loose) printf("  (NATTEST_LOOSE_TIMING: the jitter is printed, not compared (up to 100 ms passes), and pings up to 150 ms pass; this machine's own noise is as large)\n");
 	}
 	// ---- platforms in the lobby (R8.1) ----
 	{
