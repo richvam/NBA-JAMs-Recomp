@@ -101,6 +101,8 @@ jobs:
           grep -q ", 0 failed" uitest.log
           build/linux/touchtest viewtest-out | tee touchtest.log
           grep -q ", 0 failed" touchtest.log
+          build/linux/replaytest | tee replaytest.log
+          grep -q ", 0 failed" replaytest.log
 
       - name: ROM art reader tests (no ROM needed)
         run: |
@@ -242,6 +244,7 @@ jobs:
           mkdir -p viewtest-out
           build/mac/uitest viewtest-out | tee uitest.log; grep -q ", 0 failed" uitest.log
           build/mac/touchtest viewtest-out | tee touchtest.log; grep -q ", 0 failed" touchtest.log
+          build/mac/replaytest | tee replaytest.log; grep -q ", 0 failed" replaytest.log
           build/mac/arttest viewtest-out | tee arttest.log; grep -q ", 0 failed" arttest.log
           build/mac/viewtest --rects | tee rects.log; grep -q ", 0 failed" rects.log
           # R6.4: netplay over loopback (STUN, punching, UPnP/PCP/NAT-PMP against fakes) and the router found with sysctl

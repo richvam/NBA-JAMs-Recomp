@@ -78,6 +78,10 @@ $(BUILD)/viewtest: tools/headless/viewtest.cpp src/app/view.cpp src/app/gl_prese
 	$(CXX) $(CXXFLAGS) -Isrc/app -Isrc/third_party/miniz -I$(SDL2L)/include/SDL2 tools/headless/viewtest.cpp src/app/view.cpp src/app/gl_present.cpp src/app/png_read.cpp src/app/overlay.cpp src/app/ui/ui.cpp src/app/ui/gallery.cpp src/app/ui/lettering.cpp src/app/ui/themes.cpp src/app/ui/screens.cpp src/app/ui/keyboard.cpp $(BUILD)/miniz.o \
 	  $(SDL_LINK) -o $@
 
+# replaytest: the replay file (N5.4), no SDL and no ROMs
+$(BUILD)/replaytest: tools/headless/replaytest.cpp src/app/replay.cpp $(BUILD)/miniz.o
+	@mkdir -p $(BUILD)
+	$(CXX) $(CXXFLAGS) $(INC) $(APP_INC) $< src/app/replay.cpp $(BUILD)/miniz.o -o $@
 # touchtest: the on-screen touch controls (R7.3), no SDL and no display
 $(BUILD)/touchtest: tools/headless/touchtest.cpp src/app/touch_pad.cpp $(UI_SRC) $(BUILD)/miniz.o
 	$(CXX) $(CXXFLAGS) $(INC) $(APP_INC) $< src/app/touch_pad.cpp $(UI_SRC) $(BUILD)/miniz.o -o $@
@@ -112,7 +116,7 @@ win:
 	x86_64-w64-mingw32-gcc -O2 -c src/third_party/miniz/miniz.c -o build/win/miniz.o
 	$(MAKE) BUILD=build/win CC=x86_64-w64-mingw32-gcc build/win/liblua.a
 	x86_64-w64-mingw32-g++ -std=c++20 -O2 $(DETERMINISM) -Isrc/emu -Isrc/mame -Isrc/board -Isrc/app -Isrc/third_party/miniz -Isrc/third_party/lua -I$(SDL2W)/include/SDL2 \
-	  src/app/main.cpp src/app/games.cpp src/app/romload.cpp src/app/netplay.cpp src/app/nat.cpp src/app/gl_present.cpp src/app/controls.cpp src/app/mods.cpp src/app/menu_sound.cpp src/app/pad_script.cpp src/app/version.cpp src/app/paths.cpp src/app/news.cpp src/app/view.cpp src/app/png_read.cpp src/app/overlay.cpp src/app/ui/ui.cpp src/app/ui/gallery.cpp src/app/ui/lettering.cpp src/app/ui/themes.cpp src/app/ui/screens.cpp src/app/ui/keyboard.cpp src/app/ui/art_view.cpp src/app/rom_art.cpp src/app/touch_pad.cpp $(VERSION_DEFS) build/win/miniz.o build/win/libcore.a build/win/liblua.a \
+	  src/app/main.cpp src/app/games.cpp src/app/romload.cpp src/app/netplay.cpp src/app/nat.cpp src/app/gl_present.cpp src/app/controls.cpp src/app/mods.cpp src/app/menu_sound.cpp src/app/pad_script.cpp src/app/version.cpp src/app/paths.cpp src/app/news.cpp src/app/view.cpp src/app/png_read.cpp src/app/overlay.cpp src/app/ui/ui.cpp src/app/ui/gallery.cpp src/app/ui/lettering.cpp src/app/ui/themes.cpp src/app/ui/screens.cpp src/app/ui/keyboard.cpp src/app/ui/art_view.cpp src/app/rom_art.cpp src/app/touch_pad.cpp src/app/replay.cpp $(VERSION_DEFS) build/win/miniz.o build/win/libcore.a build/win/liblua.a \
 	  -L$(SDL2W)/lib -lmingw32 -lSDL2main -lSDL2 -mwindows -static -lwinmm -lsetupapi -loleaut32 -lole32 -limm32 -lversion -lgdi32 -luser32 -lshell32 -luuid -ladvapi32 -lcfgmgr32 -lws2_32 -liphlpapi -lwinhttp -lwinpthread \
 	  -o $(WIN_OUT)/NBAJamRecomp.exe
 
@@ -130,7 +134,7 @@ $(BUILD)/miniz.o: src/third_party/miniz/miniz.c
 	@mkdir -p $(dir $@)
 	$(CC) -O2 $(CFLAGS) -c $< -o $@
 linux-app: $(BUILD)/libcore.a $(BUILD)/miniz.o $(BUILD)/liblua.a
-	$(CXX) $(CXXFLAGS) $(APP_INC) -I$(SDL2L)/include/SDL2 src/app/main.cpp src/app/games.cpp src/app/romload.cpp src/app/netplay.cpp src/app/nat.cpp src/app/gl_present.cpp src/app/controls.cpp src/app/mods.cpp src/app/menu_sound.cpp src/app/pad_script.cpp src/app/version.cpp src/app/paths.cpp src/app/news.cpp src/app/view.cpp src/app/png_read.cpp src/app/overlay.cpp src/app/ui/ui.cpp src/app/ui/gallery.cpp src/app/ui/lettering.cpp src/app/ui/themes.cpp src/app/ui/screens.cpp src/app/ui/keyboard.cpp src/app/ui/art_view.cpp src/app/rom_art.cpp src/app/touch_pad.cpp $(VERSION_DEFS) \
+	$(CXX) $(CXXFLAGS) $(APP_INC) -I$(SDL2L)/include/SDL2 src/app/main.cpp src/app/games.cpp src/app/romload.cpp src/app/netplay.cpp src/app/nat.cpp src/app/gl_present.cpp src/app/controls.cpp src/app/mods.cpp src/app/menu_sound.cpp src/app/pad_script.cpp src/app/version.cpp src/app/paths.cpp src/app/news.cpp src/app/view.cpp src/app/png_read.cpp src/app/overlay.cpp src/app/ui/ui.cpp src/app/ui/gallery.cpp src/app/ui/lettering.cpp src/app/ui/themes.cpp src/app/ui/screens.cpp src/app/ui/keyboard.cpp src/app/ui/art_view.cpp src/app/rom_art.cpp src/app/touch_pad.cpp src/app/replay.cpp $(VERSION_DEFS) \
 	  $(BUILD)/miniz.o $(BUILD)/libcore.a $(BUILD)/liblua.a $(SDL_LINK) -o $(BUILD)/NBAJamRecomp
 $(BUILD)/cattest: tools/headless/cattest.cpp src/app/games.cpp src/app/romload.cpp $(BUILD)/libcore.a $(BUILD)/miniz.o
 	$(CXX) $(CXXFLAGS) $(APP_INC) $< src/app/games.cpp src/app/romload.cpp $(BUILD)/miniz.o $(BUILD)/libcore.a -o $@

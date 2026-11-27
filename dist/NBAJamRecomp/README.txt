@@ -213,6 +213,7 @@ FOLDERS
   overlays\     borders shown around the picture (F8)
   saves\        each game's NVRAM
   screenshots\  screenshots (F12)
+  replays\      your games, to watch again (main menu, Replays)
   mods\         Lua mods (see LUA MODS)
   stats\        files Lua mods save (box scores, drafts, ladders)
   data\         (optional) games you built with tools/build_roms.sh

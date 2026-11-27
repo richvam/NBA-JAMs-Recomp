@@ -15,6 +15,7 @@
 #include "pad_script.h"
 #include "ui/ui_sdl.h"
 #include "miniz.h"
+#include "replay.h"
 #include "gl_present.h"
 #include "touch_pad.h"
 #include "netplay.h"
@@ -342,7 +343,7 @@ private:
 	const char *screen_name() const;
 	void gallery_loop();
 	void rom_art_loop();
-	enum class screen { menu, settings, net_menu, net_lobby, game, about, mods, mod_detail, controls, news, pause, touch_arrange };
+	enum class screen { menu, settings, net_menu, net_lobby, game, about, mods, mod_detail, controls, news, pause, touch_arrange, replays };
 	// on-screen touch controls (R7.3)
 	touch_pad m_touch;
 	std::string m_hud_key;                 // what the touch layer last drawn showed
@@ -553,6 +554,22 @@ private:
 	static std::vector<u8> squeeze(const std::vector<u8> &raw);
 	static bool unsqueeze(const std::vector<u8> &in, std::vector<u8> &raw);
 	unsigned m_away_msg_t = 0;
+	// N5.4: replays. Every game is recorded from its first frame (a save state, then each
+	// frame's inputs, as an online game shares them) and kept in replays/<game>/ when it ends.
+	replay m_rec;
+	bool m_rec_on = false;             // m_rec holds this game's start
+	replay m_play;                     // the replay being watched
+	bool m_playing = false, m_play_paused = false, m_play_done = false;
+	u32 m_play_pos = 0;
+	int m_play_speed = 1;
+	ui::screen m_replays_scr;
+	std::vector<std::string> m_replay_files;
+	void rec_frame(const cabinet_inputs &in);
+	void rec_save();
+	void open_replays();
+	void replays_frame();
+	bool start_replay(const std::string &path);
+	bool play_frame(bool menu_open);
 	bool read_state(const std::string &path, std::string &err, u32 &saved, u32 &now);
 	// R7.5: the app put away and brought back (phones); the game is kept in states/resume.state
 	// in case the system closes the app meanwhile, and goes on from there on the next start
@@ -1207,7 +1224,7 @@ void app::poll_events()
 				if (m_mach && !m_net_game)
 				{
 					if (k == SDLK_F2) { m_test = !m_test; message(m_test ? "TEST switch: ON (service menu)" : "TEST switch: OFF", 2000); }
-					if (k == SDLK_F3) { m_mach->reset(); message("Reset", 1500); }
+					if (k == SDLK_F3 && !m_playing) { m_mach->reset(); m_rec_on = false; message("Reset", 1500); }
 					if (k == SDLK_p || k == SDLK_PAUSE) m_paused = !m_paused;
 				}
 				break;
@@ -1231,6 +1248,7 @@ const char *app::screen_name() const
 	case screen::mods: case screen::mod_detail: return "mods";
 	case screen::controls: return "controls";
 	case screen::news: return "news";
+	case screen::replays: return "replays";
 	case screen::pause: return "pause";
 	case screen::touch_arrange: return "touch_arrange";
 	}
@@ -1500,6 +1518,7 @@ bool app::start_game(int index, bool net_client)
 	bool const wide_missing = m_cfg.shape == view_shape::widescreen && !m_wide_possible;
 	m_join = audio_join();
 	m_mach->reset();
+	m_rec_on = false;                    // N5.4: recorded from its first frame
 	m_cur_game = index;
 	m_paused = false;
 	m_test = false;
@@ -1529,6 +1548,11 @@ bool app::start_game(int index, bool net_client)
 
 void app::stop_game(bool keep_resume)
 {
+	if (!m_playing) rec_save();
+	m_rec_on = false;
+	m_rec = replay();
+	m_playing = false;
+	m_play = replay();
 	if (!keep_resume) std::remove(resume_path().c_str());
 	m_wide.reset();
 	m_wide_possible = false;
@@ -1839,6 +1863,7 @@ void app::menu_frame()
 			}
 			else if (r.id == ui::pk_controls) { m_ctl_scr = ui::screen(); m_screen = screen::controls; return; }
 			else if (r.id == ui::pk_news) { m_news_scr = ui::screen(); m_screen = screen::news; return; }
+			else if (r.id == ui::pk_replays) { open_replays(); return; }
 			else if (r.id == ui::pk_about) { m_about_scr = ui::screen(); m_screen = screen::about; return; }
 			else if (r.id == ui::pk_romdir) open_rom_folder();
 			else if (r.id == ui::pk_romtree) open_rom_folder(true);
@@ -2775,6 +2800,7 @@ void app::net_lobby_frame()
 				return;
 			}
 			SDL_Log("online: back in the game at frame %u, game state %08x", m_net.frame(), now);
+			m_rec_on = false;
 			message("Back in the game", 3000);
 			m_net.client_ready(true, "");
 			return;
@@ -2824,6 +2850,7 @@ bool app::step_game(bool menu_open)
 			cabinet_inputs local = menu_open ? menu_inputs() : gather_inputs();
 			if (!menu_open) m_mods.apply_presses(local, m_net.local_slot());   // nba.press (1.6), sent like the pad
 			cabinet_inputs in = m_net.frame_inputs(local.p[0]);
+			rec_frame(in);                                             // N5.4
 			m_mods.take_inputs(in);                                    // nba.input / nba.hold (6.F2)
 			m_mach->set_inputs(in);
 			m_mach->run_frame();
@@ -2832,10 +2859,12 @@ bool app::step_game(bool menu_open)
 			ran = true;
 		}
 	}
+	else if (m_playing) ran = play_frame(menu_open);                      // N5.4: a replay being watched
 	else if (!m_paused && !menu_open)
 	{
 		cabinet_inputs in = gather_inputs();
 		m_mods.apply_presses(in);                                          // nba.press (1.6)
+		rec_frame(in);                                                     // N5.4
 		m_mods.take_inputs(in);                                            // nba.input / nba.hold (6.F2)
 		m_mach->set_inputs(in);
 		m_mach->run_frame();
@@ -2865,6 +2894,17 @@ bool app::game_frame()
 {
 	// Esc, the Guide button, or the held shortcut: the pause menu (U5.1)
 	if (m_menu_back || pause_shortcut()) { open_pause(); return false; }
+	if (m_playing)
+	{
+		// N5.4: A / Enter pauses, Right plays faster, Left plays at normal speed
+		if (m_menu_ok)
+		{
+			if (m_play_done) { message("The replay has ended: Back opens the menu", 2500); }
+			else { m_play_paused = !m_play_paused; message(m_play_paused ? "Paused" : "Playing", 1200); }
+		}
+		if (m_menu_right && m_play_speed < 8) { m_play_speed *= 2; message("Speed x" + std::to_string(m_play_speed), 1200); }
+		if (m_menu_left && m_play_speed > 1) { m_play_speed = 1; message("Normal speed", 1200); }
+	}
 	bool ran = step_game(false);
 	if (m_screen != screen::game) return ran;
 	update_wide();
@@ -3015,8 +3055,161 @@ bool app::load_slot(int n)
 		return false;
 	}
 	SDL_Log("save state: slot %d loaded, game state %08x%s", n + 1, now, now == saved ? ", as saved" : ", NOT as saved");
+	m_rec_on = false;                    // the recording starts again from here
 	message("Loaded slot " + std::to_string(n + 1), 2000);
 	return true;
+}
+
+// ---------------------------------------------------------------- replays (N5.4)
+static std::string utf8_of(const std::filesystem::path &p) { auto u = p.u8string(); return std::string(u.begin(), u.end()); }
+
+void app::rec_frame(const cabinet_inputs &in)
+{
+	if (m_playing || !m_mach || m_cur_game < 0) return;
+	if (!m_rec_on)
+	{
+		m_rec = replay();
+		std::string err;
+		u32 hash = 0;
+		if (!pack_state(m_rec.state, err, hash)) { SDL_Log("replay: not recorded: %s", err.c_str()); return; }
+		const std::string id = game_list()[size_t(m_cur_game)].id;
+		m_rec.game = id;
+		m_rec.mods = m_mods.net_description(id);
+		m_rec.start_hash = hash;
+		m_rec.online = m_net_game;
+		m_rec.players = u8(m_net_game ? m_net.players() : 1);
+		m_rec_on = true;
+	}
+	m_rec.add(in);
+}
+
+// a finished game into replays/<game>/<date>.njr; the 20 newest of each game are kept
+void app::rec_save()
+{
+	if (!m_rec_on || !m_mach || m_cur_game < 0 || m_rec.count() < 600) return;
+	m_rec.end_hash = m_mach->state_hash();
+	m_rec.build = app_version();
+	m_rec.saved_at = int64_t(std::time(nullptr));
+	std::time_t t = std::time_t(m_rec.saved_at);
+	char name[40];
+	std::strftime(name, sizeof name, "%Y%m%d-%H%M%S.njr", std::localtime(&t));
+	const std::string dir = path_join(path_join(m_base, "replays"), m_rec.game);
+	std::vector<u8> file = m_rec.encode();
+	if (file.empty() || !write_whole_file(path_join(dir, name), file)) { SDL_Log("replay: could not write %s", path_join(dir, name).c_str()); return; }
+	SDL_Log("replay: %u frames saved as %s (%zu bytes), game state %08x", m_rec.count(), path_join(dir, name).c_str(), file.size(), m_rec.end_hash);
+	std::vector<std::string> all;
+	std::error_code ec;
+	for (auto &e : std::filesystem::directory_iterator(std::filesystem::u8path(dir), ec))
+		if (e.path().extension() == ".njr") all.push_back(utf8_of(e.path()));
+	std::sort(all.begin(), all.end());
+	for (size_t i = 0; i + 20 < all.size(); i++) std::filesystem::remove(std::filesystem::u8path(all[i]), ec);
+}
+
+void app::open_replays()
+{
+	m_replay_files.clear();
+	ui::replays_state st;
+	std::vector<std::pair<std::string, std::string>> found;     // file name (the date), path
+	std::error_code ec;
+	for (auto &g : std::filesystem::directory_iterator(std::filesystem::u8path(path_join(m_base, "replays")), ec))
+		if (g.is_directory(ec))
+			for (auto &e : std::filesystem::directory_iterator(g.path(), ec))
+				if (e.path().extension() == ".njr") found.push_back({ utf8_of(e.path().filename()), utf8_of(e.path()) });
+	std::sort(found.begin(), found.end(), [](auto &a, auto &b) { return a.first > b.first; });
+	if (found.size() > 60) found.resize(60);
+	for (auto &f : found)
+	{
+		std::string id = utf8_of(std::filesystem::u8path(f.second).parent_path().filename()), title = id;
+		for (const game_info &g : game_list()) if (g.id == id) title = g.title;
+		const std::string &n = f.first;    // 20261127-143005.njr
+		std::string when = n.size() >= 15 ? n.substr(6, 2) + "/" + n.substr(4, 2) + "/" + n.substr(0, 4) + " " + n.substr(9, 2) + ":" + n.substr(11, 2) : n;
+		const auto size = std::filesystem::file_size(std::filesystem::u8path(f.second), ec);
+		st.rows.push_back(title + "   " + when + "   " + std::to_string((size + 1023) / 1024) + " KB");
+		m_replay_files.push_back(f.second);
+	}
+	m_replays_scr = ui::make_replays(st);
+	m_screen = screen::replays;
+}
+
+void app::replays_frame()
+{
+	ui_frame_begin();
+	ui::event ev;
+	while (ui_next(ev))
+	{
+		ui::result r = m_replays_scr.handle(ev);
+		if (r.what == ui::result::back) { m_screen = screen::menu; return; }
+		if (r.what == ui::result::activated && r.id >= ui::rp_item0 && size_t(r.id - ui::rp_item0) < m_replay_files.size())
+		{
+			if (start_replay(m_replay_files[size_t(r.id - ui::rp_item0)])) return;
+		}
+	}
+	ui_show(m_replays_scr);
+}
+
+bool app::start_replay(const std::string &path)
+{
+	std::vector<u8> file;
+	replay rp;
+	std::string why;
+	if (!read_whole_file(path, file) || !replay::decode(file, rp, why)) { message("Cannot play this replay: " + (why.empty() ? std::string("unreadable") : why), 5000); return false; }
+	int idx = -1;
+	for (size_t i = 0; i < game_list().size(); i++) if (game_list()[i].id == rp.game) idx = int(i);
+	if (idx < 0) why = "an unknown game";
+	else if (!m_avail[size_t(idx)]) why = std::string("you don't have ") + game_list()[size_t(idx)].title;
+	else if (rp.build != app_version()) why = "it was recorded by another version (" + rp.build + ")";
+	// the Lua mods it was recorded with, with their options; yours come back afterwards
+	if (why.empty()) m_mods.net_apply(rp.game, rp.mods, why);
+	if (!why.empty()) { m_mods.net_restore(); message("Cannot play this replay: " + why, 5000); return false; }
+	if (!start_game(idx)) { m_mods.net_restore(); return false; }
+	std::string err;
+	u32 saved = 0, now = 0;
+	if (!load_state_bytes(rp.state, err, saved, now) || now != rp.start_hash)
+	{
+		stop_game();
+		message("Cannot play this replay: " + (err.empty() ? std::string("its start does not load the same here") : err), 5000);
+		return false;
+	}
+	m_play = std::move(rp);
+	m_playing = true;
+	m_play_paused = m_play_done = false;
+	m_play_pos = 0;
+	m_play_speed = 1;
+	m_rec_on = false;
+	SDL_Log("replay: playing %s, %u frames", path.c_str(), m_play.count());
+#ifdef __ANDROID__
+	message("Replay: A pauses, right plays faster, back gesture for the menu", 5000);
+#else
+	message("Replay: A or Enter pauses, Right plays faster, Esc for the menu", 5000);
+#endif
+	return true;
+}
+
+// one tick of the replay being watched: m_play_speed frames (the sound of the last)
+bool app::play_frame(bool menu_open)
+{
+	if (menu_open || m_play_paused || m_play_done) return false;
+	bool ran = false;
+	for (int k = 0; k < m_play_speed; k++)
+	{
+		if (m_play_pos >= m_play.count())
+		{
+			m_play_done = true;
+			const u32 h = m_mach->state_hash();
+			const bool same = h == m_play.end_hash;
+			SDL_Log("replay: ended at frame %u, game state %08x, %s", m_play_pos, h, same ? "as recorded" : "NOT as recorded");
+			message(same ? "The replay has ended (as recorded): Back opens the menu" : "The replay has ended, but not as it was recorded", 6000);
+			break;
+		}
+		if (ran) { m_abuf.clear(); m_mach->take_audio(m_abuf); }     // only the last frame's sound when faster
+		cabinet_inputs in = m_play.at(m_play_pos++);
+		m_mods.take_inputs(in);
+		m_mach->set_inputs(in);
+		m_mach->run_frame();
+		m_mods.frame();
+		ran = true;
+	}
+	return ran;
 }
 
 // ---------------------------------------------------------------- put away and brought back (R7.5)
@@ -3071,6 +3264,7 @@ void app::resume_saved_game()
 	if (index >= 0 && start_game(index, false) && read_state(path, err, saved, now))
 	{
 		SDL_Log("lifecycle: game resumed, game state %08x%s", now, now == saved ? ", as kept" : ", NOT as kept");
+		m_rec_on = false;
 		open_pause();
 		message("Your game goes on from where you left it", 4000);
 	}
@@ -3188,7 +3382,7 @@ bool app::pause_frame()
 		case ui::ps_service: if (!m_net_game) m_service_pulse += 8; break;
 		case ui::ps_state_save: if (!m_net_game && m_cfg.save_states) save_slot(m_state_slot); break;
 		case ui::ps_state_load: if (!m_net_game && m_cfg.save_states && load_slot(m_state_slot)) { resume_game(); return ran; } break;
-		case ui::ps_reset: if (!m_net_game) { m_mach->reset(); message("Reset", 1500); resume_game(); return ran; } break;
+		case ui::ps_reset: if (!m_net_game && !m_playing) { m_mach->reset(); m_rec_on = false; message("Reset", 1500); resume_game(); return ran; } break;
 		// the full screens, offline only; Back there returns here
 		case ui::ps_video:
 			m_overlays = list_overlays(m_base);
@@ -3555,6 +3749,7 @@ int app::run()
 			case screen::net_lobby: net_lobby_frame(); next = clock::now(); continue;
 			case screen::about: about_frame(); next = clock::now(); continue;
 			case screen::news: news_frame(); next = clock::now(); continue;
+			case screen::replays: replays_frame(); next = clock::now(); continue;
 			case screen::mods: mods_frame(); next = clock::now(); continue;
 			case screen::mod_detail: m_screen = screen::mods; continue;
 			case screen::controls: controls_frame(); next = clock::now(); continue;

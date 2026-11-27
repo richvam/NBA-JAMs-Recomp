@@ -1,0 +1,47 @@
+# N5.4: a replay. The first game in the list for about 20 seconds with some buttons, back to the
+# menu (the game is kept as a replay), then Replays, the newest one, watched to the end. The
+# log says "replay: ended at frame ..., as recorded" when it ran exactly as the game did.
+wait 6000
+expect menu
+tap a
+wait 9000
+expect game
+tap a
+wait 800
+tap b
+wait 800
+tap x
+wait 1500
+tap a
+wait 3000
+tap rb
+wait 2000
+tap a
+wait 2000
+tap guide
+wait 500
+expect pause
+tap down 7
+tap a
+wait 2500
+expect menu
+# Replays: the menu below the five games, the ninth entry
+tap down 5
+tap down 8
+tap a
+wait 800
+expect replays
+shot
+tap a
+wait 3000
+expect game
+wait 26000
+shot
+tap guide
+wait 500
+expect pause
+tap down 7
+tap a
+wait 2000
+expect menu
+quit
