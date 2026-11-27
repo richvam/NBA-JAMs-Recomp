@@ -76,6 +76,14 @@ public:
 	int local_slot() const { return m_slot; }
 	int players() const { return m_nplayers; }
 	std::vector<std::string> peer_list() const;   // host: one line per connected client
+	// R8.1: what each seat plays on (0 unknown, then Windows, Linux, macOS, Android), as the
+	// players said when joining; the host sends the list to everyone in the lobby
+	enum platform_id : u8 { plat_unknown = 0, plat_windows, plat_linux, plat_macos, plat_android };
+	static platform_id this_platform();
+	static const char *platform_name(int p);
+	int platform_of(int slot) const { return slot >= 0 && slot < 4 ? m_plat[slot] : 0; }
+	// tests: what this side says it plays on (a test plays every platform from one computer)
+	platform_id claimed_platform = this_platform();
 	std::string error() const { return m_error; }
 	int ping_ms() const { return m_ping; }
 	bool desynced() const { return m_desync; }
@@ -181,7 +189,9 @@ private:
 		u32 chunk_mask_lo = 0, chunk_mask_hi = 0;
 		bool start_acked = false;
 		int ping = 0, jitter = 0, last_rtt = 0;
+		u8 platform = 0;         // R8.1: as it said in its hello
 	};
+	u8 m_plat[4] = { 0, 0, 0, 0 };   // R8.1: each seat's platform
 	void reset_state();
 	void handle(const net_addr &from, const u8 *p, int n);
 	void send_raw(const net_addr &to, const std::vector<u8> &b);

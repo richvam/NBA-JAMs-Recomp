@@ -2653,11 +2653,13 @@ void app::net_lobby_frame()
 			return s + (l.v6 ? "direct IPv6" : "direct");
 		};
 		const auto links = m_net.links();
+		// R8.1: what each player plays on, after the name
+		auto on = [&](int slot) { const char *p = netplay::platform_name(m_net.platform_of(slot)); return *p ? std::string(" (") + p + ")" : std::string(); };
 		if (!host)
-			for (auto &l : links) st.links.push_back({ l.slot == 0 ? std::string("Host") : "Player " + std::to_string(l.slot + 1), path(l) });
+			for (auto &l : links) st.links.push_back({ (l.slot == 0 ? std::string("Host") : "Player " + std::to_string(l.slot + 1)) + on(l.slot), path(l) });
 		if (host)
 		{
-			st.players.push_back({ "Player 1", "you (host)" });
+			st.players.push_back({ "Player 1" + on(0), "you (host)" });
 			// a peer's line is its slot, then its address, ping and whether it is ready
 			for (const std::string &p : m_net.peer_list())
 			{
@@ -2666,7 +2668,7 @@ void app::net_lobby_frame()
 				int n = slot.size() > 1 ? atoi(slot.c_str() + 1) - 1 : -1;
 				for (auto &l : links)
 					if (l.slot == n) rest = path(l) + (rest.find("ready") != std::string::npos ? ", ready" : "");
-				st.players.push_back({ "Player " + (slot.size() > 1 ? slot.substr(1) : slot), rest });
+				st.players.push_back({ "Player " + (slot.size() > 1 ? slot.substr(1) : slot) + on(n), rest });
 			}
 		}
 		return st;
