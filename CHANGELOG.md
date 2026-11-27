@@ -174,6 +174,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - The README files describe the menus and the pause menu first; the F-keys are shortcuts.
 
 ### Fixed
+- "Music on" in the menus' bottom corner is no longer drawn over the Back button.
 - Android: a TV remote's centre key now chooses in the menus.
 - Android: online play could not make a socket (the app did not ask for network access); the home-network search keeps Wi-Fi from dropping broadcasts, and NAT-PMP and PCP find the router.
 - nattest: on the Apple Silicon CI runner the jitter is printed but not compared and the ping bound is wider (the runner adds delay and jitter of its own); Linux and Intel Macs still check both.
