@@ -175,6 +175,21 @@ public:
 	bool allow_watchers = true;                   // host
 	bool spectator() const { return m_slot == WATCHER; }
 	int watchers() const { return int(m_watchers.size()); }   // host
+
+	// --- chat (roadmap N6.1) ---
+	// Short messages between the players and watchers of a game, through the host, in packets
+	// of their own: nothing about them can stall or change the game. Every receiver keeps the
+	// limits (CHAT_LEN characters, printable ASCII; CHAT_BURST messages at once from one
+	// sender, then one a second) and drops what goes over. Each message is sent three times
+	// and kept once. Quick phrases go as a number, written by the receiver.
+	static constexpr int CHAT_LEN = 80, CHAT_BURST = 3, CHAT_PHRASES = 8;
+	struct chat_msg { int from = 0; bool phrase = false; int phrase_id = 0; std::string text; };   // from: seat 0-3, or 100 + watcher
+	void say(const std::string &text);
+	void say_phrase(int id);
+	std::vector<chat_msg> take_chat() { std::vector<chat_msg> v; v.swap(m_chat_in); return v; }
+	static const char *phrase_text(int id);
+	static std::string chat_clean(const std::string &s);
+	int chat_dropped() const { return m_chat_dropped; }   // over the limits, since the start
 	u32 relay_after_ms = 3000;
 
 	// --- mesh for four players (roadmap N2.5) ---
@@ -289,6 +304,18 @@ private:
 	int m_rejoins = 0;
 	void parse_resume();
 	std::vector<peer> m_watchers;   // N5.1 (host)
+	// N6.1
+	std::vector<chat_msg> m_chat_in;
+	struct chat_out { std::vector<u8> pkt; int left = 0; };
+	std::vector<chat_out> m_chat_out;
+	u32 m_chat_id = 0;
+	int m_chat_dropped = 0;
+	std::vector<std::pair<int, u32>> m_chat_seen;              // (sender, id), the newest 128
+	struct bucket { double tokens = CHAT_BURST; u32 t = 0; };
+	std::map<int, bucket> m_chat_rate;
+	void chat_packet(int from, u32 id, bool phrase, int phrase_id, const std::string &text, std::vector<u8> &out) const;
+	void chat_in(int from_peer, const u8 *p, int n);
+	void chat_flush();
 	int m_moves = 0;
 	void send_moved(const net_addr &to, int slot, u32 now);
 	dip_settings m_dips;

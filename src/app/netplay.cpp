@@ -430,6 +430,7 @@ void netplay::reset_state()
 	m_nchunks = m_chunks_ok = 0; m_chunk_have.clear();
 	m_client_ready_sent = m_client_ok = false; m_client_why.clear();
 	m_want_state = m_resume = m_resume_parsed = false; m_resume_blob.clear(); m_resume_state.clear(); m_rejoins = 0; m_watchers.clear();
+	m_chat_in.clear(); m_chat_out.clear(); m_chat_id = 0; m_chat_dropped = 0; m_chat_seen.clear(); m_chat_rate.clear();
 	m_delay = 4; m_frame = 0;
 	for (auto &m : m_in) m.clear();
 	m_merged.clear(); m_merged_upto = 0; m_stall_since = 0; m_hash.clear();
@@ -652,6 +653,114 @@ net_addr netplay::relay_candidate() const
 		if (!best || p.ping < best->ping) best = &p;
 	}
 	return best ? best->addr : net_addr{};
+}
+
+// ---------------------------------------------------------------------------
+// chat (roadmap N6.1)
+// ---------------------------------------------------------------------------
+const char *netplay::phrase_text(int id)
+{
+	static const char *const p[CHAT_PHRASES] = { "Good game!", "Nice shot!", "One more?", "Wait a moment, please", "Ready!", "Thanks!", "Oops!", "Let's go!" };
+	return id >= 0 && id < CHAT_PHRASES ? p[id] : "";
+}
+
+std::string netplay::chat_clean(const std::string &s)
+{
+	std::string o;
+	for (unsigned char c : s)
+	{
+		if (c == '\t' || c == '\n' || c == '\r') c = ' ';
+		if (c < 32 || c > 126) continue;                    // printable ASCII only: no control or look-alike characters
+		if (c == ' ' && (o.empty() || o.back() == ' ')) continue;
+		o.push_back(char(c));
+		if (int(o.size()) >= CHAT_LEN) break;
+	}
+	while (!o.empty() && o.back() == ' ') o.pop_back();
+	return o;
+}
+
+void netplay::chat_packet(int from, u32 id, bool phrase, int phrase_id, const std::string &text, std::vector<u8> &out) const
+{
+	wbuf w;
+	w.u8_('T'); w.u8_(MAGIC); w.u32_(0); w.u32_(0);
+	w.u8_(u8(from)); w.u32_(id); w.u8_(phrase ? 1 : 0);
+	if (phrase) w.u8_(u8(phrase_id)); else w.str(text);
+	out = w.b;
+}
+
+void netplay::say(const std::string &text)
+{
+	std::string t = chat_clean(text);
+	if (t.empty() || m_mode == mode::off) return;
+	chat_out o;
+	chat_packet(m_mode == mode::host ? 0 : m_slot, ++m_chat_id, false, 0, t, o.pkt);
+	o.left = 3;
+	m_chat_out.push_back(o);
+	chat_flush();
+}
+
+void netplay::say_phrase(int id)
+{
+	if (id < 0 || id >= CHAT_PHRASES || m_mode == mode::off) return;
+	chat_out o;
+	chat_packet(m_mode == mode::host ? 0 : m_slot, ++m_chat_id, true, id, "", o.pkt);
+	o.left = 3;
+	m_chat_out.push_back(o);
+	chat_flush();
+}
+
+// what we said: to the host, or (host) to everyone; each packet goes three times, one a tick
+void netplay::chat_flush()
+{
+	for (auto &o : m_chat_out)
+	{
+		if (o.left <= 0) continue;
+		o.left--;
+		if (m_mode == mode::host) { for (auto &q : m_peers) send_raw(q.addr, o.pkt); for (auto &q : m_watchers) send_raw(q.addr, o.pkt); }
+		else if (!m_peers.empty()) send_raw(m_peers[0].addr, o.pkt);
+	}
+	while (!m_chat_out.empty() && m_chat_out.front().left <= 0) m_chat_out.erase(m_chat_out.begin());
+}
+
+// a 'T' packet. from_peer: on the host, who sent it (seat, or 100 + watcher); on a player, -1
+void netplay::chat_in(int from_peer, const u8 *p, int n)
+{
+	rbuf r{ p, n };
+	r.u8_(); r.u8_(); r.u32_(); r.u32_();
+	int from = r.u8_();
+	u32 id = r.u32_();
+	bool phrase = r.u8_() != 0;
+	chat_msg m;
+	m.phrase = phrase;
+	if (phrase) m.phrase_id = r.u8_(); else m.text = r.str();
+	if (!r.ok) return;
+	// the host knows who it came from, whatever the packet says
+	if (from_peer >= 0) from = from_peer;
+	m.from = from;
+	if (phrase && (m.phrase_id < 0 || m.phrase_id >= CHAT_PHRASES)) return;
+	if (!phrase) { m.text = chat_clean(m.text); if (m.text.empty()) return; }
+	for (auto &s : m_chat_seen) if (s.first == from && s.second == id) return;   // a copy
+	m_chat_seen.push_back({ from, id });
+	if (m_chat_seen.size() > 128) m_chat_seen.erase(m_chat_seen.begin());
+	// the rate: CHAT_BURST at once, then one a second, per sender
+	bucket &b = m_chat_rate[from];
+	u32 now = net_now_ms();
+	if (b.t) b.tokens = std::min(double(CHAT_BURST), b.tokens + (now - b.t) / 1000.0);
+	b.t = now;
+	if (b.tokens < 1.0) { m_chat_dropped++; return; }
+	b.tokens -= 1.0;
+	m_chat_in.push_back(m);
+	if (m_mode == mode::host)
+	{
+		// to everyone else, three times, with the sender the host saw
+		chat_out o;
+		chat_packet(from, id, phrase, m.phrase_id, m.text, o.pkt);
+		for (int k = 0; k < 3; k++)
+		{
+			for (auto &q : m_peers) if (q.slot != from) send_raw(q.addr, o.pkt);
+			for (size_t w = 0; w < m_watchers.size(); w++) if (int(100 + w) != from) send_raw(m_watchers[w].addr, o.pkt);
+		}
+	}
 }
 
 netplay::platform_id netplay::this_platform()
@@ -904,6 +1013,7 @@ void netplay::poll()
 	}
 	if (m_phase == phase::running && !m_merged.count(m_frame)) { if (!m_stall_since) m_stall_since = now; }
 	else m_stall_since = 0;
+	if (!m_chat_out.empty()) chat_flush();
 	if (m_mode == mode::host) tick_host(now); else tick_client(now);
 }
 
@@ -918,6 +1028,18 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 	peer *pp = nullptr;
 	for (auto &q : m_peers) if (q.addr == from) pp = &q;
 	for (auto &q : m_watchers) if (q.addr == from) pp = &q;     // N5.1
+	if (type == 'T')
+	{
+		// N6.1: chat, never part of the game
+		if (m_mode == mode::host)
+		{
+			if (!pp) return;
+			int who = pp->watcher ? 100 + int(pp - m_watchers.data()) : pp->slot;
+			chat_in(who, p, n);
+		}
+		else if (!m_peers.empty() && from == m_peers[0].addr) chat_in(-1, p, n);
+		return;
+	}
 
 	if (type == 'R')
 	{

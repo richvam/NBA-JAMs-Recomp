@@ -200,7 +200,9 @@ screen make_settings(const settings_state &st)
 	p.items = { toggle(st_news, "Check for new versions", st.news), label("Asks the Releases page once at start."), label("Nothing is downloaded or installed."),
 	            header("PAUSE MENU IN A GAME"), picker(st_pause, "Hold on a controller", pause_button_names(), st.pause_buttons),
 	            label("Start: one second (a quick press"), label("still joins). Others: half a second."), label("Esc and Guide open it too."),
-	            toggle(st_save_states, "Save states", st.save_states), label("Save and Load, three slots per game."), label("Offline games only.") };
+	            toggle(st_save_states, "Save states", st.save_states), label("Save and Load, three slots per game."), label("Offline games only."),
+	            header("ONLINE CHAT"), picker(st_chat, "Show chat from", { "Everyone", "Players only", "Nobody" }, st.chat),
+	            toggle(st_chat_filter, "Word filter", st.chat_filter), label("Rude words are shown as ****.") };
 	prog.panels = { p };
 
 	tab touch;
@@ -232,6 +234,7 @@ void show_settings(screen &s, const settings_state &st)
 	sli(st_scanlines, st.scanlines); sli(st_volume, st.volume); sli(st_menu_volume, st.menu_volume);
 	tog(st_menu_music, st.menu_music); tog(st_menu_sounds, st.menu_sounds);
 	pick(st_touch, st.touch_mode); sli(st_touch_size, st.touch_size); sli(st_touch_opacity, st.touch_opacity);
+	pick(st_chat, st.chat); tog(st_chat_filter, st.chat_filter);
 }
 
 void read_settings(const screen &s, settings_state &st)
@@ -245,6 +248,7 @@ void read_settings(const screen &s, settings_state &st)
 	sli(st_scanlines, st.scanlines); sli(st_volume, st.volume); sli(st_menu_volume, st.menu_volume);
 	tog(st_menu_music, st.menu_music); tog(st_menu_sounds, st.menu_sounds);
 	pick(st_touch, st.touch_mode); sli(st_touch_size, st.touch_size); sli(st_touch_opacity, st.touch_opacity);
+	pick(st_chat, st.chat); tog(st_chat_filter, st.chat_filter);
 }
 
 const std::vector<std::string> &pause_button_names()
@@ -803,6 +807,15 @@ screen make_pause(const pause_state &st)
 	cab.title = "Cabinet";
 	cab.r = { 0.52f, 0.24f, 0.48f, 0.76f };
 	cab.items = { button(ps_service, "Service credit"), toggle(ps_test, "TEST switch", st.test), button(ps_reset, "Reset the game") };
+	if (st.online)
+	{
+		// N6.3: online the cabinet cannot be touched; this panel is the chat instead
+		cab.title = "Say";
+		cab.items.clear();
+		static const char *const phrases[] = { "Good game!", "Nice shot!", "One more?", "Wait a moment, please", "Ready!", "Thanks!", "Oops!", "Let's go!" };
+		for (int i = 0; i < 8; i++) cab.items.push_back(button(ps_phrase0 + i, phrases[i]));
+		cab.items.push_back(button(ps_say, "Type a message..."));
+	}
 	if (st.states && !st.online)
 	{
 		cab.items.push_back(header("SAVE STATE"));
@@ -843,10 +856,11 @@ void update_pause(screen &s, const pause_state &st)
 		if (item *i = s.find(ps_state_load)) { i->disabled = in.empty(); i->value_text = in.empty() ? "empty" : in; }
 	}
 	panel &cab = s.tabs[0].panels[2];
-	while (cab.items.size() > (states ? 7u : 3u)) cab.items.pop_back();
+	// online this panel is the chat (N6.3): eight phrases and "Type a message"
+	while (cab.items.size() > (st.online ? 9u : states ? 7u : 3u)) cab.items.pop_back();
 	cab.items.push_back(label(""));
 	const int px = int(s.panel_rect(2).w) - 30;
-	if (st.online) add_text(cab.items, "Online, the game goes on while this menu is open. Greyed: offline only.", px, 5);
+	if (st.online) add_text(cab.items, "The players and watchers see it. The game goes on while this menu is open.", px, 4);
 	else add_text(cab.items, "The game waits while this menu is open. Coins go in when it resumes.", px, 5);
 	s.fix_focus();
 }
