@@ -336,6 +336,8 @@ Good to know:
 * The pause menu opens online too, but the game goes on for everybody while it is open.
 * If a player's network changes during a game (a phone moving from Wi-Fi to mobile data), the
   game goes on at the new address, as long as the other side's router lets it in.
+* Joining a game that has already started, with the host's code, lets you **watch** it (up
+  to 8 watchers). A watcher's buttons do nothing, and a watcher cannot slow the game down.
 * A player who drops out (lost connection, app closed, phone put away) has a minute to come
   back: the game waits, and the host's screen counts down. They join again with the same code
   and go on from where the game is; a phone brought back in time just goes on.

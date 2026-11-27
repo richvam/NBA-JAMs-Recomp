@@ -429,7 +429,7 @@ void netplay::reset_state()
 	m_got_start = false; m_game_id.clear(); m_fp = 0; m_dips = dip_settings(); m_nv.clear(); m_nvlen = 0; m_lobby_mods.clear();
 	m_nchunks = m_chunks_ok = 0; m_chunk_have.clear();
 	m_client_ready_sent = m_client_ok = false; m_client_why.clear();
-	m_want_state = m_resume = m_resume_parsed = false; m_resume_blob.clear(); m_resume_state.clear(); m_rejoins = 0;
+	m_want_state = m_resume = m_resume_parsed = false; m_resume_blob.clear(); m_resume_state.clear(); m_rejoins = 0; m_watchers.clear();
 	m_delay = 4; m_frame = 0;
 	for (auto &m : m_in) m.clear();
 	m_merged.clear(); m_merged_upto = 0; m_stall_since = 0; m_hash.clear();
@@ -739,6 +739,7 @@ void netplay::give_state(const std::vector<u8> &state)
 	m_want_state = false;
 	peer *p = nullptr;
 	for (auto &q : m_peers) if (q.rejoin) p = &q;
+	for (auto &q : m_watchers) if (q.rejoin && !p) p = &q;
 	if (!p) return;
 	const u32 F = m_frame, R = m_merged_upto;
 	wbuf w;
@@ -746,6 +747,7 @@ void netplay::give_state(const std::vector<u8> &state)
 	for (u32 f = F; f < R; f++) { auto it = m_merged.find(f); w.u64_(it == m_merged.end() ? 0 : it->second); }
 	for (u32 f = R; f < R + u32(m_delay); f++)
 	{
+		if (p->watcher) { w.u16_(0); continue; }
 		if (!has_input(p->slot, f)) m_in[p->slot][f] = 0;
 		w.u16_(input_of(p->slot, f));
 	}
@@ -765,7 +767,7 @@ void netplay::parse_resume()
 	m_merged.clear();
 	for (u32 f = F; f < R && r.ok; f++) m_merged[f] = r.u64_();
 	for (auto &m : m_in) m.clear();
-	for (u32 f = R; f < R + u32(m_delay) && r.ok; f++) m_in[m_slot][f] = r.u16_();
+	for (u32 f = R; f < R + u32(m_delay) && r.ok; f++) { u16 v = r.u16_(); if (!spectator()) m_in[m_slot][f] = v; }
 	u32 ml = r.u32_();
 	if (!r.ok || !r.need(int(ml))) { m_client_why = "the game in progress could not be read"; return; }
 	std::string mods(reinterpret_cast<const char *>(m_nv.data()) + r.i, ml);
@@ -816,7 +818,7 @@ bool netplay::can_run() const
 // merges that frame itself instead of waiting for the host's merge, which is the same
 bool netplay::local_merge_ok(u32 f) const
 {
-	if (m_mode != mode::client || !mesh || m_slot < 0) return false;
+	if (m_mode != mode::client || !mesh || m_slot < 0 || spectator()) return false;
 	for (int s = 0; s < m_nplayers; s++) if (!has_input(s, f)) return false;
 	return true;
 }
@@ -836,7 +838,7 @@ u32 netplay::stall_ms() const
 cabinet_inputs netplay::frame_inputs(const cabinet_inputs::player &local_now)
 {
 	u32 tf = m_frame + u32(m_delay);
-	if (!has_input(m_slot, tf)) m_in[m_slot][tf] = net_pack_input(local_now);
+	if (!spectator() && !has_input(m_slot, tf)) m_in[m_slot][tf] = net_pack_input(local_now);
 	if (m_mode == mode::host) try_merge();
 	if (!m_merged.count(m_frame) && local_merge_ok(m_frame))
 	{
@@ -915,6 +917,7 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 
 	peer *pp = nullptr;
 	for (auto &q : m_peers) if (q.addr == from) pp = &q;
+	for (auto &q : m_watchers) if (q.addr == from) pp = &q;     // N5.1
 
 	if (type == 'R')
 	{
@@ -962,6 +965,19 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 				peer *held = nullptr;
 				if (ver == VERSION && m_phase == phase::running && !m_want_state && m_resume_blob.empty())
 					for (auto &q : m_peers) if (q.away && !q.rejoin && !held) held = &q;
+				// N5.1: a game in progress and no seat to take: watch it
+				if (!held && ver == VERSION && m_phase == phase::running && allow_watchers && int(m_watchers.size()) < MAX_WATCHERS &&
+				    !m_want_state && m_resume_blob.empty())
+				{
+					peer np;
+					np.addr = from;
+					np.slot = WATCHER;
+					np.watcher = true;
+					np.away = true;
+					np.away_since = now;
+					m_watchers.push_back(np);
+					held = &m_watchers.back();
+				}
 				if (held)
 				{
 					held->addr = from;
@@ -1018,7 +1034,7 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 				pp->rejoin = false;
 				pp->away = false;
 				pp->ready = true;
-				m_rejoins++;
+				if (!pp->watcher) m_rejoins++;
 				m_resume_blob.clear();
 			}
 			return;
@@ -1028,6 +1044,11 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 			// what the player sees as our address (N2.4)
 			net_addr a;
 			if (r.i < n && get_addr(p + r.i, n - r.i, a)) m_seen_as = a;
+			return;
+		}
+		if (type == 'b' && pp->watcher)
+		{
+			m_watchers.erase(m_watchers.begin() + (pp - m_watchers.data()));
 			return;
 		}
 		if (type == 'b')
@@ -1062,8 +1083,14 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 				pp->rejoin = false;
 				pp->away = false;
 				pp->ready = true;
-				m_rejoins++;
+				if (!pp->watcher) m_rejoins++;
 				m_resume_blob.clear();
+			}
+			if (pp->watcher)
+			{
+				r.u8_();
+				pp->acked_merged = std::max(pp->acked_merged, r.u32_());
+				return;
 			}
 			int slot = r.u8_();
 			u32 acked = r.u32_();
@@ -1300,10 +1327,17 @@ void netplay::tick_host(u32 now)
 	const bool roster_due = now - m_roster_t >= 500;
 	if (roster_due) m_roster_t = now;
 	const std::vector<link_info> mine = report ? links() : std::vector<link_info>();
-	for (auto &p : m_peers)
+	// N5.1: watchers that went quiet are forgotten
+	for (size_t i = 0; i < m_watchers.size(); i++)
+		if (now - m_watchers[i].last_seen > timeout_ms) { m_watchers.erase(m_watchers.begin() + long(i)); break; }
+	std::vector<peer *> everyone;
+	for (auto &q : m_peers) everyone.push_back(&q);
+	for (auto &q : m_watchers) everyone.push_back(&q);
+	for (peer *pq : everyone)
 	{
+		peer &p = *pq;
 		auto hdr = [&](wbuf &w, char t) { w.u8_(u8(t)); w.u8_(MAGIC); w.u32_(now); w.u32_(p.echo ? p.echo + (now - p.echo_at) : 0); };
-		if (report)
+		if (report && !p.watcher)
 		{
 			wbuf w; hdr(w, 'o');
 			put_addr(w.b, p.addr);
@@ -1311,13 +1345,13 @@ void netplay::tick_host(u32 now)
 			for (auto &l : mine) { w.u8_(u8(l.slot)); w.u16_(u16(std::min(l.ping, 65535))); w.u16_(u16(std::min(l.jitter, 65535))); w.u8_(u8((l.relayed ? 1 : 0) | (l.v6 ? 2 : 0))); }
 			send_raw(p.addr, w.b);
 		}
-		if (m_phase == phase::lobby && slow)
+		if (m_phase == phase::lobby && slow && !p.watcher)
 		{
 			wbuf w; hdr(w, 'l'); w.u8_(u8(m_nplayers)); w.u8_(u8(p.slot)); w.str(m_lobby_mods);
 			for (int s = 0; s < 4; s++) w.u8_(platform_of(s));   // R8.1
 			send_raw(p.addr, w.b);
 		}
-		if (m_phase == phase::transfer && slow)
+		if (m_phase == phase::transfer && slow && !p.watcher)
 		{
 			if (!p.start_acked)
 			{
@@ -1362,7 +1396,7 @@ void netplay::tick_host(u32 now)
 					sent++;
 				}
 		}
-		if (mesh && (m_phase == phase::transfer || m_phase == phase::running) && roster_due)
+		if (mesh && (m_phase == phase::transfer || m_phase == phase::running) && roster_due && !p.watcher)
 		{
 			// the players reached directly (not through a relay), for the mesh (N2.5)
 			wbuf w; hdr(w, 'M');
@@ -1377,12 +1411,14 @@ void netplay::tick_host(u32 now)
 			for (const peer *q : direct) { w.u8_(u8(q->slot)); put_addr(w.b, q->addr); }
 			send_raw(p.addr, w.b);
 		}
-		if (m_phase == phase::running && mesh) send_direct(p.addr);
+		if (m_phase == phase::running && mesh && !p.watcher) send_direct(p.addr);
 		if (m_phase == phase::running)
 		{
 			wbuf w; hdr(w, 'f');
 			u32 first = std::max(p.acked_merged, m_merged_upto > MAX_HIST ? m_merged_upto - MAX_HIST : 0u);
 			u32 last = m_merged_upto;
+			// N5.1: a watcher may be further behind than the players can be: from where it is
+			if (p.watcher && !p.rejoin) { first = p.acked_merged; last = std::min(m_merged_upto, first + u32(MAX_HIST)); }
 			if (first > last) first = last;
 			w.u32_(first);
 			w.u8_(u8(last - first));
@@ -1390,7 +1426,7 @@ void netplay::tick_host(u32 now)
 			w.u8_(m_desync ? 1 : 0);
 			// next input frame we still need from this client
 			u32 need = m_merged_upto;
-			while (has_input(p.slot, need)) need++;
+			while (!p.watcher && has_input(p.slot, need)) need++;
 			w.u32_(need);
 			send_raw(p.addr, w.b);
 		}
@@ -1488,8 +1524,19 @@ void netplay::tick_client(u32 now)
 		if (m_client_ready_sent && !m_client_ok) stop(m_client_why.c_str());
 		return;
 	}
-	if (m_phase == phase::running && mesh)
+	if (m_phase == phase::running && mesh && !spectator())
 		for (auto &m : m_roster) send_direct(m.second);
+	if (m_phase == phase::running && spectator())
+	{
+		// N5.1: a watcher says only how far it has the merged inputs
+		u32 have = m_frame;
+		while (m_merged.count(have)) have++;
+		wbuf w; hdr(w, 'i');
+		w.u8_(WATCHER);
+		w.u32_(have);
+		send_raw(h.addr, w.b);
+		return;
+	}
 	if (m_phase == phase::running)
 	{
 		// next merged frame we are missing
