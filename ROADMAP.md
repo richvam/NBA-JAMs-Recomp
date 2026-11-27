@@ -1219,6 +1219,8 @@ green on its processor.
 | R8.2 | Sonnet | One tag builds everything: Windows installer and zip, Linux AppImage and archive, macOS disk image, Android APK, checksums, and the release page from R2.2. |
 | R8.3 | Haiku | README, in-app help and the online guide checked against the released build on each platform, in both languages. |
 
+**Status (R8.1):** started. Each player now says what it plays on when joining (Windows, Linux, macOS or Android), the host sends every seat's platform with the lobby updates, and the lobby shows it after each name ("Player 2 (Android)"). `nattest` has four players say four platforms and checks that everyone sees all four. A player on a version without this shows no platform; nothing else changes. Not done: rooms (N4 does not exist yet), an icon instead of the name, and the matrix itself: a full game for every pair of platforms with equal hashes needs the four machines (macOS only in CI, Android only on a phone or the emulator, and the hashes need ROMs, which CI does not have).
+
 **Gate:** advisor sign-off on the matrix, then publish.
 
 ## Limits to expect
