@@ -16,6 +16,9 @@ src/app/pad_script.h.
   g_first_run.pad  first start with no ROMs to a game (R3.2): Open my ROM folder, then
                  nbajam.zip dropped on the window (`drop ${ROMS}/nbajam.zip`, ROMS=<folder>
                  in the environment), one game ready, started
+  h_lifecycle.pad, then h_resume.pad on the same data folder: the app put away during a
+                 game (R7.5), quit as the system would, started again: the log says
+                 "lifecycle: game resumed, ..., as kept"
   f_states.pad   save states (N1.4): with save_states=1 in the data folder's ini, Save in
                  slot 1, play on, Load; the log says "as saved"
 

@@ -23,8 +23,15 @@ screen make_picker(const picker_state &st)
 	panel menu;
 	menu.title = "Menu";
 	menu.r = { 0.0f, 0.48f, 0.5f, 0.52f };
+#ifdef __ANDROID__
+	// R7.2: the system file picker brings ROMs in (files, or a whole folder)
+	menu.items = { button(pk_online, "Online game"), button(pk_settings, "Settings"), button(pk_mods, "Lua mods"), button(pk_controls, "Controls"),
+	               button(pk_news, "News"), button(pk_about, "About"), button(pk_romdir, "Add ROMs"), button(pk_romtree, "Add a ROM folder"),
+	               button(pk_rescan, "Look for ROMs again"), button(pk_quit, "Quit") };
+#else
 	menu.items = { button(pk_online, "Online game"), button(pk_settings, "Settings"), button(pk_mods, "Lua mods"), button(pk_controls, "Controls"),
 	               button(pk_news, "News"), button(pk_about, "About"), button(pk_romdir, "Open my ROM folder"), button(pk_rescan, "Look for ROMs again"), button(pk_quit, "Quit") };
+#endif
 	panel info;
 	info.r = { 0.52f, 0.0f, 0.48f, 1.0f };
 	t.panels = { games, menu, info };
@@ -76,9 +83,15 @@ void update_picker(screen &s, const picker_state &st, int game)
 		{
 			// first run: nothing can be played yet
 			info.items.push_back(header("NO GAMES FOUND"));
+#ifdef __ANDROID__
+			lines("Choose Add ROMs and pick your ROM sets (ZIP files), or Add a ROM folder. They are copied into:");
+			lines(st.roms_dir);
+			lines("A computer sees that folder over USB too. After copying there, choose Look for ROMs again.");
+#else
 			lines("Drag your ROM sets (ZIP files) onto this window, or put them in this folder:");
 			lines(st.roms_dir);
 			lines("Open my ROM folder opens it. After copying, choose Look for ROMs again.");
+#endif
 		}
 		else if (g.available) info.items.push_back(header("READY TO PLAY"));
 		else
@@ -143,11 +156,16 @@ screen make_settings(const settings_state &st)
 		picker(st_sides, "Sides of a 4:3 picture", st.side_names, st.sides),
 		toggle(st_fullscreen, "Fullscreen", st.fullscreen),
 		toggle(st_tv, "Menus inside a TV's safe area", st.tv_margins),
+		toggle(st_frame_log, "Log frame times", st.frame_log),
 	};
 	panel vk;
 	vk.r = { 0.1f, 0.66f, 0.8f, 0.3f };
 	vk.items = { label("Also on keys: F7 shape, F5 scaling,"), label("F4 look, F6 scanlines, F8 sides,"), label("F11 fullscreen.") };
+#ifdef __ANDROID__
+	video.panels = { v };                     // no F keys on a phone (R7.1)
+#else
 	video.panels = { v, vk };
+#endif
 
 	tab sound;
 	sound.name = "Sound";
@@ -185,7 +203,20 @@ screen make_settings(const settings_state &st)
 	            toggle(st_save_states, "Save states", st.save_states), label("Save and Load, three slots per game."), label("Offline games only.") };
 	prog.panels = { p };
 
-	s.tabs = { video, sound, game, prog };
+	tab touch;
+	touch.name = "Touch";
+	panel tc;
+	tc.title = "Touch controls in a game";
+	tc.r = { 0.1f, 0.0f, 0.8f, 0.9f };
+	tc.items = { picker(st_touch, "Touch controls", { "Automatic", "On", "Off" }, st.touch_mode),
+	             label("Automatic: shown on a touch screen"), label("while no controller is connected."),
+	             slider(st_touch_size, "Size", st.touch_size, 0.6f, 1.6f, 0.1f),
+	             slider(st_touch_opacity, "Opacity", st.touch_opacity, 0.2f, 1.0f, 0.1f),
+	             button(st_touch_arrange, "Arrange the controls"), label("Drag each one where your thumbs rest."),
+	             button(st_touch_reset, "Put them back where they were") };
+	touch.panels = { tc };
+
+	s.tabs = { video, sound, game, prog, touch };
 	s.fix_focus();
 	return s;
 }
@@ -197,9 +228,10 @@ void show_settings(screen &s, const settings_state &st)
 	auto sli = [&](int id, float v) { if (item *i = s.find(id)) i->value = std::clamp(v, i->min, i->max); };
 	if (item *i = s.find(st_sides)) i->choices = st.side_names;
 	pick(st_shape, st.shape); pick(st_max_wide, st.max_wide); pick(st_scaling, st.scaling); pick(st_shader, st.shader); pick(st_sides, st.sides); pick(st_country, st.country); pick(st_pause, st.pause_buttons);
-	tog(st_fullscreen, st.fullscreen); tog(st_tv, st.tv_margins); tog(st_free_play, st.free_play); tog(st_players, st.four_players); tog(st_clips, st.video_clips); tog(st_news, st.news); tog(st_save_states, st.save_states);
+	tog(st_fullscreen, st.fullscreen); tog(st_tv, st.tv_margins); tog(st_frame_log, st.frame_log); tog(st_free_play, st.free_play); tog(st_players, st.four_players); tog(st_clips, st.video_clips); tog(st_news, st.news); tog(st_save_states, st.save_states);
 	sli(st_scanlines, st.scanlines); sli(st_volume, st.volume); sli(st_menu_volume, st.menu_volume);
 	tog(st_menu_music, st.menu_music); tog(st_menu_sounds, st.menu_sounds);
+	pick(st_touch, st.touch_mode); sli(st_touch_size, st.touch_size); sli(st_touch_opacity, st.touch_opacity);
 }
 
 void read_settings(const screen &s, settings_state &st)
@@ -209,15 +241,27 @@ void read_settings(const screen &s, settings_state &st)
 	auto tog = [&](int id, bool &v) { if (const item *i = m.find(id)) v = i->on; };
 	auto sli = [&](int id, float &v) { if (const item *i = m.find(id)) v = std::round(i->value * 10.0f) / 10.0f; };
 	pick(st_shape, st.shape); pick(st_max_wide, st.max_wide); pick(st_scaling, st.scaling); pick(st_shader, st.shader); pick(st_sides, st.sides); pick(st_country, st.country); pick(st_pause, st.pause_buttons);
-	tog(st_fullscreen, st.fullscreen); tog(st_tv, st.tv_margins); tog(st_free_play, st.free_play); tog(st_players, st.four_players); tog(st_clips, st.video_clips); tog(st_news, st.news); tog(st_save_states, st.save_states);
+	tog(st_fullscreen, st.fullscreen); tog(st_tv, st.tv_margins); tog(st_frame_log, st.frame_log); tog(st_free_play, st.free_play); tog(st_players, st.four_players); tog(st_clips, st.video_clips); tog(st_news, st.news); tog(st_save_states, st.save_states);
 	sli(st_scanlines, st.scanlines); sli(st_volume, st.volume); sli(st_menu_volume, st.menu_volume);
 	tog(st_menu_music, st.menu_music); tog(st_menu_sounds, st.menu_sounds);
+	pick(st_touch, st.touch_mode); sli(st_touch_size, st.touch_size); sli(st_touch_opacity, st.touch_opacity);
 }
 
 const std::vector<std::string> &pause_button_names()
 {
 	static const std::vector<std::string> n = { "Start (1 second)", "Start + Back", "L3 + R3" };
 	return n;
+}
+
+// the longer code (IPv4 and IPv6), split in two so the whole of it shows
+static void add_long_code(std::vector<item> &i, const std::string &c)
+{
+	if (c.empty()) return;
+	i.push_back(label("If it fails, the longer code:"));
+	size_t cut = c.size() > 24 ? c.find('-', 18) : std::string::npos;
+	if (cut == std::string::npos) { i.push_back(label(" " + c)); return; }
+	i.push_back(label(" " + c.substr(0, cut + 1)));
+	i.push_back(label(" " + c.substr(cut + 1)));
 }
 
 // ---------------------------------------------------------------- Lua mods (U3.4)
@@ -515,6 +559,7 @@ void update_lobby(screen &s, const lobby_state &st)
 		i.push_back(header("TELL THE OTHERS"));
 		i.push_back(label("Code: " + (st.code.empty() ? std::string("none") : st.code)));
 		add_text(i, st.code_note, px, 3);
+		add_long_code(i, st.code_long);
 		add_text(i, "Same network: " + joined(st.local_ips, "not known") + ", port " + std::to_string(st.port), px, 3);
 	}
 	else
@@ -546,6 +591,7 @@ void update_lobby(screen &s, const lobby_state &st)
 		i.push_back(header("YOUR CODE"));
 		i.push_back(label(st.code.empty() ? std::string("none") : st.code));
 		add_text(i, st.code_note, px, 3);
+		add_long_code(i, st.code_long);
 		i.push_back(header("YOUR CONTROLS"));
 		add_text(i, "The player 1 keys, or the first controller.", px, 3);
 	}
@@ -608,8 +654,19 @@ screen make_about(const about_state &st)
 		{ "Scanline strength", "F6" }, { "Picture shape", "F7" }, { "Sides of a 4:3 picture", "F8" },
 		{ "Fullscreen", kFull }, { "Screenshot", kShot }, { "Volume", "- and +" }, { "Online game, from the menu", "N" },
 	};
+#ifdef __ANDROID__
+	// a phone or handheld: touch, the back gesture and a controller, no F keys (R7.1)
+	k.title = "Buttons and gestures";
+	static const char *const kTouch[][2] = {
+		{ "Choose in a menu", "Tap, or A on a controller" }, { "Back", "Back gesture, < Back, or B" },
+		{ "Pause menu, in a game", "Back gesture, or hold Start" }, { "Picture, sound, game", "Settings in the menu" },
+	};
+	for (auto &r : kTouch) k.items.push_back(row(r[0], r[1]));
+	add_text(k.items, "With a keyboard attached, the desktop keys (Esc, F1 to F12) work too.", px, 2);
+#else
 	for (auto &r : kKeys) k.items.push_back(row(r[0], r[1]));
 	add_text(k.items, "F4 to F8, F11 and the volume are also in Settings.", px, 2);
+#endif
 	prog.panels = { k };
 
 	tab cred;

@@ -79,7 +79,11 @@ private:
 	void hold(act a, unsigned now);
 	void release(act a);
 	std::deque<event> m_q;
+#ifdef __ANDROID__
+	device m_dev = device::touch;            // a phone starts with touch prompts; a controller press switches them
+#else
 	device m_dev = device::keyboard;
+#endif
 	act m_held = act::none;
 	unsigned m_next = 0, m_interval = 0;
 	int m_stick_x = 0, m_stick_y = 0;        // -1, 0, 1 after the dead zone
@@ -195,6 +199,7 @@ public:
 	static inline int kW = 400;
 	static constexpr int kMinW = 400, kMaxW = 712;
 	static constexpr int kH = 300, kRow = 12, kTabsY = 22, kTop = 38, kBottom = 268;
+	static rectf back_button();         // the touch / mouse Back button (bottom right)
 
 private:
 	panel *cur() { return panels().empty() ? nullptr : &panels()[size_t(cur_panel)]; }

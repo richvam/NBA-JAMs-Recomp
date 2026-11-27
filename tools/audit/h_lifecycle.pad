@@ -1,0 +1,25 @@
+# R7.5: the app put away and brought back, as on a phone. Run twice on the same data folder:
+# the first run puts the app away during a game (it pauses and keeps the game in
+# states/resume.state) and quits as if the system had closed it; the second run starts
+# with that game, paused, from the same place ("lifecycle: game resumed, ..., as kept").
+# A second part of the first run: back in the foreground the kept game is dropped.
+wait 6000
+expect menu
+tap a
+wait 9000
+expect game
+wait 2000
+background
+wait 500
+expect pause
+foreground
+wait 500
+expect pause
+tap b
+wait 500
+expect game
+wait 2000
+background
+wait 500
+expect pause
+quit

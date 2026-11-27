@@ -43,7 +43,7 @@ struct picker_state
 	std::string news_tag, version, roms_dir;
 };
 
-enum picker_id { pk_game0 = 1, pk_online = 50, pk_settings, pk_mods, pk_controls, pk_news, pk_about, pk_romdir, pk_rescan, pk_quit };
+enum picker_id { pk_game0 = 1, pk_online = 50, pk_settings, pk_mods, pk_controls, pk_news, pk_about, pk_romdir, pk_rescan, pk_quit, pk_romtree };
 
 screen make_picker(const picker_state &st);
 // The game the screen is about: the focused one, or the one last focused while focus is in
@@ -69,6 +69,7 @@ struct settings_state
 	std::vector<std::string> side_names; // "Black", "Blurred picture", then one per overlay image
 	bool fullscreen = false;
 	bool tv_margins = false;              // the menus kept inside the safe area of a TV (U7.2)
+	bool frame_log = false;               // frame_times.log in the data folder (W5.3, R7.6)
 	float volume = 0.8f;
 	bool free_play = true, four_players = true, video_clips = true;
 	int country = 0;
@@ -77,9 +78,11 @@ struct settings_state
 	int pause_buttons = 0;               // what is held on a controller for the pause menu: index into pause_button_names()
 	bool menu_music = true, menu_sounds = true;   // in the menus, from the highlighted game's sound board (U6)
 	float menu_volume = 0.6f;
+	int touch_mode = 2;                  // on-screen touch controls (R7.3): 0 automatic, 1 on, 2 off
+	float touch_size = 1.0f, touch_opacity = 0.5f;
 };
 
-enum settings_id { st_shape = 1, st_scaling, st_shader, st_scanlines, st_sides, st_fullscreen, st_volume, st_free_play, st_players, st_country, st_clips, st_news, st_pause, st_menu_music, st_menu_sounds, st_menu_volume, st_tv, st_save_states, st_max_wide };
+enum settings_id { st_shape = 1, st_scaling, st_shader, st_scanlines, st_sides, st_fullscreen, st_volume, st_free_play, st_players, st_country, st_clips, st_news, st_pause, st_menu_music, st_menu_sounds, st_menu_volume, st_tv, st_save_states, st_max_wide, st_touch, st_touch_size, st_touch_opacity, st_touch_arrange, st_touch_reset, st_frame_log };
 
 // The controller buttons held for half a second to open the pause menu (U5.1). There is no
 // "none": Esc and the Guide button always open it as well, so it can never be unbound.
@@ -176,6 +179,7 @@ struct lobby_state
 	bool receiving = false;              // joining: the game data is coming
 	// N2: this computer's connection code, as the internet sees it, and how it was found
 	std::string code, code_note;
+	std::string code_long;                // IPv4 and IPv6 together, when both exist: for when the short code does not connect
 	int inviting = 0;                    // host: players being let in by their code
 	bool no_answer = false;              // joining: no answer for a few seconds
 	std::string mods;                    // the Lua mods the host runs (roadmap 1.7), "none"

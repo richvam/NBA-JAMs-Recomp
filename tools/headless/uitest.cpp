@@ -714,7 +714,11 @@ int main(int argc, char **argv)
 		show_settings(se, ss);
 		read_settings(se, back2);
 		CHECK(back2.max_wide == 2, "settings: the widest view (W5.2) goes to its widget and back");
-		CHECK(se.tabs.size() == 4 && se.tabs[0].name == "Video" && se.tabs[1].name == "Sound" && se.tabs[2].name == "Game", "settings: Video, Sound, Game and Program tabs");
+		CHECK(se.tabs.size() == 5 && se.tabs[0].name == "Video" && se.tabs[1].name == "Sound" && se.tabs[2].name == "Game" && se.tabs[4].name == "Touch", "settings: Video, Sound, Game, Program and Touch tabs");
+		ss.touch_mode = 1; ss.touch_size = 1.3f; ss.touch_opacity = 0.7f;
+		show_settings(se, ss);
+		read_settings(se, back2);
+		CHECK(back2.touch_mode == 1 && std::fabs(back2.touch_size - 1.3f) < 0.01f && std::fabs(back2.touch_opacity - 0.7f) < 0.01f, "settings: touch controls (R7.3) go to their widgets and back");
 
 		// pictures
 		theme th2;
@@ -1346,6 +1350,10 @@ int main(int argc, char **argv)
 		show_settings(s, a);
 		read_settings(s, b);
 		CHECK(s.find(st_tv) && b.tv_margins, "Settings: the TV safe area switch round-trips (U7.2)");
+		a.frame_log = true;
+		show_settings(s, a);
+		read_settings(s, b);
+		CHECK(s.find(st_frame_log) && b.frame_log, "Settings: the frame time log switch round-trips (R7.6)");
 
 		// "Music on" at the right of the status line, only when it is set
 		theme th5;
@@ -1359,6 +1367,25 @@ int main(int argc, char **argv)
 				if (on.px[size_t(y) * screen::kW + size_t(x)] != off.px[size_t(y) * screen::kW + size_t(x)]) (x > screen::kW / 2 ? diff_right : diff_left)++;
 		CHECK(diff_right > 20 && diff_left == 0, "status line: \"Music on\" is drawn at the right when the music plays, and nothing else moves");
 		write_png(out, "settings_sound_music_on.png", on);
+		// with the mouse (or touch) the Back button is in that corner: "Music on" stays left of it
+		{
+			theme th6;
+			canvas m_off(screen::kW, screen::kH), m_on(screen::kW, screen::kH);
+			s.draw(m_off, th6, device::mouse, 0);
+			th6.note = "Music on";
+			s.draw(m_on, th6, device::mouse, 0);
+			rectf bb = screen::back_button();
+			int in_button = 0, changed = 0;
+			for (int y = screen::kH - 30; y < screen::kH; y++)
+				for (int x = 0; x < screen::kW; x++)
+					if (m_on.px[size_t(y) * screen::kW + size_t(x)] != m_off.px[size_t(y) * screen::kW + size_t(x)])
+					{
+						changed++;
+						if (bb.has(float(x), float(y))) in_button++;
+					}
+			CHECK(changed > 20 && in_button == 0, "status line: with the Back button shown, \"Music on\" is drawn beside it, not over it");
+			write_png(out, "settings_sound_music_on_mouse.png", m_on);
+		}
 	}
 
 	printf("\n%d checks, %d failed\n", g_run, g_fail);

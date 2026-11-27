@@ -12,6 +12,12 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 ## Unreleased
 
 ### Added
+- Settings, Video: "Log frame times" writes how long frames take, late frames and the audio delay to frame_times.log. On Android the CRT looks now step down by themselves on a slow phone, and the battery saver keeps the picture at Smooth.
+- Android: putting the app away pauses the game and stops its sound; if Android closes the app meanwhile, the game goes on from the same place on the next start. An online game is left instead of freezing the others.
+- On-screen touch controls in a game: stick, Shoot, Pass, Turbo, Start and Coin, shown on a touch screen while no controller is connected; size, opacity and places in Settings, Touch (R7.3).
+- Android: Add ROMs and Add a ROM folder open the system file picker and copy the choice into the ROM folder (R7.2); the data folder is visible over USB (Android/data/io.github.richvam.NBA_JAMs_Recomp/files).
+- Menus: a Back button in the corner when they are used by touch or mouse; on Android the back gesture is Back.
+- An Android build in CI: a debug APK for 64-bit ARM (and x86_64), started on an emulator, where it reaches the game picker (R7.1, not released yet).
 - macOS: the reason shown in the Local Network question, and online help for it and the firewall (R6.4).
 - macOS download: a disk image with the universal app for Apple Silicon and Intel; drag it onto Applications (R6.3). The first start needs Open Anyway, as the read-me in the image says.
 - macOS app bundle with its icon, data in Application Support, Command-key shortcuts (Ctrl+Cmd+F, Cmd+Return, Cmd+V), built and started in CI (R6.2). Still no Mac download (R6.3).
@@ -128,6 +134,8 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - New Lua mod cpu_vs_cpu.lua (every game): whole games between two computer teams, one after another, for watching.
 
 ### Changed
+- Android: the menus keep clear of rounded screen corners and camera cut-outs, and typing a name or code uses the game's own keyboard without the phone's keyboard opening over it.
+- Online codes: with both IPv4 and IPv6 (most phones) the code to type is the short 10-character one again; the longer code with the IPv6 address is shown under it, for when the short one does not connect.
 - Save states are now the same bytes on every build (R5.1). States saved by earlier versions do not load.
 - The pause menu opens by holding Start for one second on a controller (a quick press still joins
   the game). Start + Back opened a Windows menu; it and L3 + R3 can still be chosen in Settings,
@@ -165,6 +173,9 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - The README files describe the menus and the pause menu first; the F-keys are shortcuts.
 
 ### Fixed
+- "Music on" in the menus' bottom corner is no longer drawn over the Back button.
+- Android: a TV remote's centre key now chooses in the menus.
+- Android: online play could not make a socket (the app did not ask for network access); the home-network search keeps Wi-Fi from dropping broadcasts, and NAT-PMP and PCP find the router.
 - nattest: on the Apple Silicon CI runner the jitter is printed but not compared and the ping bound is wider (the runner adds delay and jitter of its own); Linux and Intel Macs still check both.
 - macOS CI: the network test (nattest) has the loopback addresses its simulated routers need.
 - macOS: NAT-PMP and PCP now find the router (the gateway was read from a file macOS does not have).
@@ -190,6 +201,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - With a controller in use, moving or resizing the window under a still mouse pointer no longer takes the focus away from the controller.
 
 ### Online
+- An online game goes on when a player's network changes mid-game (a phone moving from Wi-Fi to mobile data), when the other side's router lets the new address in.
 - Widescreen and 4:3 players can play each other online: each player's choice only changes
   their own picture, never the game.
 - Hosting opens the router's port by PCP or NAT-PMP too, when the router has no UPnP.

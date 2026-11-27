@@ -47,9 +47,9 @@ inline bool from_sdl(const SDL_Event &e, const view_rect &shown, int win_w, int 
 		case SDLK_DOWN: out.k = key::down; break;
 		case SDLK_LEFT: out.k = key::left; break;
 		case SDLK_RIGHT: out.k = key::right; break;
-		case SDLK_RETURN: case SDLK_KP_ENTER: out.k = key::enter; break;
+		case SDLK_RETURN: case SDLK_KP_ENTER: case SDLK_SELECT: out.k = key::enter; break;   // SELECT: a TV remote's centre key
 		case SDLK_SPACE: out.k = key::space; break;
-		case SDLK_ESCAPE: out.k = key::escape; break;
+		case SDLK_ESCAPE: case SDLK_AC_BACK: out.k = key::escape; break;   // AC_BACK: Android's back gesture and button
 		case SDLK_BACKSPACE: out.k = key::backspace; break;
 		case SDLK_TAB: out.k = key::tab; break;
 		case SDLK_PAGEUP: out.k = key::page_up; break;

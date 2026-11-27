@@ -1,0 +1,15 @@
+# R7.5, second run of h_lifecycle.pad: the kept game goes on, paused
+wait 9000
+expect pause
+tap b
+wait 500
+expect game
+wait 1000
+tap guide
+wait 500
+expect pause
+tap down 7
+tap a
+wait 1500
+expect menu
+quit

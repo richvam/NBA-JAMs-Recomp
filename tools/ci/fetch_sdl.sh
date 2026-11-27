@@ -5,6 +5,7 @@
 #   linux: static libSDL2.a built from source  -> <install_dir>/{include,lib}   (make SDL2L=<install_dir>)
 #   win:   official MinGW development package  -> <install_dir>/{include,lib}   (make SDL2W=<install_dir>)
 #   mac:   static libSDL2.a built from source for arm64 and x86_64 in one file, macOS 11 and later
+#   android: the source tree itself, for SDL's Android project
 # Skipped when <install_dir> already holds a build made by this script version.
 set -euo pipefail
 SDL_VERSION=2.30.9
@@ -41,7 +42,13 @@ case $kind in
     cmake --build "$tmp/build" -j"$(sysctl -n hw.ncpu)" >/dev/null
     cmake --install "$tmp/build" >/dev/null
     ;;
-  *) echo "usage: $0 <linux|win|mac> <dir>" >&2; exit 2 ;;
+  android)
+    # R7.1: the checked source tree only; SDL's Android project builds it (tools/ci/android_build.sh)
+    fetch SDL2-$SDL_VERSION.tar.gz $SRC_SHA256
+    tar -xzf "$tmp/SDL2-$SDL_VERSION.tar.gz" -C "$tmp"
+    cp -r "$tmp/SDL2-$SDL_VERSION/." "$out/"
+    ;;
+  *) echo "usage: $0 <linux|win|mac|android> <dir>" >&2; exit 2 ;;
 esac
 touch "$stamp"
 echo "SDL2 $SDL_VERSION ($kind) ready in $out"

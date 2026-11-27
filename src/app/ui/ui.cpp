@@ -479,10 +479,14 @@ result screen::press(item &it)
 }
 
 static rectf dialog_button(bool yes) { return { float((screen::kW - 400) / 2) + (yes ? 120.0f : 216.0f), 164, 64, 16 }; }
+// a Back button in the bottom right corner, drawn when the menus are used by touch or mouse
+// (a phone has no Esc key; R7.1)
+rectf screen::back_button() { return { float(kW - 62), float(kH - 19), 54, 15 }; }
 
 result screen::handle(const event &e)
 {
 	result r;
+	if (e.ptr == event::click && !asking() && back_button().has(e.x, e.y)) { r.what = result::back; return r; }
 	if (tabs.empty()) { if (e.a == act::back) r.what = result::back; return r; }
 	if (asking())
 	{
@@ -684,16 +688,36 @@ void screen::draw(canvas &cv, const theme &th, device dev, unsigned now_ms) cons
 	}
 
 	// status line: what each button does here, in the words of the device used last
-	std::string st = "[" + glyph(dev, act::confirm) + "] Select  [" + glyph(dev, act::back) + "] Back";
-	if (tabs.size() > 1) st += "  [" + glyph(dev, act::tab_prev) + "/" + glyph(dev, act::tab_next) + "] Tab";
-	for (const prompt &pr : prompts) st += "  [" + glyph(dev, pr.a) + "] " + pr.text;
-	const int line = cv.w - 16;
+	std::string st;
+	if (dev == device::touch)
+	{
+		// touch (R7.1): no keys to name. Tap a row or a tab; Back is the corner button or the
+		// system's back gesture. Prompts that only have a key (Online: Del) are rows anyway.
+		st = "Tap to choose  Swipe back or < Back";
+		if (tabs.size() > 1) st += "  Tap a tab to switch";
+	}
+	else
+	{
+		st = "[" + glyph(dev, act::confirm) + "] Select  [" + glyph(dev, act::back) + "] Back";
+		if (tabs.size() > 1) st += "  [" + glyph(dev, act::tab_prev) + "/" + glyph(dev, act::tab_next) + "] Tab";
+		for (const prompt &pr : prompts) st += "  [" + glyph(dev, pr.a) + "] " + pr.text;
+	}
+	const bool back_btn = dev == device::touch || dev == device::mouse;
+	if (back_btn)
+	{
+		rectf b = back_button();
+		cv.fill(int(b.x), int(b.y), int(b.w), int(b.h), th.strip);
+		cv.frame(int(b.x), int(b.y), int(b.w), int(b.h), th.bar);
+		put(int(b.x) + (int(b.w) - wide("< Back")) / 2, int(b.y) + 3, "< Back", th.tab_sel);
+	}
+	const int line = cv.w - 16 - (back_btn ? 60 : 0);
 	const int note_w = th.note.empty() ? 0 : text_w(th.note, face::note) + 12;
+	const int note_x = cv.w - 8 - (back_btn ? 60 : 0) - note_w + 12;   // left of the Back button when it is shown
 	if (text_w(st, face::note) <= line)
 	{
 		put(8, cv.h - 14, st, th.status, face::note);
 		// the note beside the prompts, or on the free line above them
-		if (note_w) put(cv.w - 8 - note_w + 12, text_w(st, face::note) + note_w <= line ? cv.h - 14 : cv.h - 25, th.note, th.header, face::note);
+		if (note_w) put(note_x, text_w(st, face::note) + note_w <= line ? cv.h - 14 : cv.h - 25, th.note, th.header, face::note);
 	}
 	else
 	{
@@ -704,7 +728,7 @@ void screen::draw(canvas &cv, const theme &th, device dev, unsigned now_ms) cons
 		if (cut == std::string::npos) cut = st.size() / 2;
 		put(8, cv.h - 24, fit_px(st.substr(0, cut), line, face::note), th.status, face::note);
 		put(8, cv.h - 13, fit_px(st.substr(std::min(st.size(), cut + 2)), line, face::note), th.status, face::note);
-		if (note_w && text_w(st.substr(std::min(st.size(), cut + 2)), face::note) + note_w <= line) put(cv.w - 8 - note_w + 12, cv.h - 13, th.note, th.header, face::note);
+		if (note_w && text_w(st.substr(std::min(st.size(), cut + 2)), face::note) + note_w <= line) put(note_x, cv.h - 13, th.note, th.header, face::note);
 	}
 
 	if (!m_toast.empty() && now_ms < m_toast_until)

@@ -16,6 +16,7 @@
 #include "ui/ui_sdl.h"
 #include "miniz.h"
 #include "gl_present.h"
+#include "touch_pad.h"
 #include "netplay.h"
 #include "nat.h"
 #include "mods.h"
@@ -119,6 +120,12 @@ struct config
 	int scale = 0;                // window size in multiples of 400x300; 0 = from the screen size
 	bool fullscreen = false;
 	bool tv_margins = false;      // the menus inside a TV's safe area: 5 % in from each edge (U7.2)
+#ifdef __ANDROID__
+	int touch_mode = 0;           // on-screen touch controls (R7.3): 0 automatic, 1 on, 2 off
+#else
+	int touch_mode = 2;
+#endif
+	std::string touch_layout;     // touch_layout::save(); empty = the default places
 	bool smooth = false;          // legacy (SDL renderer fallback)
 	bool scanlines = false;       // legacy
 	int shader = 3;               // 0 sharp, 1 smooth, 2 scanlines, 3 CRT, 4 CRT curved
@@ -181,6 +188,8 @@ static void save_config(const std::string &path, config &c)
 	  << "\n# view: original (4:3), widescreen (more of the court in play; all five games) or stretch (fills the window, distorted).\nview=" << view_shape_id(c.shape)
 	  << "\n# scaling: integer (whole multiples of the game's lines), fit (fills the height, crisp pixels), smooth (fills the height, filtered)\nscaling=" << view_scaling_id(c.scaling) << "\n# frame_time_log=1 writes how long each 120 game frames took to draw to frame_times.log in the data folder\nframe_time_log=" << c.frame_log << "\n# max_view_width: the widest the Widescreen view gets: widest (as wide as the window, up to 1000 columns), 16:9 or 21:9; a wider window gets sides\nmax_view_width=" << (c.max_wide == 1 ? "16:9" : c.max_wide == 2 ? "21:9" : "widest") << "\n# side_fill: around a 4:3 picture on a wider screen: black, blur (the picture, blurred and dimmed), overlay (an image from overlays/ in the data folder)\nside_fill=" << (c.side_fill == 1 ? "blur" : c.side_fill == 2 ? "overlay" : "black") << "\noverlay=" << c.overlay << "\n# overlay_opacity: 0.1 to 1, for overlays with a transparent opening\noverlay_opacity=" << c.overlay_opacity << "\nscanline_strength=" << c.scan_strength
 	  << "\n# opengl=0 uses the basic SDL renderer (no shaders)\nopengl=" << c.use_opengl
+	  << "\n\n[touch]\n# touch_controls: auto (on a touch screen while no controller is connected), on or off\ntouch_controls=" << (c.touch_mode == 1 ? "on" : c.touch_mode == 2 ? "off" : "auto")
+	  << "\n# where each control is (x,y as fractions of the window: stick, shoot, pass, turbo, start, coin), then size and opacity\ntouch_layout=" << c.touch_layout
 	  << "\n\n[audio]\nvolume=" << c.volume
 	  << "\n\n[network]\nport=" << c.net_port << "\ninput_delay=" << c.net_delay << "\nupnp=" << c.net_upnp << "\nstun=" << c.net_stun << "\nstun_server=" << c.net_stun_server << "\nlast_host=" << c.net_host << "\nrecent_hosts=" << [&] { std::string r; for (auto &h : c.net_recent) r += (r.empty() ? "" : ",") + h; return r; }()
 	  << "\n\n[dips]\nfree_play=" << c.dips.free_play << "\nfour_players=" << c.dips.four_players
@@ -225,6 +234,8 @@ static void load_config(const std::string &path, config &c)
 		else if (k == "scale") c.scale = std::clamp(atoi(v.c_str()), 0, 8);
 		else if (k == "fullscreen") c.fullscreen = atoi(v.c_str()) != 0;
 		else if (k == "tv_margins") c.tv_margins = atoi(v.c_str()) != 0;
+		else if (k == "touch_controls") c.touch_mode = v == "on" ? 1 : v == "off" ? 2 : 0;
+		else if (k == "touch_layout") c.touch_layout = v;
 		else if (k == "frame_time_log") c.frame_log = atoi(v.c_str()) != 0;
 		else if (k == "max_view_width") c.max_wide = v == "16:9" ? 1 : v == "21:9" ? 2 : 0;
 		else if (k == "smooth") c.smooth = atoi(v.c_str()) != 0;
@@ -331,7 +342,13 @@ private:
 	const char *screen_name() const;
 	void gallery_loop();
 	void rom_art_loop();
-	enum class screen { menu, settings, net_menu, net_lobby, game, about, mods, mod_detail, controls, news, pause };
+	enum class screen { menu, settings, net_menu, net_lobby, game, about, mods, mod_detail, controls, news, pause, touch_arrange };
+	// on-screen touch controls (R7.3)
+	touch_pad m_touch;
+	std::string m_hud_key;                 // what the touch layer last drawn showed
+	bool touch_shown() const;
+	void update_hud(bool show);
+	void touch_arrange_frame();
 
 	void open_window();
 	void present(const u32 *pixels, int w, int h, bool game);
@@ -393,7 +410,7 @@ private:
 	void apply_setup(const import_result &r);
 	bool game_frame();                 // returns true when an emulated frame was run
 	bool start_game(int index, bool net_client = false);
-	void stop_game();
+	void stop_game(bool keep_resume = false);
 	void poll_events();
 	cabinet_inputs gather_inputs();
 	void draw_overlay(canvas &cv);
@@ -402,7 +419,19 @@ private:
 	view_rect view_for(int win_w, int win_h, int w, int h, bool game) const
 	{
 		if (game) return compute_view(win_w, win_h, w, h, m_cfg.shape, m_cfg.scaling, m_presenting_wide);
-		return menu_view(win_w, win_h, w, h, m_cfg.tv_margins);
+		return menu_rect(win_w, win_h, w, h);
+	}
+	// R7.8: the edges a phone's rounded corners or camera cut into, in drawable pixels
+	// (left, top, right, bottom); the menus stay inside them
+	int m_safe[4] = { 0, 0, 0, 0 };
+	void read_safe_area();
+	view_rect menu_rect(int win_w, int win_h, int w, int h) const
+	{
+		const int l = m_safe[0], t = m_safe[1], r = m_safe[2], b = m_safe[3];
+		if (!(l | t | r | b) || win_w - l - r < w || win_h - t - b < h) return menu_view(win_w, win_h, w, h, m_cfg.tv_margins);
+		view_rect v = menu_view(win_w - l - r, win_h - t - b, w, h, m_cfg.tv_margins);
+		v.x += l; v.y += t;
+		return v;
 	}
 	void say_view(bool scaling_changed);
 	// overlays / borders (overlay.h)
@@ -417,7 +446,7 @@ private:
 	int copy_into_roms(const std::string &from, std::string &err);   // files copied; never overwrites
 	int m_dropped = 0;                              // files copied by the drop in progress
 	std::string m_drop_err;
-	void open_rom_folder();
+	void open_rom_folder(bool folder = false);   // Android: the system file picker (files, or a folder)
 	void message(const std::string &m, u32 ms = 2500) { m_message = m; m_message_until = SDL_GetTicks() + ms; }
 	std::string nv_path(const game_info &g) const { return path_join(path_join(m_base, "saves"), std::string(g.id) + ".nv"); }
 
@@ -482,6 +511,18 @@ private:
 	std::unique_ptr<wide_view> m_wide;
 	frame_guard m_guard;               // steps the shader down when drawing is too slow (W5.3)
 	void guard_frame(double ms, int ww, int wh, int used);
+	// R7.6: what a frame costs, in frame_times.log every 120 game frames (frame_time_log=1)
+	struct perf_window
+	{
+		int frames = 0, late = 0;
+		double emu_sum = 0, emu_max = 0, gap_sum = 0, gap_max = 0;
+		std::chrono::steady_clock::time_point last{};
+	} m_perf;
+	int m_audio_dev_ms = 0;            // the audio device's own buffer
+	bool m_power_save = false;         // Android's battery saver: the shader is kept at Smooth at most
+	unsigned m_power_checked = 0;
+	void perf_frame(double emu_ms, double hz);
+	void check_power_save();
 	bool m_wide_possible = false;      // the running game can draw it (its symbols are there)
 	bool m_presenting_wide = false;    // the picture being presented is the wide one
 	int wide_columns() const;          // the view width that fills the window's shape
@@ -505,6 +546,14 @@ private:
 	void read_slots();
 	void save_slot(int n);
 	bool load_slot(int n);
+	bool write_state(const std::string &path, std::string &err, u32 &hash);
+	bool read_state(const std::string &path, std::string &err, u32 &saved, u32 &now);
+	// R7.5: the app put away and brought back (phones); the game is kept in states/resume.state
+	// in case the system closes the app meanwhile, and goes on from there on the next start
+	std::string resume_path() const;
+	void went_background();
+	void came_foreground();
+	void resume_saved_game();
 
 	// Lua mods
 	mod_manager m_mods;
@@ -515,7 +564,7 @@ private:
 	upnp_mapper m_upnp;                // N2.1: the router's port forward while hosting
 	u32 m_join_t = 0;                  // when joining started (the hint after a few seconds)
 	void net_traversal_start();
-	std::string net_code_note(std::string &code);
+	std::string net_code_note(std::string &code, std::string *longer = nullptr);
 	std::string note_v4(std::string &code, bool host);
 	net_addr m_code4;                         // the IPv4 part of the code last shown
 	bool m_editing = false;            // text is being typed: on the on-screen keyboard or a physical one (U4.1)
@@ -576,11 +625,66 @@ int app::copy_into_roms(const std::string &from, std::string &err)
 	return n;
 }
 
-void app::open_rom_folder()
+#ifdef __ANDROID__
+#include <jni.h>
+// R7.2: the Java side (dist/android/NBAJamActivity.java) copies what was chosen in the system
+// file picker into roms/ and reports here, from its own thread; the main loop rescans
+static Uint32 g_roms_imported_event = 0;
+extern "C" JNIEXPORT void JNICALL Java_io_github_richvam_nbajam_NBAJamActivity_nativeRomsImported(JNIEnv *, jclass, jint copied, jint failed)
+{
+	if (!g_roms_imported_event) return;
+	SDL_Event e{};
+	e.type = g_roms_imported_event;
+	e.user.code = copied;
+	e.user.data1 = reinterpret_cast<void *>(intptr_t(failed));
+	SDL_PushEvent(&e);
+}
+// the router for NAT-PMP and PCP (nat.cpp): Android does not let an app read /proc/net/route
+u32 android_default_gateway()
+{
+	JNIEnv *env = static_cast<JNIEnv *>(SDL_AndroidGetJNIEnv());
+	jobject act = static_cast<jobject>(SDL_AndroidGetActivity());
+	if (!env || !act) return 0;
+	jclass cls = env->GetObjectClass(act);
+	jmethodID m = env->GetStaticMethodID(cls, "defaultGateway", "()I");
+	u32 g = m ? u32(env->CallStaticIntMethod(cls, m)) : 0;
+	if (env->ExceptionCheck()) { env->ExceptionClear(); g = 0; }
+	env->DeleteLocalRef(cls);
+	env->DeleteLocalRef(act);
+	return g;
+}
+static void android_pick_roms(const std::string &dir, bool folder)
+{
+	JNIEnv *env = static_cast<JNIEnv *>(SDL_AndroidGetJNIEnv());
+	jobject act = static_cast<jobject>(SDL_AndroidGetActivity());
+	if (!env || !act) return;
+	jclass cls = env->GetObjectClass(act);
+	jmethodID m = env->GetStaticMethodID(cls, "pickRoms", "(Ljava/lang/String;Z)V");
+	if (m)
+	{
+		jstring s = env->NewStringUTF(dir.c_str());
+		env->CallStaticVoidMethod(cls, m, s, jboolean(folder));
+		env->DeleteLocalRef(s);
+	}
+	if (env->ExceptionCheck()) env->ExceptionClear();
+	env->DeleteLocalRef(cls);
+	env->DeleteLocalRef(act);
+}
+#endif
+
+void app::open_rom_folder(bool folder)
 {
 	const std::string dir = path_join(m_base, "roms");
 	std::error_code ec;
 	std::filesystem::create_directories(std::filesystem::u8path(dir), ec);
+#ifdef __ANDROID__
+	if (m_scripted) { SDL_Log("pick roms: %s", dir.c_str()); return; }
+	if (!g_roms_imported_event) g_roms_imported_event = SDL_RegisterEvents(1);
+	android_pick_roms(dir, folder);
+	return;
+#else
+	(void)folder;
+#endif
 	if (m_scripted) { SDL_Log("open folder: %s", dir.c_str()); message("Opened " + dir, 3000); return; }   // no file manager in a scripted run
 	std::string url = "file:///";
 	for (char c : dir) url += c == '\\' ? '/' : c;
@@ -614,8 +718,15 @@ void app::open_window()
 	Uint32 fs = m_cfg.fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0;
 	if (m_cfg.use_opengl)
 	{
+#ifdef __ANDROID__
+		// R7.1: OpenGL ES 2.0 (the shaders already have a GLSL ES 1.00 version)
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+#else
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+#endif
 		SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 		m_win = SDL_CreateWindow("NBA JAM Recomp", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, w, h,
 			SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL | SDL_WINDOW_ALLOW_HIGHDPI | fs);
@@ -714,6 +825,97 @@ void app::guard_frame(double ms, int ww, int wh, int used)
 		}
 }
 
+void app::perf_frame(double emu_ms, double hz)
+{
+	auto now = std::chrono::steady_clock::now();
+	perf_window &p = m_perf;
+	if (p.last != std::chrono::steady_clock::time_point{})
+	{
+		double gap = std::chrono::duration<double, std::milli>(now - p.last).count();
+		if (gap < 250)          // not across a pause or the app put away
+		{
+			p.gap_sum += gap; p.gap_max = std::max(p.gap_max, gap);
+			if (gap > 1500.0 / hz) p.late++;     // half a frame later than the game's rate
+			p.emu_sum += emu_ms; p.emu_max = std::max(p.emu_max, emu_ms);
+			p.frames++;
+		}
+	}
+	p.last = now;
+	if (p.frames < frame_guard::kWindow) return;
+	const int queued = m_audio ? int(SDL_GetQueuedAudioSize(m_audio) / sizeof(float) * 1000 / 48000) : 0;
+	int ww = 0, wh = 0;
+	if (m_gl.ok()) m_gl.drawable_size(ww, wh);
+	char line[400];
+	snprintf(line, sizeof line, "%dx%d %s%s: emulation and drawing %.2f ms average, %.2f longest; frames %.2f ms apart (game %.2f), longest %.2f, %d late of %d; GPU %s; audio %d ms queued + %d ms device",
+	         ww, wh, shader_name(m_power_save ? std::min(m_guard.shader(m_cfg.shader), 1) : m_guard.shader(m_cfg.shader)), m_power_save ? " (battery saver)" : "",
+	         p.emu_sum / p.frames, p.emu_max, p.gap_sum / p.frames, 1000.0 / hz, p.gap_max, p.late, p.frames,
+	         m_gl.gpu_timing() ? (std::to_string(m_guard.last_avg).substr(0, 5) + " ms average").c_str() : "not measured", queued, m_audio_dev_ms);
+	if (m_cfg.frame_log)
+	{
+		if (FILE *f = fopen(path_join(m_base, "frame_times.log").c_str(), "a")) { fprintf(f, "%s\n", line); fclose(f); }
+		SDL_Log("frame times: %s", line);
+	}
+	const auto last = p.last;
+	p = perf_window{};
+	p.last = last;
+}
+
+#ifdef __ANDROID__
+static bool android_power_save()
+{
+	JNIEnv *env = static_cast<JNIEnv *>(SDL_AndroidGetJNIEnv());
+	jobject act = static_cast<jobject>(SDL_AndroidGetActivity());
+	if (!env || !act) return false;
+	jclass cls = env->GetObjectClass(act);
+	jmethodID m = env->GetStaticMethodID(cls, "powerSaveMode", "()Z");
+	bool on = m && env->CallStaticBooleanMethod(cls, m);
+	if (env->ExceptionCheck()) { env->ExceptionClear(); on = false; }
+	env->DeleteLocalRef(cls);
+	env->DeleteLocalRef(act);
+	return on;
+}
+#endif
+
+void app::read_safe_area()
+{
+#ifdef __ANDROID__
+	JNIEnv *env = static_cast<JNIEnv *>(SDL_AndroidGetJNIEnv());
+	jobject act = static_cast<jobject>(SDL_AndroidGetActivity());
+	if (!env || !act) return;
+	jclass cls = env->GetObjectClass(act);
+	jmethodID m = env->GetStaticMethodID(cls, "safeInsets", "()[I");
+	jintArray a = m ? static_cast<jintArray>(env->CallStaticObjectMethod(cls, m)) : nullptr;
+	if (env->ExceptionCheck()) { env->ExceptionClear(); a = nullptr; }
+	if (a && env->GetArrayLength(a) == 4)
+	{
+		jint v[4];
+		env->GetIntArrayRegion(a, 0, 4, v);
+		for (int i = 0; i < 4; i++) m_safe[i] = std::max(0, int(v[i]));
+		SDL_Log("safe area: %d %d %d %d (left, top, right, bottom)", m_safe[0], m_safe[1], m_safe[2], m_safe[3]);
+	}
+	if (a) env->DeleteLocalRef(a);
+	env->DeleteLocalRef(cls);
+	env->DeleteLocalRef(act);
+#endif
+}
+
+// every two seconds in a game: Android's battery saver keeps the picture cheap (R7.6)
+void app::check_power_save()
+{
+#ifdef __ANDROID__
+	const unsigned now = SDL_GetTicks();
+	if (m_power_checked && now - m_power_checked < 2000) return;
+	m_power_checked = now ? now : 1;
+	const bool on = android_power_save();
+	if (on != m_power_save)
+	{
+		m_power_save = on;
+		SDL_Log("battery saver %s", on ? "on" : "off");
+		if (on && m_cfg.shader > 1) message("Battery saver: the picture uses Smooth", 4000);
+	}
+#endif
+}
+
 void app::present(const u32 *pixels, int w, int h, bool game)
 {
 	int shader = game ? m_cfg.shader : 0;
@@ -722,13 +924,14 @@ void app::present(const u32 *pixels, int w, int h, bool game)
 	{
 		int ww, wh;
 		m_gl.drawable_size(ww, wh);
+		update_hud((game && m_screen == screen::game && touch_shown()) || m_screen == screen::touch_arrange);
 		if (!game)
 		{
 			m_gl.present(pixels, w, h, shader, view_for(ww, wh, w, h, game), m_cfg.scan_strength, true, m_cfg.side_fill);
 			return;
 		}
 		// a game frame: timed, and drawn with the shader the guard allows (W5.3)
-		int const used = m_guard.shader(shader);
+		int const used = m_power_save ? std::min(m_guard.shader(shader), 1) : m_guard.shader(shader);
 		m_gl.present(pixels, w, h, used, view_for(ww, wh, w, h, game), m_cfg.scan_strength, true, m_cfg.side_fill);
 		if (m_gl.gpu_timing() && m_gl.gpu_ms() >= 0) guard_frame(m_gl.gpu_ms(), ww, wh, used);
 		return;
@@ -763,10 +966,32 @@ void app::present(const u32 *pixels, int w, int h, bool game)
 	SDL_RenderPresent(m_ren);
 }
 
+#ifdef __ANDROID__
+// SDL sends "will enter background" on Android's own thread, just before it holds the main
+// loop: the watch waits (a short time) for the main loop to keep the game first
+static SDL_atomic_t g_bg_asked;
+static SDL_sem *g_bg_done;
+static int SDLCALL lifecycle_watch(void *, SDL_Event *e)
+{
+	if (e->type == SDL_APP_WILLENTERBACKGROUND && g_bg_done)
+	{
+		SDL_AtomicSet(&g_bg_asked, 1);
+		SDL_SemWaitTimeout(g_bg_done, 2000);
+	}
+	return 1;
+}
+#endif
+
 void app::poll_events()
 {
+#ifdef __ANDROID__
+	if (SDL_AtomicGet(&g_bg_asked)) { went_background(); SDL_AtomicSet(&g_bg_asked, 0); SDL_SemPost(g_bg_done); }
+#endif
 	m_menu_up = m_menu_down = m_menu_left = m_menu_right = m_menu_ok = m_menu_back = m_menu_net = m_menu_clear = m_menu_guide = false;
 	if (m_scripted) script_tick();
+	// each screen change goes to the log (the Android tests follow the menus by it)
+	static screen logged = screen(-1);
+	if (m_screen != logged) { logged = m_screen; SDL_Log("screen: %s", screen_name()); }
 	SDL_Event e;
 	while (SDL_PollEvent(&e))
 	{
@@ -784,6 +1009,10 @@ void app::poll_events()
 		switch (e.type)
 		{
 			case SDL_QUIT: m_quit = true; break;
+			case SDL_APP_DIDENTERFOREGROUND: came_foreground(); break;
+#ifndef __ANDROID__
+			case SDL_APP_WILLENTERBACKGROUND: went_background(); break;   // iOS and others: from the queue
+#endif
 			case SDL_CONTROLLERDEVICEADDED:
 				if (SDL_GameController *c = SDL_GameControllerOpen(e.cdevice.which)) m_pads.push_back(c);
 				break;
@@ -796,7 +1025,37 @@ void app::poll_events()
 						break;
 					}
 				break;
+			case SDL_FINGERDOWN:
+			case SDL_FINGERMOTION:
+			case SDL_FINGERUP:
+				if ((m_screen == screen::game && touch_shown()) || m_screen == screen::touch_arrange)
+				{
+					int ww = 1, wh = 1;
+					if (m_win) SDL_GetWindowSize(m_win, &ww, &wh);
+					long long id = (long long)e.tfinger.fingerId;
+					if (e.type == SDL_FINGERDOWN) m_touch.down(id, e.tfinger.x, e.tfinger.y, ww, wh);
+					else if (e.type == SDL_FINGERMOTION) m_touch.move(id, e.tfinger.x, e.tfinger.y, ww, wh);
+					else m_touch.up(id);
+				}
+				break;
 			case SDL_DROPBEGIN: m_dropped = 0; m_drop_err.clear(); break;
+#ifdef __ANDROID__
+			default:
+				if (g_roms_imported_event && e.type == g_roms_imported_event && !m_mach)
+				{
+					int copied = e.user.code, failed = int(intptr_t(e.user.data1));
+					rescan_roms(SDL_GetTicks());
+					int ready = 0;
+					for (bool a : m_avail) ready += a;
+					std::string m = failed < 0 ? std::string("This device has no file picker: copy ROMs over USB")
+					                           : "Added " + std::to_string(copied) + (copied == 1 ? " file" : " files") + ": " + std::to_string(ready) + " of " +
+					                               std::to_string(int(game_list().size())) + " games ready";
+					if (failed > 0) m += " (" + std::to_string(failed) + " could not be read)";
+					message(m, 6000);
+					SDL_Log("%s", m.c_str());
+				}
+				break;
+#endif
 			case SDL_DROPFILE:
 				if (e.drop.file)
 				{
@@ -865,6 +1124,7 @@ void app::poll_events()
 			case SDL_WINDOWEVENT:
 				// fullscreen chosen with the window's own control (the green button on a Mac,
 				// which gives the game its own Space): the setting follows
+				if (e.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) read_safe_area();
 				if (e.window.event == SDL_WINDOWEVENT_SIZE_CHANGED && m_win)
 					m_cfg.fullscreen = (SDL_GetWindowFlags(m_win) & SDL_WINDOW_FULLSCREEN_DESKTOP) == SDL_WINDOW_FULLSCREEN_DESKTOP;
 				break;
@@ -886,16 +1146,16 @@ void app::poll_events()
 					if (k == SDLK_BACKSPACE) m_kbd.erase();
 					if (k == SDLK_v && (e.key.keysym.mod & (KMOD_CTRL | KMOD_GUI)))
 						if (char *t = SDL_GetClipboardText()) { for (char *c = t; *c; c++) if (!isspace((unsigned char)*c)) m_kbd.type(*c); SDL_free(t); }
-					if (k == SDLK_RETURN || k == SDLK_KP_ENTER) m_menu_ok = true;
-					if (k == SDLK_ESCAPE) m_menu_back = true;
+					if (k == SDLK_RETURN || k == SDLK_KP_ENTER || k == SDLK_SELECT) m_menu_ok = true;
+					if (k == SDLK_ESCAPE || k == SDLK_AC_BACK) m_menu_back = true;
 					break;
 				}
 				if (k == SDLK_UP) m_menu_up = true;
 				if (k == SDLK_DOWN) m_menu_down = true;
 				if (k == SDLK_LEFT) m_menu_left = true;
 				if (k == SDLK_RIGHT) m_menu_right = true;
-				if (k == SDLK_RETURN && !alt && !cmd) m_menu_ok = true;
-				if (k == SDLK_ESCAPE) m_menu_back = true;
+				if ((k == SDLK_RETURN && !alt && !cmd) || k == SDLK_SELECT) m_menu_ok = true;   // SELECT: a TV remote's centre key
+				if (k == SDLK_ESCAPE || k == SDLK_AC_BACK) m_menu_back = true;   // AC_BACK: Android's back gesture and button
 				if (k == SDLK_n) m_menu_net = true;
 				if (k == SDLK_DELETE || k == SDLK_BACKSPACE) m_menu_clear = true;
 				if (fs_key)
@@ -966,6 +1226,7 @@ const char *app::screen_name() const
 	case screen::controls: return "controls";
 	case screen::news: return "news";
 	case screen::pause: return "pause";
+	case screen::touch_arrange: return "touch_arrange";
 	}
 	return "?";
 }
@@ -1013,6 +1274,8 @@ void app::script_tick()
 			break;
 		}
 		case pad_script::action::log: SDL_Log("pad script line %d: %s", a.line, a.text.c_str()); break;
+		case pad_script::action::background: went_background(); break;
+		case pad_script::action::foreground: came_foreground(); break;
 		case pad_script::action::quit: m_quit = true; break;
 		case pad_script::action::drop:
 		{
@@ -1083,10 +1346,67 @@ cabinet_inputs app::gather_inputs()
 		q.up |= on(A_UP); q.down |= on(A_DOWN); q.left |= on(A_LEFT); q.right |= on(A_RIGHT);
 		q.shoot |= on(A_SHOOT); q.pass |= on(A_PASS); q.turbo |= on(A_TURBO); q.start |= on(A_START); q.coin |= on(A_COIN);
 	}
+	if (touch_shown()) m_touch.apply(in.p[0]);           // the on-screen controls play as player 1 (R7.3)
 	in.test = m_test;
 	in.service = ks[SDL_SCANCODE_9] != 0;
 	add_pulses(in);
 	return in;
+}
+
+// Automatic: on a touch screen, while no controller is connected (a controller hides them,
+// and its prompts take over); On and Off as set
+bool app::touch_shown() const
+{
+	if (m_cfg.touch_mode == 2 || m_scripted) return false;
+	if (m_cfg.touch_mode == 1) return true;
+	return SDL_GetNumTouchDevices() > 0 && m_pads.empty();
+}
+
+void app::update_hud(bool show)
+{
+	m_gl.show_hud(show);
+	if (!show) { m_touch.clear(); return; }   // fingers held when the controls go away are let go
+	int ww, wh;
+	m_gl.drawable_size(ww, wh);
+	// drawn at most 1600 wide (it is stretched to the window, and soft edges hide that)
+	int w = std::min(ww, 1600), h = std::max(1, wh * w / std::max(1, ww));
+	cabinet_inputs::player p{};
+	m_touch.apply(p);
+	std::string key = m_touch.layout.save() + (m_touch.arranging ? "A" : "") + std::to_string(w) + "x" + std::to_string(h) +
+	                  char('0' + p.up) + char('0' + p.down) + char('0' + p.left) + char('0' + p.right) + char('0' + p.shoot) + char('0' + p.pass) +
+	                  char('0' + p.turbo) + char('0' + p.start) + char('0' + p.coin);
+	if (key == m_hud_key) return;
+	m_hud_key = key;
+	std::vector<uint8_t> rgba;
+	m_touch.render(rgba, w, h);
+	m_gl.set_hud(rgba.data(), w, h);
+}
+
+// Settings, Touch, Arrange: the controls over a plain screen; a finger drags them; Back keeps
+// the new places
+void app::touch_arrange_frame()
+{
+	ui_frame_begin();
+	ui::event ev;
+	while (ui_next(ev)) {}
+	if (m_menu_back)
+	{
+		m_touch.arranging = false;
+		m_touch.clear();
+		m_cfg.touch_layout = m_touch.layout.save();
+		save_config(m_cfgpath, m_cfg);
+		SDL_Log("touch layout saved: %s", m_cfg.touch_layout.c_str());
+		message("Touch controls placed", 2500);
+		m_screen = screen::settings;
+		return;
+	}
+	canvas cv(ui::screen::kW, ui::screen::kH);
+	cv.fill(0, 0, cv.w, cv.h, 0xff1a1a24);
+	cv.text(120, 136, "Drag the controls", 0xffffffff);
+	cv.text(96, 150, "where your thumbs rest.", 0xffffffff);
+	cv.text(88, 172, "Swipe back (or Esc) to keep them.", 0xffa0a0b0);
+	present(cv.px.data(), cv.w, cv.h, false);
+	SDL_Delay(8);
 }
 
 // Coins and service credits from the pause menu go in as short presses, one after the
@@ -1182,7 +1502,11 @@ bool app::start_game(int index, bool net_client)
 	SDL_SetWindowTitle(m_win, (std::string("NBA JAM Recomp - ") + g.title + (m_net_game ? "   [ONLINE]" : "   [Esc: pause menu  F1: help]")).c_str());
 	SDL_ClearQueuedAudio(m_audio);
 	if (wide_missing) message("Widescreen is not available for this game: 4:3", 4000);
+#ifdef __ANDROID__
+	else if (!m_net_game) message("Back gesture: pause menu", 3000);
+#else
 	else if (!m_net_game) message("Press F1 to see the controls", 3000);
+#endif
 	if (m_mods.active_count() > 0)
 	{
 		std::string log;
@@ -1197,8 +1521,9 @@ bool app::start_game(int index, bool net_client)
 	return true;
 }
 
-void app::stop_game()
+void app::stop_game(bool keep_resume)
 {
+	if (!keep_resume) std::remove(resume_path().c_str());
 	m_wide.reset();
 	m_wide_possible = false;
 	m_presenting_wide = false;
@@ -1440,6 +1765,11 @@ void app::open_online()
 	m_online_scr = ui::screen();
 	m_local_ips = net_local_ipv4();
 	net_local_ipv6(m_local6);
+	{
+		std::string l;
+		for (const std::string &ip : m_local_ips) l += " " + ip;
+		SDL_Log("online: local addresses:%s", l.empty() ? " none" : l.c_str());
+	}
 }
 
 void app::menu_frame()
@@ -1505,6 +1835,7 @@ void app::menu_frame()
 			else if (r.id == ui::pk_news) { m_news_scr = ui::screen(); m_screen = screen::news; return; }
 			else if (r.id == ui::pk_about) { m_about_scr = ui::screen(); m_screen = screen::about; return; }
 			else if (r.id == ui::pk_romdir) open_rom_folder();
+			else if (r.id == ui::pk_romtree) open_rom_folder(true);
 			else if (r.id == ui::pk_rescan)
 			{
 				rescan_roms(now);
@@ -1545,12 +1876,14 @@ ui::settings_state app::settings_now()
 		for (size_t i = 0; i < m_overlays.size(); i++) if (m_overlays[i].name == m_cfg.overlay) st.sides = int(i) + 2;
 	st.fullscreen = m_cfg.fullscreen;
 	st.tv_margins = m_cfg.tv_margins;
+	st.frame_log = m_cfg.frame_log;
 	st.volume = m_cfg.volume;
 	st.free_play = m_cfg.dips.free_play; st.four_players = m_cfg.dips.four_players; st.video_clips = m_cfg.dips.video_clips; st.country = m_cfg.dips.country;
 	st.news = m_cfg.news;
 	st.save_states = m_cfg.save_states;
 	st.pause_buttons = m_cfg.pause_buttons;
 	st.menu_music = m_cfg.menu_music; st.menu_sounds = m_cfg.menu_sounds; st.menu_volume = m_cfg.menu_volume;
+	st.touch_mode = m_cfg.touch_mode; st.touch_size = m_touch.layout.size; st.touch_opacity = m_touch.layout.opacity;
 	return st;
 }
 
@@ -1570,6 +1903,11 @@ void app::apply_settings(const ui::settings_state &want)
 	m_cfg.save_states = want.save_states;
 	m_cfg.menu_music = want.menu_music; m_cfg.menu_sounds = want.menu_sounds; m_cfg.menu_volume = std::clamp(want.menu_volume, 0.0f, 1.0f);
 	m_cfg.tv_margins = want.tv_margins;
+	m_cfg.frame_log = want.frame_log;
+	m_cfg.touch_mode = std::clamp(want.touch_mode, 0, 2);
+	m_touch.layout.size = std::clamp(want.touch_size, touch_layout::kMinSize, touch_layout::kMaxSize);
+	m_touch.layout.opacity = std::clamp(want.touch_opacity, touch_layout::kMinOpacity, touch_layout::kMaxOpacity);
+	m_cfg.touch_layout = m_touch.layout.save();
 	if (want.fullscreen != had.fullscreen)
 	{
 		m_cfg.fullscreen = want.fullscreen;
@@ -1605,6 +1943,15 @@ void app::settings_frame()
 	{
 		ui::result r = m_settings.handle(ev);
 		if (r.what == ui::result::back) { save_config(m_cfgpath, m_cfg); m_screen = m_back_to; return; }
+		if (r.what == ui::result::activated && r.id == ui::st_touch_arrange) { m_touch.clear(); m_touch.arranging = true; m_screen = screen::touch_arrange; return; }
+		if (r.what == ui::result::activated && r.id == ui::st_touch_reset)
+		{
+			touch_layout d = touch_layout::defaults();
+			d.size = m_touch.layout.size; d.opacity = m_touch.layout.opacity;
+			m_touch.layout = d;
+			m_cfg.touch_layout = d.save();
+			message("Touch controls back in their places", 2500);
+		}
 		if (r.what == ui::result::changed)
 		{
 			ui::settings_state want = settings_now();
@@ -1738,7 +2085,11 @@ void app::kbd_open(ui::layout l, const std::string &title, const std::string &st
 {
 	m_kbd.open(l, title, start, max_len);
 	m_editing = true;
+#ifndef __ANDROID__
 	SDL_StartTextInput();
+#endif
+	// on Android, SDL would open the system keyboard over this one (R7.8); a keyboard that is
+	// plugged in types without it
 }
 
 int app::kbd_step()
@@ -2197,9 +2548,10 @@ void app::net_traversal_start()
 }
 
 // this computer's code and a line on how it was found
-std::string app::net_code_note(std::string &code)
+std::string app::net_code_note(std::string &code, std::string *longer)
 {
 	code.clear();
+	if (longer) longer->clear();
 	const bool host = m_net.role() == netplay::mode::host;
 	// IPv6 has no router in the way of the address: this computer's own address and port
 	net_addr six{};
@@ -2207,10 +2559,15 @@ std::string app::net_code_note(std::string &code)
 	std::string note = note_v4(code, host);
 	if (six.v6)
 	{
-		const bool had4 = !code.empty();
-		code = net_code_pair(had4 ? m_code4 : net_addr{}, six);
-		note = had4 ? note + " The code ends with your IPv6 address: a player with IPv6 tries that first."
-		            : "Your code holds only your IPv6 address: players with IPv6 can join with it.";
+		// with both: the short IPv4 code is the one to type; the longer one (IPv4 and IPv6
+		// together) is offered under it for when the short one does not connect, as on mobile
+		// data, where the IPv4 address is often shared by many phones
+		if (code.empty())
+		{
+			code = net_code(six);
+			note = "Your code holds only your IPv6 address: players with IPv6 can join with it.";
+		}
+		else if (longer) *longer = net_code_pair(m_code4, six);
 	}
 	// N2.3: a player who cannot reach the host goes through a player already in
 	net_addr relay = host ? m_net.relay_candidate() : net_addr{};
@@ -2277,7 +2634,7 @@ void app::net_lobby_frame()
 		st.ping = m_net.ping_ms();
 		st.count = m_net.players();
 		st.receiving = m_net.stage() == netplay::phase::transfer;
-		st.code_note = net_code_note(st.code);
+		st.code_note = net_code_note(st.code, &st.code_long);
 		st.inviting = m_net.invites();
 		st.no_answer = !host && st.slot < 0 && SDL_GetTicks() - m_join_t > 5000;
 		if (host) m_net.set_lobby_mods(net_mod_names(g.id));
@@ -2512,47 +2869,132 @@ void app::read_slots()
 	}
 }
 
-void app::save_slot(int n)
+bool app::write_state(const std::string &path, std::string &err, u32 &hash)
 {
 	std::vector<u8> mach, scripts, file;
-	std::string err;
-	if (!m_mach->save_state_to(mach)) { message("Could not save: " + m_mach->state_error(), 4000); return; }
-	if (!m_mods.save_state(scripts, err)) { message("Could not save: " + err, 4000); return; }
+	if (!m_mach->save_state_to(mach)) { err = m_mach->state_error(); return false; }
+	if (!m_mods.save_state(scripts, err)) return false;
 	state_file::header h;
 	h.build = app_version();
 	h.game = game_list()[size_t(m_cur_game)].id;
 	h.saved_at = int64_t(std::time(nullptr));
-	h.hash = m_mach->state_hash();
-	if (!state_file::pack(h, mach, scripts, file) || !write_whole_file(slot_path(n), file)) { message("Could not write " + slot_path(n), 4000); return; }
-	SDL_Log("save state: slot %d saved, game state %08x, %zu bytes", n + 1, h.hash, file.size());
+	h.hash = hash = m_mach->state_hash();
+	if (!state_file::pack(h, mach, scripts, file) || !write_whole_file(path, file)) { err = "could not write " + path; return false; }
+	return true;
+}
+
+void app::save_slot(int n)
+{
+	std::string err;
+	u32 hash = 0;
+	if (!write_state(slot_path(n), err, hash)) { message("Could not save: " + err, 4000); return; }
+	SDL_Log("save state: slot %d saved, game state %08x", n + 1, hash);
 	message("Saved in slot " + std::to_string(n + 1), 2000);
 	read_slots();
 }
 
-bool app::load_slot(int n)
+// into the running game; err is empty when there is no file
+bool app::read_state(const std::string &path, std::string &err, u32 &saved, u32 &now)
 {
 	std::vector<u8> file, mach, scripts, before;
-	std::string err;
 	state_file::header h;
-	if (!read_whole_file(slot_path(n), file)) { message("Slot " + std::to_string(n + 1) + " is empty", 2000); return false; }
-	if (!state_file::unpack(file, h, mach, scripts, err)) { message("Could not load: " + err, 4000); return false; }
-	if (h.game != game_list()[size_t(m_cur_game)].id) { message("Could not load: a state of another game", 4000); return false; }
-	if (h.build != app_version()) { message("Could not load: saved by another version (" + h.build + ")", 4000); return false; }
+	err.clear();
+	if (!read_whole_file(path, file)) return false;
+	if (!state_file::unpack(file, h, mach, scripts, err)) return false;
+	if (h.game != game_list()[size_t(m_cur_game)].id) { err = "a state of another game"; return false; }
+	if (h.build != app_version()) { err = "saved by another version (" + h.build + ")"; return false; }
 	// a machine load that fails part way leaves the machine changed: keep it as it is now
-	if (!m_mach->save_state_to(before)) { message("Could not load: " + m_mach->state_error(), 4000); return false; }
+	if (!m_mach->save_state_to(before)) { err = m_mach->state_error(); return false; }
 	bool mach_ok = true;
 	if (!m_mods.load_state(scripts, err, [&] { mach_ok = m_mach->load_state(mach); if (!mach_ok) err = m_mach->state_error(); return mach_ok; }))
 	{
 		if (!mach_ok) m_mach->load_state(before);
-		message("Could not load: " + err, 4000);
+		if (err.empty()) err = "the state could not be loaded";
 		return false;
 	}
 	if (m_audio) SDL_ClearQueuedAudio(m_audio);
 	m_join.jump();
-	const u32 now = m_mach->state_hash();
-	SDL_Log("save state: slot %d loaded, game state %08x%s", n + 1, now, now == h.hash ? ", as saved" : ", NOT as saved");
+	saved = h.hash;
+	now = m_mach->state_hash();
+	return true;
+}
+
+bool app::load_slot(int n)
+{
+	std::string err;
+	u32 saved = 0, now = 0;
+	if (!read_state(slot_path(n), err, saved, now))
+	{
+		message(err.empty() ? "Slot " + std::to_string(n + 1) + " is empty" : "Could not load: " + err, err.empty() ? 2000 : 4000);
+		return false;
+	}
+	SDL_Log("save state: slot %d loaded, game state %08x%s", n + 1, now, now == saved ? ", as saved" : ", NOT as saved");
 	message("Loaded slot " + std::to_string(n + 1), 2000);
 	return true;
+}
+
+// ---------------------------------------------------------------- put away and brought back (R7.5)
+std::string app::resume_path() const
+{
+	return path_join(path_join(m_base, "states"), "resume.state");
+}
+
+// Called on the main thread before the system stops the app (on Android the main loop is
+// then held until the app comes back, and the system may close it meanwhile without warning).
+void app::went_background()
+{
+	SDL_Log("lifecycle: put away, on %s", screen_name());
+	if (m_audio) { SDL_ClearQueuedAudio(m_audio); SDL_PauseAudioDevice(m_audio, 1); }
+	if (!m_mach || m_cur_game < 0) return;
+	if (m_net_game)
+	{
+		// the others cannot wait for a phone that is put away: the game is left, as with
+		// Leave, so their side ends at once instead of freezing (no seat is held: N4.7)
+		SDL_Log("lifecycle: online game left");
+		stop_game();
+		message("You left the online game when the app was put away", 6000);
+		return;
+	}
+	if (m_screen == screen::game) open_pause();
+	std::string err;
+	u32 hash = 0;
+	if (write_state(resume_path(), err, hash)) SDL_Log("lifecycle: game kept, game state %08x", hash);
+	else SDL_Log("lifecycle: the game could not be kept: %s", err.c_str());
+}
+
+void app::came_foreground()
+{
+	SDL_Log("lifecycle: back, on %s", screen_name());
+	if (m_audio) SDL_PauseAudioDevice(m_audio, 0);
+	std::remove(resume_path().c_str());      // the app was not closed: the game is still here
+}
+
+// On start: a game kept when the app was put away and then closed by the system goes on,
+// paused, from where it was.
+void app::resume_saved_game()
+{
+	std::vector<u8> file, mach, scripts;
+	state_file::header h;
+	std::string err;
+	const std::string path = resume_path();
+	if (!read_whole_file(path, file)) return;
+	bool ok = state_file::unpack(file, h, mach, scripts, err);
+	int index = -1;
+	for (size_t i = 0; ok && i < game_list().size(); i++)
+		if (game_list()[i].id == h.game && i < m_avail.size() && m_avail[i]) index = int(i);
+	u32 saved = 0, now = 0;
+	if (index >= 0 && start_game(index, false) && read_state(path, err, saved, now))
+	{
+		SDL_Log("lifecycle: game resumed, game state %08x%s", now, now == saved ? ", as kept" : ", NOT as kept");
+		open_pause();
+		message("Your game goes on from where you left it", 4000);
+	}
+	else
+	{
+		if (m_mach) stop_game();
+		SDL_Log("lifecycle: the kept game could not go on: %s", err.empty() ? "its game is not ready" : err.c_str());
+	}
+	std::remove(path.c_str());
 }
 
 // ---------------------------------------------------------------- pause menu (U5)
@@ -2708,6 +3150,40 @@ bool app::pause_frame()
 // Where the user's files live (R1.4): next to the executable for a portable copy, the
 // per-user folder otherwise. An installed copy that finds an older setup next to the
 // executable offers to move it, once.
+#ifdef __ANDROID__
+// R7.1: the shipped scripts, overlays and read-me files are APK assets (listed in
+// shipped.txt). They are unpacked into <private storage>/shipped on every start, which then
+// plays the part of the program's folder: seed_data_dir copies the scripts the user does
+// not have, as on the desktop.
+static std::string unpack_android_assets(const std::string &user)
+{
+	std::string base = user + "shipped/";
+	SDL_RWops *list = SDL_RWFromFile("shipped.txt", "rb");
+	if (!list) return user;
+	std::string names(size_t(SDL_RWsize(list) > 0 ? SDL_RWsize(list) : 0), '\0');
+	if (!names.empty()) SDL_RWread(list, names.data(), 1, names.size());
+	SDL_RWclose(list);
+	std::error_code ec;
+	size_t pos = 0;
+	while (pos < names.size())
+	{
+		size_t e = names.find('\n', pos);
+		std::string n = names.substr(pos, (e == std::string::npos ? names.size() : e) - pos);
+		pos = e == std::string::npos ? names.size() : e + 1;
+		if (n.empty()) continue;
+		SDL_RWops *in = SDL_RWFromFile(("shipped/" + n).c_str(), "rb");
+		if (!in) continue;
+		std::vector<char> buf(size_t(SDL_RWsize(in) > 0 ? SDL_RWsize(in) : 0));
+		if (!buf.empty()) SDL_RWread(in, buf.data(), 1, buf.size());
+		SDL_RWclose(in);
+		std::filesystem::path dst = std::filesystem::u8path(base + n);
+		std::filesystem::create_directories(dst.parent_path(), ec);
+		std::ofstream(dst, std::ios::binary).write(buf.data(), std::streamsize(buf.size()));
+	}
+	return base;
+}
+#endif
+
 void app::choose_data_folder()
 {
 	char *bp = SDL_GetBasePath();
@@ -2718,6 +3194,16 @@ void app::choose_data_folder()
 	// SDL_GetPrefPath creates the folder, so only ask for it when it will be used
 	if (!(env && *env) && !file_exists(path_join(exe, "portable.txt")))
 		if (char *pp = SDL_GetPrefPath("", "NBAJamRecomp")) { user = pp; SDL_free(pp); }
+#ifdef __ANDROID__
+	// R7.1: an app has no folder of its own beside the program (the working folder is the
+	// system root); everything lives in its private storage, so there is nothing to move
+	// (the shipped files are unpacked there). The user's own folder is the app's folder on
+	// shared storage, Android/data/<app id>/files, which a computer sees over USB, so ROMs can
+	// be copied in; the private folder only when shared storage is not there (removed card).
+	if (!user.empty()) exe = unpack_android_assets(user);
+	if (!(env && *env) && (SDL_AndroidGetExternalStorageState() & SDL_ANDROID_EXTERNAL_STORAGE_WRITE))
+		if (const char *ext = SDL_AndroidGetExternalStoragePath()) user = std::string(ext) + "/";
+#endif
 	m_paths = resolve_paths(exe, user, env);
 	if (legacy_setup_present(m_paths))
 	{
@@ -2767,6 +3253,14 @@ void app::choose_data_folder()
 	// NBAJAM_CRASH_TEST=1: crash here on purpose, to check that a dump is written
 	if (const char *ct = getenv("NBAJAM_CRASH_TEST")) if (*ct == '1') *(volatile int *)nullptr = 1;
 	SDL_Log("data folder: %s%s", m_base.c_str(), m_paths.portable ? " (portable)" : "");
+#ifdef __ANDROID__
+	{
+		// online needs the INTERNET permission: a socket that cannot be made shows here (R7.1)
+		std::string l;
+		for (const std::string &ip : net_local_ipv4()) l += " " + ip;
+		SDL_Log("network: local addresses:%s", l.empty() ? " none" : l.c_str());
+	}
+#endif
 }
 
 // The widget gallery of the menu toolkit (roadmap U1), driven by the real devices through
@@ -2789,7 +3283,7 @@ void app::gallery_loop()
 		if (m_gl.ok()) m_gl.drawable_size(dw, dh); else if (m_ren) SDL_GetRendererOutputSize(m_ren, &dw, &dh);
 		SDL_GetWindowSize(m_win, &ww, &wh);
 		// the menu picture's place, in the units the mouse reports (window points, not pixels)
-		view_rect shown = menu_view(dw, dh, ui::screen::kW, ui::screen::kH, m_cfg.tv_margins);
+		view_rect shown = menu_rect(dw, dh, ui::screen::kW, ui::screen::kH);
 		if (dw > 0 && dh > 0)
 		{
 			shown.x = shown.x * ww / dw; shown.w = shown.w * ww / dw;
@@ -2902,6 +3396,12 @@ int app::run()
 	// system at 150% or 200% display scaling (W1.4)
 	SDL_SetHint("SDL_WINDOWS_DPI_AWARENESS", "permonitorv2");
 	SDL_Log("%s", app_version_line().c_str());
+#ifdef __ANDROID__
+	// R7.1: the game is 4:3 and wider; SDL would otherwise follow the phone (portrait)
+	SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
+	// the back gesture goes to the menus as Back (SDLK_AC_BACK) instead of closing the app
+	SDL_SetHint(SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1");
+#endif
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) != 0)
 	{
 		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "NBA JAM Recomp", SDL_GetError(), nullptr);
@@ -2910,6 +3410,7 @@ int app::run()
 	choose_data_folder();
 	m_cfgpath = path_join(m_base, "nbajam_recomp.ini");
 	load_config(m_cfgpath, m_cfg);
+	if (!m_cfg.touch_layout.empty()) m_touch.layout.load(m_cfg.touch_layout);   // the saved places (R7.3); defaults otherwise
 	if (m_cfg.news) m_news.start();          // background; the menu never waits for it
 	m_cat = std::make_unique<game_catalog>(m_base);
 	m_mods.scan(path_join(m_base, "mods"), path_join(m_base, "mods.ini"));
@@ -2927,6 +3428,7 @@ int app::run()
 	want.channels = 1;
 	want.samples = 1024;
 	m_audio = SDL_OpenAudioDevice(nullptr, 0, &want, &have, 0);
+	if (m_audio && have.freq > 0) m_audio_dev_ms = int(have.samples * 1000 / have.freq);
 	if (m_audio) SDL_PauseAudioDevice(m_audio, 0);
 	if (m_audio)
 		m_msound = std::make_unique<menu_sound>(
@@ -2943,7 +3445,13 @@ int app::run()
 	// start on the first available game
 	for (size_t i = 0; i < m_avail.size(); i++) if (m_avail[i]) { m_sel = int(i); break; }
 
+	read_safe_area();
 	if (!m_script_path.empty() && !start_pad_script()) return 2;
+#ifdef __ANDROID__
+	g_bg_done = SDL_CreateSemaphore(0);
+	SDL_AddEventWatch(lifecycle_watch, nullptr);
+#endif
+	if (!m_gallery && !m_rom_art) resume_saved_game();
 	if (m_gallery) { gallery_loop(); m_quit = true; }
 	if (m_rom_art) { rom_art_loop(); m_quit = true; }
 
@@ -2965,9 +3473,14 @@ int app::run()
 			case screen::mods: mods_frame(); next = clock::now(); continue;
 			case screen::mod_detail: m_screen = screen::mods; continue;
 			case screen::controls: controls_frame(); next = clock::now(); continue;
+			case screen::touch_arrange: touch_arrange_frame(); next = clock::now(); continue;
 			case screen::game: case screen::pause: break;
 		}
+		check_power_save();
+		auto const t0 = clock::now();
 		bool ran = m_screen == screen::pause ? pause_frame() : game_frame();
+		if (ran && m_screen == screen::game && m_mach)
+			perf_frame(std::chrono::duration<double, std::milli>(clock::now() - t0).count(), m_mach->refresh_hz());
 		if (m_screen != screen::game && m_screen != screen::pause) continue;
 		if (m_net_game && !ran)
 		{
@@ -2985,7 +3498,7 @@ int app::run()
 		if (next > now && !behind) std::this_thread::sleep_for(next - now);
 		else if (now - next > std::chrono::milliseconds(100)) next = now;
 	}
-	if (m_mach) stop_game();
+	if (m_mach) stop_game(true);            // a game kept when put away stays kept (R7.5)
 	m_net.stop();
 	save_config(m_cfgpath, m_cfg);
 	for (auto *c : m_pads) SDL_GameControllerClose(c);

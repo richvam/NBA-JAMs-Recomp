@@ -25,6 +25,10 @@ public:
 	void set_overlay(const uint8_t *rgba, int w, int h);
 	bool has_overlay() const { return m_bezel != 0; }
 	void set_overlay_opacity(float o) { m_ov_opacity = o; }
+	// A transparent picture over the whole window, on top of everything (the touch controls,
+	// R7.3). RGBA, top row first, any size (stretched to the window). Null removes it.
+	void set_hud(const uint8_t *rgba, int w, int h);
+	void show_hud(bool on) { m_hud_on = on; }
 	// where the overlay goes in a window of that size (for tests)
 	static void overlay_rect(int win_w, int win_h, int img_w, int img_h, int &x, int &w);
 	// the frame just drawn with swap = false, as RGB bytes, top row first (tools/headless/viewtest)
@@ -53,6 +57,9 @@ private:
 	bool m_ov_alpha = false;
 	float m_ov_opacity = 1.0f;
 	void draw_overlay(int ww, int wh);
+	void draw_hud(int ww, int wh);
+	unsigned m_hud = 0;
+	bool m_hud_on = false;
 	unsigned m_prog[8] = {};
 	int m_nprog = 0;
 };
