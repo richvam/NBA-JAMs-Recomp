@@ -135,6 +135,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - New Lua mod cpu_vs_cpu.lua (every game): whole games between two computer teams, one after another, for watching.
 
 ### Changed
+- The README files and the in-app help describe Android: installing, adding ROMs, touch controls, and playing online against computers.
 - Android: the menus keep clear of rounded screen corners and camera cut-outs, and typing a name or code uses the game's own keyboard without the phone's keyboard opening over it.
 - Online codes: with both IPv4 and IPv6 (most phones) the code to type is the short 10-character one again; the longer code with the IPv6 address is shown under it, for when the short one does not connect.
 - Save states are now the same bytes on every build (R5.1). States saved by earlier versions do not load.
@@ -202,6 +203,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - With a controller in use, moving or resizing the window under a still mouse pointer no longer takes the focus away from the controller.
 
 ### Online
+- The lobby shows what each player plays on: Windows, Linux, macOS or Android.
 - An online game goes on when a player's network changes mid-game (a phone moving from Wi-Fi to mobile data), when the other side's router lets the new address in.
 - Widescreen and 4:3 players can play each other online: each player's choice only changes
   their own picture, never the game.

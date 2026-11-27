@@ -653,6 +653,27 @@ net_addr netplay::relay_candidate() const
 	return best ? best->addr : net_addr{};
 }
 
+netplay::platform_id netplay::this_platform()
+{
+#if defined(__ANDROID__)
+	return plat_android;
+#elif defined(_WIN32)
+	return plat_windows;
+#elif defined(__APPLE__)
+	return plat_macos;
+#elif defined(__linux__)
+	return plat_linux;
+#else
+	return plat_unknown;
+#endif
+}
+
+const char *netplay::platform_name(int p)
+{
+	static const char *n[] = { "", "Windows", "Linux", "macOS", "Android" };
+	return p > 0 && p < 5 ? n[p] : "";
+}
+
 std::vector<std::string> netplay::peer_list() const
 {
 	std::vector<std::string> v;
@@ -864,6 +885,7 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 		if (type == 'h')
 		{
 			u16 ver = r.u16_();
+			u8 plat = r.i < n ? r.u8_() : 0;
 			if (!pp)
 			{
 				wbuf w;
@@ -882,6 +904,7 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 			}
 			wbuf w;
 			w.u8_('w'); w.u8_(MAGIC); w.u32_(now); w.u32_(tsend);
+			pp->platform = plat < 5 ? plat : 0;
 			w.u8_(u8(pp->slot)); w.u8_(u8(m_nplayers));
 			w.u32_(m_key);                     // R7.7: to be found again after a network change
 			send_raw(from, w.b);
@@ -1010,7 +1033,14 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 		case 'r': stop(("rejected: " + r.str()).c_str()); return;
 		case 'b': stop(m_phase == phase::running ? "the host has closed the game" : "the host has cancelled"); return;
 		case 'w': { m_slot = r.u8_(); m_nplayers = r.u8_(); u32 k = r.u32_(); if (r.ok) m_key = k; break; }
-		case 'l': { m_nplayers = r.u8_(); m_slot = r.u8_(); std::string mods = r.str(); if (r.ok) m_lobby_mods = mods; break; }
+		case 'l':
+		{
+			m_nplayers = r.u8_(); m_slot = r.u8_(); std::string mods = r.str(); if (r.ok) m_lobby_mods = mods;
+			u8 pl[4];
+			for (int s = 0; s < 4; s++) pl[s] = r.u8_();
+			if (r.ok) for (int s = 0; s < 4; s++) m_plat[s] = pl[s] < 5 ? pl[s] : 0;
+			break;
+		}
 		case 's':
 		{
 			if (m_got_start) break;
@@ -1074,6 +1104,9 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 // ---------------------------------------------------------------------------
 void netplay::tick_host(u32 now)
 {
+	m_plat[0] = u8(claimed_platform);
+	for (int s = 1; s < 4; s++) m_plat[s] = 0;
+	for (auto &q : m_peers) if (q.slot > 0 && q.slot < 4) m_plat[q.slot] = q.platform;
 	// R7.7: a player silent for a moment: perhaps the host moved; say where it is now
 	if (m_key && m_phase != phase::lobby && now - m_moved_t >= 250)
 	{
@@ -1119,7 +1152,9 @@ void netplay::tick_host(u32 now)
 		}
 		if (m_phase == phase::lobby && slow)
 		{
-			wbuf w; hdr(w, 'l'); w.u8_(u8(m_nplayers)); w.u8_(u8(p.slot)); w.str(m_lobby_mods); send_raw(p.addr, w.b);
+			wbuf w; hdr(w, 'l'); w.u8_(u8(m_nplayers)); w.u8_(u8(p.slot)); w.str(m_lobby_mods);
+			for (int s = 0; s < 4; s++) w.u8_(platform_of(s));   // R8.1
+			send_raw(p.addr, w.b);
 		}
 		if (m_phase == phase::transfer && slow)
 		{
@@ -1230,7 +1265,7 @@ void netplay::tick_client(u32 now)
 		if (slow && (now - m_start_t >= 400 || m_slot < 0))
 		{
 			m_start_t = now;
-			wbuf w; hdr(w, 'h'); w.u16_(VERSION);
+			wbuf w; hdr(w, 'h'); w.u16_(VERSION); w.u8_(u8(claimed_platform));
 			// a code with both addresses: IPv6 first, for 1.5 s, then IPv4 (one at a time, so
 			// the host never sees the player twice)
 			if (m_target6.v6 && now - m_target6_t > 1500) m_target6 = {};

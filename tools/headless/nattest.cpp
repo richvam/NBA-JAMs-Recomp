@@ -860,6 +860,34 @@ int main(int argc, char **argv)
 		      "report: cone routers are moderate; jitter follows the spread the router adds (about 10 ms for 0..30) and is near 0 without");
 		if (loose) printf("  (NATTEST_LOOSE_TIMING: the jitter is printed, not compared, and pings up to 150 ms pass; this machine's own noise is as large)\n");
 	}
+	// ---- platforms in the lobby (R8.1) ----
+	{
+		// four players, each saying another platform: everyone sees every seat's
+		netplay h, c[3];
+		std::string err;
+		h.claimed_platform = netplay::plat_android;
+		const netplay::platform_id said[3] = { netplay::plat_windows, netplay::plat_linux, netplay::plat_macos };
+		bool ok = h.host(0, err);
+		net_addr ha{ ip4(127, 0, 0, 1), h.socket().local_port() };
+		for (int i = 0; ok && i < 3; i++) { c[i].claimed_platform = said[i]; ok = c[i].join(net_code(ha), 0, err); }
+		auto pump = [&] { h.poll(); for (auto &x : c) if (x.active()) x.poll(); };
+		auto t0 = net_now_ms();
+		auto all = [&]
+		{
+			for (auto *n : { &h, &c[0], &c[1], &c[2] })
+				if (n->platform_of(0) != netplay::plat_android || n->platform_of(1) == 0 || n->platform_of(2) == 0 || n->platform_of(3) == 0) return false;
+			return true;
+		};
+		while (ok && !all() && net_now_ms() - t0 < 6000) { pump(); sleep_ms(2); }
+		bool seen = ok && all();
+		std::string line;
+		for (int s = 0; s < 4; s++) line += std::string(s ? ", " : "") + "P" + std::to_string(s + 1) + " " + netplay::platform_name(c[2].platform_of(s));
+		printf("  as player 4 sees them: %s\n", line.c_str());
+		bool distinct = seen;
+		for (int s = 1; s < 4 && seen; s++) for (int t = s + 1; t < 4; t++) distinct = distinct && h.platform_of(s) != h.platform_of(t);
+		CHECK(seen && distinct, "platforms: four players on Android, Windows, Linux and macOS each see every seat's platform in the lobby (R8.1)");
+		h.stop(); for (auto &x : c) x.stop();
+	}
 	// ---- a network change mid-game (R7.7) ----
 	{
 		move_result p = move_play(1), h = move_play(0);
