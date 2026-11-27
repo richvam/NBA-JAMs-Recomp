@@ -203,6 +203,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - With a controller in use, moving or resizing the window under a still mouse pointer no longer takes the focus away from the controller.
 
 ### Online
+- Watching: joining a game that has already started, with the host's code, lets you watch it (up to 8 watchers). Watchers cannot slow the game down or put it out of step.
 - A player who drops out of an online game has a minute to come back: the game waits for them, and they join again with the same code and go on from where the game is. A phone put away during an online game keeps its seat.
 - The lobby shows what each player plays on: Windows, Linux, macOS or Android.
 - An online game goes on when a player's network changes mid-game (a phone moving from Wi-Fi to mobile data), when the other side's router lets the new address in.

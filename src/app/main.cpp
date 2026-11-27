@@ -554,6 +554,7 @@ private:
 	static std::vector<u8> squeeze(const std::vector<u8> &raw);
 	static bool unsqueeze(const std::vector<u8> &in, std::vector<u8> &raw);
 	unsigned m_away_msg_t = 0;
+	int m_watchers_seen = 0;
 	// N5.4: replays. Every game is recorded from its first frame (a save state, then each
 	// frame's inputs, as an online game shares them) and kept in replays/<game>/ when it ends.
 	replay m_rec;
@@ -1382,6 +1383,7 @@ cabinet_inputs app::gather_inputs()
 bool app::touch_shown() const
 {
 	if (m_cfg.touch_mode == 2 || m_scripted) return false;
+	if (m_net_game && m_net.spectator()) return false;   // N5.1: a watcher has nothing to press
 	if (m_cfg.touch_mode == 1) return true;
 	return SDL_GetNumTouchDevices() > 0 && m_pads.empty();
 }
@@ -1550,6 +1552,7 @@ void app::stop_game(bool keep_resume)
 {
 	if (!m_playing) rec_save();
 	m_rec_on = false;
+	m_watchers_seen = 0;
 	m_rec = replay();
 	m_playing = false;
 	m_play = replay();
@@ -2799,9 +2802,9 @@ void app::net_lobby_frame()
 				m_screen = screen::net_menu;
 				return;
 			}
-			SDL_Log("online: back in the game at frame %u, game state %08x", m_net.frame(), now);
+			SDL_Log("online: %s at frame %u, game state %08x", m_net.spectator() ? "watching" : "back in the game", m_net.frame(), now);
 			m_rec_on = false;
-			message("Back in the game", 3000);
+			message(m_net.spectator() ? "Watching the game (you play in the next one)" : "Back in the game", 4000);
 			m_net.client_ready(true, "");
 			return;
 		}
@@ -2838,6 +2841,14 @@ bool app::step_game(bool menu_open)
 			}
 			else SDL_Log("online: no state for the player joining again: %s", err.c_str());
 		}
+		// N5.1: the host hears who watches
+		if (m_net.role() == netplay::mode::host && m_net.watchers() != m_watchers_seen)
+		{
+			const int w = m_net.watchers();
+			message(w > m_watchers_seen ? "Someone is watching (" + std::to_string(w) + " watching)" : (w ? std::to_string(w) + " watching" : "Nobody is watching now"), 3000);
+			SDL_Log("online: %d watching", w);
+			m_watchers_seen = w;
+		}
 		const int away = m_net.away_slot();
 		if (away >= 0 && SDL_GetTicks() - m_away_msg_t >= 1000)
 		{
@@ -2848,7 +2859,7 @@ bool app::step_game(bool menu_open)
 		if (m_net.can_run())
 		{
 			cabinet_inputs local = menu_open ? menu_inputs() : gather_inputs();
-			if (!menu_open) m_mods.apply_presses(local, m_net.local_slot());   // nba.press (1.6), sent like the pad
+			if (!menu_open && !m_net.spectator()) m_mods.apply_presses(local, m_net.local_slot());   // nba.press (1.6), sent like the pad
 			cabinet_inputs in = m_net.frame_inputs(local.p[0]);
 			rec_frame(in);                                             // N5.4
 			m_mods.take_inputs(in);                                    // nba.input / nba.hold (6.F2)

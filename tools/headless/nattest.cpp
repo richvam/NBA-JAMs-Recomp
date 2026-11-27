@@ -462,6 +462,92 @@ static rejoin_result rejoin_play()
 	return res;
 }
 
+// N5.1: two players in a game; at frame 200 a third joins with the code and watches. The
+// watcher must see the same game (the running hash of the merged inputs, sent as its state),
+// both players must reach frame 600 with no desync, and the watcher must never be a seat.
+struct watch_result { bool joined = false, watching = false, played = false, same = false, no_seat = false; int watchers = 0; };
+static watch_result watch_play()
+{
+	watch_result res;
+	netplay host, cl, wt;
+	std::string err;
+	if (!host.host(0, err)) return res;
+	net_addr ha{ ip4(127, 0, 0, 1), host.socket().local_port() };
+	if (!cl.join(net_code(ha), 0, err)) return res;
+	auto pump = [&] { host.poll(); if (cl.active()) cl.poll(); if (wt.active()) wt.poll(); };
+	auto until = [&](auto done, int ms) { auto t0 = net_now_ms(); while (!done() && net_now_ms() - t0 < u32(ms)) { pump(); sleep_ms(2); } return done(); };
+	res.joined = until([&] { return cl.local_slot() == 1 && host.players() == 2; }, 4000);
+	if (!res.joined) return res;
+	host.host_start("watchtest", 9, dip_settings(), std::vector<u8>(64, 5), 4, "");
+	if (!until([&] { return cl.start_received(); }, 5000)) return res;
+	cl.client_ready(true, "");
+	if (!until([&] { return host.all_ready(); }, 5000)) return res;
+	u32 acc_h = 1, acc_c = 1, acc_w = 1;
+	auto step = [](netplay &n, u32 &acc, int who)
+	{
+		if (!n.can_run()) return;
+		cabinet_inputs::player mine{};
+		mine.right = ((n.frame() + u32(who) * 3) / 7) % 2 != 0;
+		mine.pass = (n.frame() * u32(5 + who)) % 13 == 0;
+		mine.up = who == 2;                 // a watcher pressing a button changes nothing
+		cabinet_inputs in = n.frame_inputs(mine);
+		for (int s = 0; s < 4; s++) acc = acc * 2654435761u + net_pack_input(in.p[s]) + 1;
+		n.frame_done(acc);
+	};
+	auto t0 = net_now_ms();
+	while ((host.frame() < 200 || cl.frame() < 200) && net_now_ms() - t0 < 15000)
+	{
+		pump();
+		if (host.frame() < 200) step(host, acc_h, 0);
+		if (cl.frame() < 200) step(cl, acc_c, 1);
+		sleep_ms(1);
+	}
+	if (!wt.join(net_code(ha), 0, err)) return res;
+	std::vector<u8> sent;
+	res.watching = until([&]
+	{
+		step(cl, acc_c, 1);                  // the player plays on meanwhile
+		if (host.wants_state() && sent.empty())
+		{
+			sent.assign(64 * 1024 + 4, 7);
+			for (int i = 0; i < 4; i++) sent[size_t(i)] = u8(acc_h >> (8 * i));
+			host.give_state(sent);
+		}
+		step(host, acc_h, 0);
+		if (wt.start_received() && wt.resuming() && wt.spectator() && wt.resume_state() == sent && !sent.empty())
+		{
+			const auto &st = wt.resume_state();
+			acc_w = u32(st[0]) | u32(st[1]) << 8 | u32(st[2]) << 16 | u32(st[3]) << 24;
+			wt.client_ready(true, "");
+			return true;
+		}
+		return false;
+	}, 8000);
+	res.watchers = host.watchers();
+	res.no_seat = host.players() == 2 && wt.spectator();
+	if (res.watching)
+	{
+		t0 = net_now_ms();
+		u32 ah = 0, aw = 0;
+		while ((host.frame() < 600 || cl.frame() < 600 || wt.frame() < 600) && net_now_ms() - t0 < 20000)
+		{
+			pump();
+			if (host.frame() < 600) step(host, acc_h, 0);
+			if (cl.frame() < 600) step(cl, acc_c, 1);
+			if (wt.frame() < 600) step(wt, acc_w, 2);
+			if (host.frame() == 600 && !ah) ah = acc_h;
+			if (wt.frame() == 600 && !aw) aw = acc_w;
+			sleep_ms(1);
+		}
+		res.played = host.frame() >= 600 && cl.frame() >= 600 && wt.frame() >= 600 && !host.desynced() && !cl.desynced();
+		res.same = acc_w == acc_h && acc_c == acc_h;
+	}
+	printf("  a watcher joined at frame %u: %s; %d watching, players %d; frames %u / %u / %u, %s\n", host.frame() >= 600 ? 200u : host.frame(),
+	       res.watching ? "yes" : "no", res.watchers, host.players(), host.frame(), cl.frame(), wt.frame(), res.same ? "same game" : "NOT the same game");
+	wt.stop(); cl.stop(); host.stop();
+	return res;
+}
+
 // The connection report (N2.4): host behind hk, player behind ck, each router delaying what
 // leaves it by its delay (and spread). Waits until the reports settled, then reads them.
 struct report_result { netplay::conn_type host = netplay::conn_type::unknown, player = netplay::conn_type::unknown, host_fw = netplay::conn_type::unknown; int ping_h = 0, ping_c = 0, jit_c = 0; bool direct = false; };
@@ -982,6 +1068,12 @@ int main(int argc, char **argv)
 		for (int s = 1; s < 4 && seen; s++) for (int t = s + 1; t < 4; t++) distinct = distinct && h.platform_of(s) != h.platform_of(t);
 		CHECK(seen && distinct, "platforms: four players on Android, Windows, Linux and macOS each see every seat's platform in the lobby (R8.1)");
 		h.stop(); for (auto &x : c) x.stop();
+	}
+	// ---- spectating (N5.1) ----
+	{
+		watch_result w = watch_play();
+		CHECK(w.joined && w.watching && w.watchers == 1 && w.no_seat, "spectating: joining a game in progress with the code makes a watcher, not a player");
+		CHECK(w.played && w.same, "spectating: the watcher sees the same game, and its own buttons change nothing");
 	}
 	// ---- reconnect (N4.7) ----
 	{

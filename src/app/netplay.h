@@ -164,6 +164,17 @@ public:
 	const std::vector<u8> &resume_state() const { return m_resume_state; }
 	void woke_up();                               // the app was held (a phone put away): forget that silence
 	int rejoins() const { return m_rejoins; }     // host: players taken back by joining again
+
+	// --- spectating (roadmap N5.1) ---
+	// Joining a game in progress with the code, when no seat is held, makes a watcher: it gets
+	// the game where it stands (as a player joining again does) and then the merged inputs,
+	// and runs the game itself. It sends only what it has received: no input, and its game
+	// state is not compared, so a watcher cannot slow the game down or cause a desync.
+	static constexpr u8 WATCHER = 255;            // the seat number a watcher is given
+	static constexpr int MAX_WATCHERS = 8;
+	bool allow_watchers = true;                   // host
+	bool spectator() const { return m_slot == WATCHER; }
+	int watchers() const { return int(m_watchers.size()); }   // host
 	u32 relay_after_ms = 3000;
 
 	// --- mesh for four players (roadmap N2.5) ---
@@ -207,6 +218,7 @@ private:
 		bool start_acked = false;
 		int ping = 0, jitter = 0, last_rtt = 0;
 		u8 platform = 0;         // R8.1: as it said in its hello
+		bool watcher = false;    // N5.1: watching, no seat
 		bool away = false;       // N4.7: silent in a game; its seat is held
 		bool rejoin = false;     // N4.7: joined again; the game is being sent to it
 		u32 away_since = 0;
@@ -276,6 +288,7 @@ private:
 	std::vector<u8> m_resume_blob, m_resume_state;
 	int m_rejoins = 0;
 	void parse_resume();
+	std::vector<peer> m_watchers;   // N5.1 (host)
 	int m_moves = 0;
 	void send_moved(const net_addr &to, int slot, u32 now);
 	dip_settings m_dips;
