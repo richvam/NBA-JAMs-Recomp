@@ -12,6 +12,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 ## Unreleased
 
 ### Added
+- NBA JAM T.E. Special Edition and NBA Maximum Hangtime 1.3 load from pre-built ROMs in the roms folder: the program ROM chips, or the program.bin, gfx.bin and sound/ of a build from tools/build_roms.sh (a folder or a zip of it), with no source repository needed.
 - Releases include the Android APK (64-bit ARM, Android 5 or later), listed on the release page with how to add ROMs on Android.
 - Settings, Video: "Log frame times" writes how long frames take, late frames and the audio delay to frame_times.log. On Android the CRT looks now step down by themselves on a slow phone, and the battery saver keeps the picture at Smooth.
 - Android: putting the app away pauses the game and stops its sound; if Android closes the app meanwhile, the game goes on from the same place on the next start. An online game is left instead of freezing the others.

@@ -98,7 +98,9 @@ void rom_pool::add_dir(const std::string &dir)
 		if (sz > 64 * 1024 * 1024) continue;
 		std::vector<uint8_t> d;
 		if (!read_whole_file(full, d)) continue;
-		add(entry{ full, "", crc32_of(d.data(), d.size()), d.size() }, name);
+		entry e{ full, "", crc32_of(d.data(), d.size()), d.size() };
+		add(e, name);
+		add_lanes(e, d);
 	}
 }
 
@@ -122,7 +124,9 @@ void rom_pool::add_tree(const std::string &dir, int depth)
 		if (!romlike) continue;
 		std::vector<uint8_t> d;
 		if (!read_whole_file(full, d)) continue;
-		add(entry{ full, "", crc32_of(d.data(), d.size()), d.size() }, u8s(it.path().filename()));
+		entry e{ full, "", crc32_of(d.data(), d.size()), d.size() };
+		add(e, u8s(it.path().filename()));
+		add_lanes(e, d);
 	}
 }
 
@@ -138,13 +142,80 @@ void rom_pool::add_zip(const std::string &zippath)
 		std::string name = st.m_filename;
 		auto slash = name.find_last_of("/\\");
 		std::string base = slash == std::string::npos ? name : name.substr(slash + 1);
-		add(entry{ zippath, name, uint32_t(st.m_crc32), size_t(st.m_uncomp_size) }, base);
+		entry e{ zippath, name, uint32_t(st.m_crc32), size_t(st.m_uncomp_size) };
+		add(e, base);
+		// only program.bin is unpacked during the scan: other 1 MB files in zips are ROM chips
+		if (e.size == 0x100000 && lower(base) == "program.bin")
+		{
+			size_t sz = 0;
+			void *p = mz_zip_reader_extract_to_heap(&zip, i, &sz, 0);
+			if (p)
+			{
+				std::vector<uint8_t> d(static_cast<uint8_t *>(p), static_cast<uint8_t *>(p) + sz);
+				mz_free(p);
+				add_lanes(e, d);
+			}
+		}
 	}
 	mz_zip_reader_end(&zip);
 }
 
+void rom_pool::add_lanes(const entry &e, const std::vector<uint8_t> &d)
+{
+	if (d.size() != 0x100000) return;
+	std::vector<uint8_t> h(d.size() / 2);
+	for (int lane = 0; lane < 2; lane++)
+	{
+		for (size_t i = 0; i < h.size(); i++) h[i] = d[i * 2 + lane];
+		entry v = e;
+		v.crc = crc32_of(h.data(), h.size());
+		v.size = h.size();
+		v.lane = lane;
+		m_bycrc.emplace(v.crc, v);   // CRC only: the name belongs to the whole image
+	}
+}
+
+static void take_lane(std::vector<uint8_t> &out, int lane)
+{
+	if (lane < 0) return;
+	std::vector<uint8_t> h(out.size() / 2);
+	for (size_t i = 0; i < h.size(); i++) h[i] = out[i * 2 + lane];
+	out.swap(h);
+}
+
+bool rom_pool::sibling(uint32_t crc, const std::string &relname, std::vector<uint8_t> &out)
+{
+	auto r = m_bycrc.equal_range(crc);
+	for (auto it = r.first; it != r.second; ++it)
+	{
+		const entry &e = it->second;
+		if (e.zipname.empty())
+		{
+			if (read_whole_file(u8s(P(e.path).parent_path() / P(relname)), out)) return true;
+			continue;
+		}
+		auto slash = e.zipname.find_last_of("/\\");
+		std::string name = (slash == std::string::npos ? std::string() : e.zipname.substr(0, slash + 1)) + relname;
+		mz_zip_archive zip{};
+		if (!mz_zip_reader_init_file(&zip, e.path.c_str(), 0)) continue;
+		size_t sz = 0;
+		void *p = mz_zip_reader_extract_file_to_heap(&zip, name.c_str(), &sz, 0);
+		mz_zip_reader_end(&zip);
+		if (p) { out.assign(static_cast<uint8_t *>(p), static_cast<uint8_t *>(p) + sz); mz_free(p); return true; }
+	}
+	return false;
+}
+
 bool rom_pool::load(const entry &e, std::vector<uint8_t> &out)
 {
+	if (e.lane >= 0)
+	{
+		entry w = e;
+		w.lane = -1;
+		if (!load(w, out)) return false;
+		take_lane(out, e.lane);
+		return true;
+	}
 	if (e.zipname.empty()) return read_whole_file(e.path, out);
 	mz_zip_archive zip{};
 	if (!mz_zip_reader_init_file(&zip, e.path.c_str(), 0)) return false;
