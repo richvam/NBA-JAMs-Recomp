@@ -88,6 +88,9 @@ struct mod_script
 	const mod_option *find_option(const std::string &id) const;
 };
 
+// where a script's messages and errors also go (the program's log file); null: only stderr
+inline void (*g_mod_log)(const char *line) = nullptr;
+
 class mod_manager
 {
 public:

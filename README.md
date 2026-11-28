@@ -198,6 +198,7 @@ The keyboard also has shortcuts for what is in those menus:
 | F6 | scanline strength |
 | F7 | shape: Original 4:3, Widescreen, or Stretch (fills the window, distorts the picture). Widescreen is true widescreen on all five games: during play you see more of the court, as wide as the window, nothing stretched; fixed screens stay 4:3, and the players' names and turbo bars spread out to the sides. It needs the game's symbol file in `mods/sym` (included); without it F7 skips Widescreen. |
 | F8 | around the 4:3 picture on a wider screen: black, the picture blurred and dimmed, then each overlay in the `overlays` folder (see [Overlays](#overlays-and-borders)) |
+| F10 | frame times (frame rate, frame time, graph), like MangoHUD |
 | F11 or Alt+Enter (Mac: also Ctrl+Cmd+F or Cmd+Return) | fullscreen |
 | F12 or Print Screen | screenshot, saved in `screenshots` (on a Mac laptop the F keys may need fn) |
 | P | pause without the menu |
@@ -383,7 +384,7 @@ Included:
 | `practice.lua` | Every game: a practice game. The game clock stands still, so the quarter never ends, and there is no shot clock. Each can be switched back on. Turn the script off to end the game. |
 | `show_info.lua` | T.E. and SE: during play, one line per player at the bottom (or top) of the screen with field goals and percentage, threes, a turbo bar, and the player's baskets in a row or ON FIRE. |
 | `stats_export.lua` | T.E. and SE: when a game ends, adds its box score to `stats/<game>_box.csv` (one row per player: teams, score, points, shots, threes, dunks, free throws, rebounds, assists, steals, blocks, human or CPU) and `stats/<game>_games.jsonl` (one JSON line per game). |
-| `cpu_vs_cpu.lua` | Every game: starts whole games between two computer teams, for watching. From attract mode it starts a game, picks a random team (not on NBA JAM 1993), and lets the computer play all four players through four quarters; then the next game starts, or attract mode comes back. Turn it off to play yourself. |
+| `cpu_vs_cpu.lua` | Every game: starts whole games between two computer teams, for watching. From attract mode it starts a game, picks a random team (not on NBA JAM 1993), and lets the computer play all four players through four quarters; then the next game starts, or attract mode comes back. "Label players: CPU" shows CPU VS CPU in play, and on Hangtime and Maximum Hangtime keeps the drones' tags from showing player 1. Turn it off to play yourself. |
 | `hitboxes.lua` | T.E. and SE, during play: draws what the game tests on the overlay. Each player's body box (blue team 1, red team 2) with its depth on the floor, the ball reach used for steals and blocks (filled while a steal or block is on), the push reach while a push is on, the ball and the rims. Each layer can be turned off. |
 | `auto_initials.lua` | T.E. and SE: when a player joins, enters the initials and birthday set in the options with that player's controls, so the saved record loads without typing. Choose the players it enters for. |
 | `random_matchup.lua` | T.E. and SE: on team select, picks a random team and pair of players for the players, the computer or both. Teams can be left out one by one. |

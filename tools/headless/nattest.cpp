@@ -866,6 +866,9 @@ int main(int argc, char **argv)
 		netplay h, c[3];
 		std::string err;
 		h.claimed_platform = netplay::plat_android;
+		h.set_nickname("  Host\tName  ");          // cleaned to "HostName"
+		c[0].set_nickname("Rich");
+		c[2].set_nickname("A name far longer than sixteen");
 		const netplay::platform_id said[3] = { netplay::plat_windows, netplay::plat_linux, netplay::plat_macos };
 		bool ok = h.host(0, err);
 		net_addr ha{ ip4(127, 0, 0, 1), h.socket().local_port() };
@@ -886,6 +889,16 @@ int main(int argc, char **argv)
 		bool distinct = seen;
 		for (int s = 1; s < 4 && seen; s++) for (int t = s + 1; t < 4; t++) distinct = distinct && h.platform_of(s) != h.platform_of(t);
 		CHECK(seen && distinct, "platforms: four players on Android, Windows, Linux and macOS each see every seat's platform in the lobby (R8.1)");
+		auto names = [&]
+		{
+			for (auto *n : { &h, &c[0], &c[1], &c[2] })
+				if (n->name_of(0) != "HostName" || n->name_of(1) != "Rich" || n->name_of(2) != "Player 3" || n->name_of(3) != "A name far longe") return false;
+			return true;
+		};
+		t0 = net_now_ms();
+		while (ok && !names() && net_now_ms() - t0 < 3000) { pump(); sleep_ms(2); }
+		printf("  names as player 2 sees them: %s, %s, %s, %s\n", c[0].name_of(0).c_str(), c[0].name_of(1).c_str(), c[0].name_of(2).c_str(), c[0].name_of(3).c_str());
+		CHECK(names(), "nicknames: every player sees every seat's nickname, cleaned and cut to 16 characters, and \"Player n\" for a seat without one");
 		h.stop(); for (auto &x : c) x.stop();
 	}
 	// ---- a network change mid-game (R7.7) ----

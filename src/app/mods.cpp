@@ -1039,7 +1039,8 @@ void mod_manager::save() const
 void mod_manager::report(const mod_script &m, const std::string &s)
 {
 	std::string line = "[" + m.name + "] " + s;
-	fprintf(stderr, "mod: %s\n", line.c_str());
+	if (g_mod_log) g_mod_log(("mod: " + line).c_str());
+	else fprintf(stderr, "mod: %s\n", line.c_str());
 	m_log.push_back(line);
 }
 
