@@ -4,6 +4,8 @@
 # finger and Back keeps the new place (checked in the app's log). CI has no ROMs, so the
 # controls are not seen in a game here: tools/headless/touchtest checks what they press.
 set -euo pipefail
+# a failed check: what Android recorded of a crash, so the reason is in the CI log
+trap 'echo "--- failed: the crash log ---"; adb logcat -d -b crash | tail -80 || true' ERR
 size=$(adb shell wm size | sed -n 's/.*: *//p' | tail -1 | tr -d '\r'); W=${size%x*}; H=${size#*x}
 [ "$W" -lt "$H" ] && { t=$W; W=$H; H=$t; }
 key() { for k in "$@"; do adb shell input keyevent KEYCODE_$k; sleep 0.6; done; }

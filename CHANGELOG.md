@@ -179,6 +179,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - The README files describe the menus and the pause menu first; the F-keys are shortcuts.
 
 ### Fixed
+- Android: the app no longer closes when the screen size or density changes (a fault in the new log file when Android starts the program again in the same process).
 - "Music on" in the menus' bottom corner is no longer drawn over the Back button.
 - Android: a TV remote's centre key now chooses in the menus.
 - Android: online play could not make a socket (the app did not ask for network access); the home-network search keeps Wi-Fi from dropping broadcasts, and NAT-PMP and PCP find the router.

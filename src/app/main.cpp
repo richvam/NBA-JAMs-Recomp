@@ -132,10 +132,16 @@ static void SDLCALL sdl_out(void *, int category, SDL_LogPriority priority, cons
 static void line(const char *s) { SDL_Log("%s", s); }
 
 // before anything is logged
+// Android can run the program's main again in the same process (the activity is made
+// anew, for example when the screen density changes): then all this is already in place,
+// and taking sdl_out itself as the previous output would make every line call itself.
 static void install()
 {
-	g_mx = SDL_CreateMutex();
-	SDL_LogGetOutputFunction(&g_prev, &g_prev_data);
+	if (!g_mx) g_mx = SDL_CreateMutex();
+	SDL_LogOutputFunction cur = nullptr;
+	void *cur_data = nullptr;
+	SDL_LogGetOutputFunction(&cur, &cur_data);
+	if (cur != sdl_out) { g_prev = cur; g_prev_data = cur_data; }
 	SDL_LogSetOutputFunction(sdl_out, nullptr);
 	g_mod_log = line;
 }
@@ -148,6 +154,8 @@ static void open(const std::string &data_dir)
 	std::filesystem::create_directories(std::filesystem::u8path(dir), ec);
 	const std::string p = path_join(dir, "nbajam_recomp.log");
 	if (g_mx) SDL_LockMutex(g_mx);
+	if (g_f && g_path == p) { if (g_mx) SDL_UnlockMutex(g_mx); return; }   // main run again (Android): go on in the same file
+	if (g_f) { fclose(g_f); g_f = nullptr; }
 	g_path = p;
 	std::remove(old_path().c_str());
 	std::rename(g_path.c_str(), old_path().c_str());
