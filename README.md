@@ -97,11 +97,22 @@ computer over USB work too.
 |---|---|
 | NBA JAM (1993) | MAME romset `nbajam.zip` |
 | NBA JAM Tournament Edition | MAME romset `nbajamte.zip`, or the ZIP of the [historicalsource/nba-jam-tournament-edition](https://github.com/historicalsource/nba-jam-tournament-edition) repository (without `nbajamte.zip` it uses the Special Edition sound ROMs) |
-| NBA JAM T.E. Special Edition | the ZIP of the [Asure/nba-jam-tournament-edition-SE](https://github.com/Asure/nba-jam-tournament-edition-SE) repository |
+| NBA JAM T.E. Special Edition | the ZIP of the [Asure/nba-jam-tournament-edition-SE](https://github.com/Asure/nba-jam-tournament-edition-SE) repository, or a pre-built SE (see below) |
 | NBA Hangtime | MAME romset `nbahangt.zip` (L1.3 or L1.1) |
-| NBA Maximum Hangtime | version 1.3: the ZIP of the [historicalsource/nba-hangtime](https://github.com/historicalsource/nba-hangtime) repository plus `nbahangt.zip` (graphics and sound); or version 1.03: MAME romset `nbamht.zip` |
+| NBA Maximum Hangtime | version 1.3: the ZIP of the [historicalsource/nba-hangtime](https://github.com/historicalsource/nba-hangtime) repository plus `nbahangt.zip` (graphics and sound), or a pre-built 1.3 (see below); or version 1.03: MAME romset `nbamht.zip` |
 
 Repository ZIPs are downloaded on GitHub with "Code", then "Download ZIP".
+
+**Pre-built ROMs.** Special Edition and Maximum Hangtime 1.3 also load from ROM files that
+were already built, without the source repositories:
+
+* the program ROM chips themselves (SE: `uj12`/`ug12`; MHT 1.3: `U54`/`U63`), under any name,
+  loose or in a zip, together with the graphics and sound ROMs as above;
+* or what [`tools/build_roms.sh`](tools/build_roms.sh) writes for the game: a folder (or a zip
+  of it) holding `program.bin` and `gfx.bin`, plus `sound/u3.bin`, `u12.bin` and `u13.bin` for
+  SE. `program.bin` is recognised by its contents; `gfx.bin` and `sound/` are read from the
+  same folder. Maximum Hangtime takes its music and speech from `nbahangt.zip` when it is there
+  (they are not part of the source release), and is silent without it.
 
 ## 3. First run
 

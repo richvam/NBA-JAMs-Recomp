@@ -125,6 +125,32 @@ static const prog_version *find_version(rom_pool &p, const prog_version (&v)[N])
 	return nullptr;
 }
 
+// A pre-built game (the program.bin, gfx.bin and sound/ that tools/build_roms.sh writes)
+// copied to roms/, as a folder or a zip: program.bin is found by the CRCs of its two halves
+// (rom_pool), and gfx.bin and sound/ are read from the same folder.
+// gfx.bin sizes: 12 MB for SE; 24 MB for Maximum Hangtime (build_roms.sh cuts the empty top
+// of the 32 MB Wolf Unit image), any size from half the image up is accepted and padded
+static const size_t se_gfx_size = 0xc00000, wolf_gfx_size = 0x2000000;
+static bool build_gfx(rom_pool &p, uint32_t prog_crc, size_t size, std::vector<u8> &out)
+{
+	if (!p.sibling(prog_crc, "gfx.bin", out) || out.size() < size / 2 || out.size() > size) { out.clear(); return false; }
+	out.resize(size, 0);
+	return true;
+}
+static bool has_build_gfx(rom_pool &p, uint32_t prog_crc, size_t size)
+{
+	std::vector<u8> d;
+	return build_gfx(p, prog_crc, size, d);
+}
+static bool build_snd(rom_pool &p, uint32_t prog_crc, tunit_roms &r)
+{
+	if (!p.sibling(prog_crc, "sound/u3.bin", r.snd_u3) || !p.sibling(prog_crc, "sound/u12.bin", r.snd_u12) ||
+		!p.sibling(prog_crc, "sound/u13.bin", r.snd_u13)) return false;
+	r.snd_u3.resize(0x20000, 0xff); r.snd_u12.resize(0x80000, 0); r.snd_u13.resize(0x80000, 0);
+	return true;
+}
+static const prog_version &mht13 = mht_versions[0];
+
 static bool wolf_gfx_ok(rom_pool &p)
 {
 	for (auto &x : ht_gfx) if (!have(p, x.r)) return false;
@@ -158,8 +184,17 @@ bool game_catalog::from_roms(const game_info &g, std::string &why)
 	}
 	if (id == "nbajamse")
 	{
-		if (have_all(p, se_prog, 2) && have_all(p, se_gfx, 16) && have_all(p, se_snd, 3)) return true;
-		why = "Copy the ZIP of the nba-jam-tournament-edition-SE repository (Asure) to roms/";
+		if (have_all(p, se_prog, 2))
+		{
+			bool gfx = have_all(p, se_gfx, 16) || has_build_gfx(p, se_prog[0].crc, se_gfx_size);
+			tunit_roms t;
+			bool snd = have_all(p, se_snd, 3) || build_snd(p, se_prog[0].crc, t);
+			if (gfx && snd) return true;
+			why = !gfx ? "Graphics missing: put gfx.bin next to program.bin, or copy the ZIP of the SE repository to roms/"
+			           : "Sound ROMs missing: put sound/ next to program.bin, or copy the ZIP of the SE repository to roms/";
+			return false;
+		}
+		why = "Copy the ZIP of the nba-jam-tournament-edition-SE repository (Asure), or a pre-built SE (program.bin, gfx.bin, sound/), to roms/";
 		return false;
 	}
 	bool ht = id == "nbahangt";
@@ -168,9 +203,11 @@ bool game_catalog::from_roms(const game_info &g, std::string &why)
 		const prog_version *v = ht ? find_version(p, ht_versions) : find_version(p, mht_versions);
 		bool rest = wolf_gfx_ok(p) && have_all(p, ht_dcs, 4);
 		if (v && rest) return true;
+		// pre-built 1.3 with its own gfx.bin: music/speech come from nbahangt.zip when it is there
+		if (!ht && v == &mht13 && has_build_gfx(p, v->u54.crc, wolf_gfx_size)) return true;
 		if (!v)
 			why = ht ? "Copy the MAME romset nbahangt.zip to roms/"
-			         : "Copy the ZIP of the nba-hangtime repository (ROMS/7M_13M) or nbamht.zip (MAME) to roms/";
+			         : "Copy the ZIP of the nba-hangtime repository (ROMS/7M_13M), a pre-built 1.3 (program.bin, gfx.bin) or nbamht.zip (MAME) to roms/";
 		else
 			why = "Graphics/sound missing: copy nbahangt.zip (MAME) to roms/";
 		return false;
@@ -260,7 +297,8 @@ bool game_catalog::art_roms(const game_info &g, rom_art::roms &out)
 	if (out.wolf)
 	{
 		const prog_version *v = id == "nbahangt" ? find_version(p, ht_versions) : find_version(p, mht_versions);
-		if (v && wolf_gfx_ok(p) && load_desc(p, v->u54, lo, err) && load_desc(p, v->u63, hi, err) && load_wolf_gfx(p, out.gfx, err))
+		if (v && load_desc(p, v->u54, lo, err) && load_desc(p, v->u63, hi, err) &&
+			((wolf_gfx_ok(p) && load_wolf_gfx(p, out.gfx, err)) || build_gfx(p, v->u54.crc, wolf_gfx_size, out.gfx)))
 		{
 			interleave(lo, hi, out.program);
 			return true;
@@ -275,6 +313,7 @@ bool game_catalog::art_roms(const game_info &g, rom_art::roms &out)
 			interleave(lo, hi, out.program);
 			if (have_all(p, gfx, 16)) { if (load_tunit_lanes(p, gfx, out.gfx, err)) return true; }
 			else if (id == "nbajamte" && have_all(p, te_irw, 4) && load_tunit_irw(p, te_irw, 4, out.gfx, err)) return true;
+			else if (id == "nbajamse" && build_gfx(p, se_prog[0].crc, se_gfx_size, out.gfx)) return true;
 		}
 	}
 	// an own build from the sources (tools/build_roms.sh)
@@ -334,11 +373,16 @@ std::unique_ptr<arcade_machine> game_catalog::create(const game_info &g, std::st
 		if (!load_desc(p, prog[0], lo, err) || !load_desc(p, prog[1], hi, err)) return nullptr;
 		interleave(lo, hi, r.program);
 		if (id == "nbajam") { if (!load_tunit_lanes(p, nbajam_gfx, r.gfx, err)) return nullptr; }
-		else if (id == "nbajamse") { if (!load_tunit_lanes(p, se_gfx, r.gfx, err)) return nullptr; }
+		else if (id == "nbajamse")
+		{
+			if (have_all(p, se_gfx, 16)) { if (!load_tunit_lanes(p, se_gfx, r.gfx, err)) return nullptr; }
+			else if (!build_gfx(p, se_prog[0].crc, se_gfx_size, r.gfx)) { err = "cannot read gfx.bin"; return nullptr; }
+		}
 		else if (have_all(p, te_gfx, 16)) { if (!load_tunit_lanes(p, te_gfx, r.gfx, err)) return nullptr; }
 		else if (!load_tunit_irw(p, te_irw, 4, r.gfx, err)) return nullptr;
 		const rom_desc *snd = id == "nbajam" ? nbajam_snd : id == "nbajamse" ? se_snd : have_all(p, te_snd, 3) ? te_snd : se_snd;
-		if (!load_snd(p, snd, r, err)) return nullptr;
+		if (id == "nbajamse" && !have_all(p, se_snd, 3)) { if (!build_snd(p, se_prog[0].crc, r)) { err = "sound ROMs missing"; return nullptr; } }
+		else if (!load_snd(p, snd, r, err)) return nullptr;
 		return std::make_unique<tunit_machine>(std::move(r), id == "nbajam" ? tunit_protection::nbajam : tunit_protection::nbajamte);
 	}
 	if (wolf)
@@ -347,7 +391,8 @@ std::unique_ptr<arcade_machine> game_catalog::create(const game_info &g, std::st
 		wunit_roms r;
 		if (!load_desc(p, v->u54, lo, err) || !load_desc(p, v->u63, hi, err)) return nullptr;
 		interleave(lo, hi, r.program);
-		if (!load_wolf_gfx(p, r.gfx, err)) return nullptr;
+		if (wolf_gfx_ok(p)) { if (!load_wolf_gfx(p, r.gfx, err)) return nullptr; }
+		else if (!build_gfx(p, v->u54.crc, wolf_gfx_size, r.gfx)) { err = "cannot read gfx.bin"; return nullptr; }
 		load_dcs_words(p, r.dcs);
 		return std::make_unique<wunit_machine>(std::move(r), 528);
 	}

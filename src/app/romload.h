@@ -24,10 +24,16 @@ public:
 	// lookup by exact (case-insensitive) name, else by CRC
 	bool get(const std::string &name, uint32_t crc, std::vector<uint8_t> &out);
 	bool has(const std::string &name, uint32_t crc);
+	// a file next to the one found by 'crc' (same folder, or same folder inside the same zip),
+	// e.g. the gfx.bin of a pre-built game whose program.bin matched
+	bool sibling(uint32_t crc, const std::string &relname, std::vector<uint8_t> &out);
 private:
-	struct entry { std::string path; std::string zipname; uint32_t crc; size_t size; };
+	// lane 0/1: the even/odd bytes of an interleaved 1 MB program image (program.bin of a
+	// pre-built game), so its halves are found by the CRCs of the two program ROMs
+	struct entry { std::string path; std::string zipname; uint32_t crc; size_t size; int lane = -1; };
 	std::map<std::string, entry> m_byname;
 	std::multimap<uint32_t, entry> m_bycrc;
 	void add(const entry &e, const std::string &name);
+	void add_lanes(const entry &e, const std::vector<uint8_t> &d);
 	bool load(const entry &e, std::vector<uint8_t> &out);
 };
