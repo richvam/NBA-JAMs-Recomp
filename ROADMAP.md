@@ -1024,6 +1024,8 @@ Opus designs the room protocol; Sonnet builds the screens on the Part 2 toolkit.
 | N4.6 | Opus | **Quick join:** the open room near you with a free seat for a game you own, else the shortest queue. | Simulator picks the expected room |
 | N4.7 | Opus | **Reconnect:** a dropped player's seat is held for a short time; the game pauses or the CPU takes over per table rule; on return they receive a save state and resume. | Drop and return in `nettest`; hashes equal afterwards |
 
+**Status (N4.7):** done for today's tables (no rooms yet, so no table rule: the game waits). A player silent for 10 s during a game is not dropped: the host holds the seat for 60 s and shows "Waiting for player N to come back" with the seconds left; the players wait for the host as long. A player whose packets come back (a phone put away and brought back) simply goes on. A player whose app was closed joins again with the same code: the host takes them into the held seat and sends, in 1 KB chunks with a sliding acknowledgement (no 64-chunk limit), the game where it stands: a compressed save state (machine and Lua scripts), the inputs merged since, the player's own inputs already scheduled and the Lua mods. The player runs those frames to catch up and plays on. On Android an online game is no longer left when the app is put away. `nattest` makes a player vanish at frame 200 without a goodbye, checks the seat is held and the game waits, joins a new instance with the code (200 KB sent) and plays both to frame 600: no desync and the same hash. Not checked: with the real game and ROMs (the state of a T-Unit game is about 1.7 MB before compression), and the host being the one that goes away for more than 10 s.
+
 ## Phase N5: spectating
 
 | ID | Model | Task | Check |

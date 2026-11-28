@@ -367,6 +367,101 @@ static move_result move_play(int who)
 	return res;
 }
 
+// N4.7: a player vanishes at frame 200 (the app closed: no goodbye), the host holds the seat,
+// and a new instance joins again with the host's code. The "game" here is a running hash of
+// every merged input, which is also the "save state" the host sends: the player who comes
+// back must end with the same hash as the host, frame for frame (the desync check compares).
+struct rejoin_result { bool joined = false, held = false, back = false, played = false, same = false; int rejoins = 0; u32 at = 0; size_t blob = 0; };
+static rejoin_result rejoin_play()
+{
+	rejoin_result res;
+	netplay host;
+	netplay *cl = new netplay, cl2;
+	std::string err;
+	host.timeout_ms = 1000;
+	host.hold_ms = 20000;
+	if (!host.host(0, err)) return res;
+	net_addr ha{ ip4(127, 0, 0, 1), host.socket().local_port() };
+	if (!cl->join(net_code(ha), 0, err)) return res;
+	bool cl_alive = true;
+	auto pump = [&] { host.poll(); if (cl_alive && cl->active()) cl->poll(); if (cl2.active()) cl2.poll(); };
+	auto until = [&](auto done, int ms) { auto t0 = net_now_ms(); while (!done() && net_now_ms() - t0 < u32(ms)) { pump(); sleep_ms(2); } return done(); };
+	res.joined = until([&] { return cl->local_slot() == 1 && host.players() == 2; }, 4000);
+	if (!res.joined) return res;
+	host.host_start("rejointest", 7, dip_settings(), std::vector<u8>(64, 3), 4, "");
+	if (!until([&] { return cl->start_received(); }, 5000)) return res;
+	cl->client_ready(true, "");
+	if (!until([&] { return host.all_ready(); }, 5000)) return res;
+	// each side: its "game" is a hash of the merged inputs; its own input changes every frame
+	u32 acc_h = 1, acc_c = 1;
+	auto step = [](netplay &n, u32 &acc, int who)
+	{
+		if (!n.can_run()) return;
+		cabinet_inputs::player mine{};
+		mine.left = ((n.frame() + u32(who) * 7) / 5) % 2 != 0;
+		mine.shoot = (n.frame() * u32(3 + who)) % 11 == 0;
+		cabinet_inputs in = n.frame_inputs(mine);
+		for (int s = 0; s < 4; s++) acc = acc * 2654435761u + net_pack_input(in.p[s]) + 1;
+		n.frame_done(acc);
+	};
+	auto t0 = net_now_ms();
+	while ((host.frame() < 200 || cl->frame() < 200) && net_now_ms() - t0 < 15000)
+	{
+		pump();
+		if (host.frame() < 200) step(host, acc_h, 0);
+		if (cl->frame() < 200) step(*cl, acc_c, 1);
+		sleep_ms(1);
+	}
+	// the player's app is closed: nothing more from it (no goodbye)
+	cl_alive = false;
+	res.held = until([&] { pump(); step(host, acc_h, 0); return host.away_slot() == 1; }, 5000) && host.active();
+	// a new start of the app joins again with the code
+	std::vector<u8> sent;
+	if (!cl2.join(net_code(ha), 0, err)) return res;
+	bool given = false;
+	res.back = until([&]
+	{
+		if (host.wants_state() && !given)
+		{
+			// the "save state": the host's hash, then 200 KB that must arrive intact
+			sent.assign(200 * 1024 + 4, 0);
+			for (int i = 0; i < 4; i++) sent[size_t(i)] = u8(acc_h >> (8 * i));
+			for (size_t i = 4; i < sent.size(); i++) sent[i] = u8(i * 131 + (i >> 9));
+			res.at = host.frame();
+			host.give_state(sent);
+			given = true;
+		}
+		if (cl2.start_received() && cl2.resuming() && cl2.resume_state() == sent && !sent.empty())
+		{
+			const auto &st = cl2.resume_state();
+			acc_c = u32(st[0]) | u32(st[1]) << 8 | u32(st[2]) << 16 | u32(st[3]) << 24;
+			cl2.client_ready(true, "");
+			return true;
+		}
+		return false;
+	}, 8000);
+	res.blob = sent.size();
+	if (res.back)
+	{
+		t0 = net_now_ms();
+		while ((host.frame() < 600 || cl2.frame() < 600) && net_now_ms() - t0 < 20000 && host.active() && cl2.active())
+		{
+			pump();
+			if (host.frame() < 600) step(host, acc_h, 0);
+			if (cl2.frame() < 600) step(cl2, acc_c, 1);
+			sleep_ms(1);
+		}
+		res.played = host.frame() >= 600 && cl2.frame() >= 600 && !host.desynced() && !cl2.desynced() && host.away_slot() < 0;
+		res.same = acc_h == acc_c;
+	}
+	res.rejoins = host.rejoins();
+	printf("  player gone at frame 200, seat held: %s; joined again at frame %u (%zu bytes sent): %s; frames %u / %u, %s, rejoins %d\n",
+	       res.held ? "yes" : "no", res.at, res.blob, res.back ? "yes" : "no", host.frame(), cl2.frame(), res.same ? "same game" : "NOT the same game", res.rejoins);
+	host.stop(); cl2.stop();
+	delete cl;        // its goodbye goes to a host that has stopped
+	return res;
+}
+
 // The connection report (N2.4): host behind hk, player behind ck, each router delaying what
 // leaves it by its delay (and spread). Waits until the reports settled, then reads them.
 struct report_result { netplay::conn_type host = netplay::conn_type::unknown, player = netplay::conn_type::unknown, host_fw = netplay::conn_type::unknown; int ping_h = 0, ping_c = 0, jit_c = 0; bool direct = false; };
@@ -887,6 +982,12 @@ int main(int argc, char **argv)
 		for (int s = 1; s < 4 && seen; s++) for (int t = s + 1; t < 4; t++) distinct = distinct && h.platform_of(s) != h.platform_of(t);
 		CHECK(seen && distinct, "platforms: four players on Android, Windows, Linux and macOS each see every seat's platform in the lobby (R8.1)");
 		h.stop(); for (auto &x : c) x.stop();
+	}
+	// ---- reconnect (N4.7) ----
+	{
+		rejoin_result r = rejoin_play();
+		CHECK(r.joined && r.held, "reconnect: a player who vanishes mid-game has their seat held, and the game waits");
+		CHECK(r.back && r.played && r.same && r.rejoins == 1, "reconnect: joining again with the code, they get the game where it stands and play on in step (same hash)");
 	}
 	// ---- a network change mid-game (R7.7) ----
 	{

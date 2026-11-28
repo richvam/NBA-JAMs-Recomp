@@ -547,6 +547,12 @@ private:
 	void save_slot(int n);
 	bool load_slot(int n);
 	bool write_state(const std::string &path, std::string &err, u32 &hash);
+	bool pack_state(std::vector<u8> &file, std::string &err, u32 &hash);
+	bool load_state_bytes(const std::vector<u8> &file, std::string &err, u32 &saved, u32 &now);
+	// N4.7: a save state for a player who joins a game again, compressed (size, then zlib)
+	static std::vector<u8> squeeze(const std::vector<u8> &raw);
+	static bool unsqueeze(const std::vector<u8> &in, std::vector<u8> &raw);
+	unsigned m_away_msg_t = 0;
 	bool read_state(const std::string &path, std::string &err, u32 &saved, u32 &now);
 	// R7.5: the app put away and brought back (phones); the game is kept in states/resume.state
 	// in case the system closes the app meanwhile, and goes on from there on the next start
@@ -2750,8 +2756,30 @@ void app::net_lobby_frame()
 			m_screen = screen::net_menu;
 			return;
 		}
-		m_mach->set_nvram(m_net.start_nvram());
 		m_mach->set_dips(m_net.start_dips());
+		if (m_net.resuming())
+		{
+			// N4.7: our seat was held: the host's save state of the game where it stands
+			std::vector<u8> raw;
+			std::string err;
+			u32 saved = 0, now = 0;
+			m_mach->reset();
+			if (!unsqueeze(m_net.resume_state(), raw) || !load_state_bytes(raw, err, saved, now) || now != saved)
+			{
+				why = "the game in progress could not be loaded" + (err.empty() ? std::string() : ": " + err);
+				m_net.client_ready(false, why);
+				m_net.poll();
+				stop_game();
+				message("Network: " + why, 6000);
+				m_screen = screen::net_menu;
+				return;
+			}
+			SDL_Log("online: back in the game at frame %u, game state %08x", m_net.frame(), now);
+			message("Back in the game", 3000);
+			m_net.client_ready(true, "");
+			return;
+		}
+		m_mach->set_nvram(m_net.start_nvram());
 		m_mach->reset();
 		m_net.client_ready(true, "");
 		return;
@@ -2770,6 +2798,27 @@ bool app::step_game(bool menu_open)
 	{
 		m_net.poll();
 		if (!m_net.active()) { stop_game(); return false; }
+		if (m_net.wants_state())
+		{
+			// N4.7: a player joined again: the game where it stands, for them
+			std::vector<u8> st;
+			std::string err;
+			u32 hash = 0;
+			if (pack_state(st, err, hash))
+			{
+				std::vector<u8> z = squeeze(st);
+				SDL_Log("online: a player joins again at frame %u: state %zu bytes, %zu compressed", m_net.frame(), st.size(), z.size());
+				m_net.give_state(z);
+			}
+			else SDL_Log("online: no state for the player joining again: %s", err.c_str());
+		}
+		const int away = m_net.away_slot();
+		if (away >= 0 && SDL_GetTicks() - m_away_msg_t >= 1000)
+		{
+			m_away_msg_t = SDL_GetTicks();
+			message("Waiting for player " + std::to_string(away + 1) + " to come back: " + std::to_string((m_net.away_left_ms() + 999) / 1000) +
+			        " s (they join again with your code)", 1200);
+		}
 		if (m_net.can_run())
 		{
 			cabinet_inputs local = menu_open ? menu_inputs() : gather_inputs();
@@ -2873,7 +2922,35 @@ void app::read_slots()
 
 bool app::write_state(const std::string &path, std::string &err, u32 &hash)
 {
-	std::vector<u8> mach, scripts, file;
+	std::vector<u8> file;
+	if (!pack_state(file, err, hash)) return false;
+	if (!write_whole_file(path, file)) { err = "could not write " + path; return false; }
+	return true;
+}
+
+std::vector<u8> app::squeeze(const std::vector<u8> &raw)
+{
+	mz_ulong n = mz_compressBound(mz_ulong(raw.size()));
+	std::vector<u8> out(4 + n);
+	for (int i = 0; i < 4; i++) out[size_t(i)] = u8(raw.size() >> (8 * i));
+	if (mz_compress2(out.data() + 4, &n, raw.data(), mz_ulong(raw.size()), 6) != MZ_OK) return {};
+	out.resize(4 + n);
+	return out;
+}
+
+bool app::unsqueeze(const std::vector<u8> &in, std::vector<u8> &raw)
+{
+	if (in.size() < 4) return false;
+	mz_ulong n = mz_ulong(in[0]) | mz_ulong(in[1]) << 8 | mz_ulong(in[2]) << 16 | mz_ulong(in[3]) << 24;
+	if (n > 64u * 1024 * 1024) return false;
+	raw.assign(n, 0);
+	return mz_uncompress(raw.data(), &n, in.data() + 4, mz_ulong(in.size() - 4)) == MZ_OK && n == raw.size();
+}
+
+bool app::pack_state(std::vector<u8> &file, std::string &err, u32 &hash)
+{
+	std::vector<u8> mach, scripts;
+	file.clear();
 	if (!m_mach->save_state_to(mach)) { err = m_mach->state_error(); return false; }
 	if (!m_mods.save_state(scripts, err)) return false;
 	state_file::header h;
@@ -2881,7 +2958,7 @@ bool app::write_state(const std::string &path, std::string &err, u32 &hash)
 	h.game = game_list()[size_t(m_cur_game)].id;
 	h.saved_at = int64_t(std::time(nullptr));
 	h.hash = hash = m_mach->state_hash();
-	if (!state_file::pack(h, mach, scripts, file) || !write_whole_file(path, file)) { err = "could not write " + path; return false; }
+	if (!state_file::pack(h, mach, scripts, file)) { err = "could not pack the state"; return false; }
 	return true;
 }
 
@@ -2898,11 +2975,18 @@ void app::save_slot(int n)
 // into the running game; err is empty when there is no file
 bool app::read_state(const std::string &path, std::string &err, u32 &saved, u32 &now)
 {
-	std::vector<u8> file, mach, scripts, before;
-	state_file::header h;
+	std::vector<u8> file;
 	err.clear();
 	if (!read_whole_file(path, file)) return false;
-	if (!state_file::unpack(file, h, mach, scripts, err)) return false;
+	return load_state_bytes(file, err, saved, now);
+}
+
+bool app::load_state_bytes(const std::vector<u8> &file, std::string &err, u32 &saved, u32 &now)
+{
+	std::vector<u8> mach, scripts, before;
+	state_file::header h;
+	err.clear();
+	if (!state_file::unpack(file, h, mach, scripts, err)) { if (err.empty()) err = "not a save state"; return false; }
 	if (h.game != game_list()[size_t(m_cur_game)].id) { err = "a state of another game"; return false; }
 	if (h.build != app_version()) { err = "saved by another version (" + h.build + ")"; return false; }
 	// a machine load that fails part way leaves the machine changed: keep it as it is now
@@ -2950,11 +3034,9 @@ void app::went_background()
 	if (!m_mach || m_cur_game < 0) return;
 	if (m_net_game)
 	{
-		// the others cannot wait for a phone that is put away: the game is left, as with
-		// Leave, so their side ends at once instead of freezing (no seat is held: N4.7)
-		SDL_Log("lifecycle: online game left");
-		stop_game();
-		message("You left the online game when the app was put away", 6000);
+		// N4.7: the host holds our seat (and we wait for a host that is put away) for a
+		// minute; back sooner, the game goes on
+		SDL_Log("lifecycle: online game kept while away");
 		return;
 	}
 	if (m_screen == screen::game) open_pause();
@@ -2968,6 +3050,7 @@ void app::came_foreground()
 {
 	SDL_Log("lifecycle: back, on %s", screen_name());
 	if (m_audio) SDL_PauseAudioDevice(m_audio, 0);
+	if (m_net.active()) m_net.woke_up();     // the time away is not a lost connection
 	std::remove(resume_path().c_str());      // the app was not closed: the game is still here
 }
 
