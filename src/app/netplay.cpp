@@ -415,7 +415,12 @@ void netplay::stop(const char *reason)
 	m_stun = stun_state::off;
 	m_invites.clear();
 	m_phase = phase::ended;
-	if (reason) m_error = reason;
+	if (reason) { m_error = reason; log(std::string("online: ended: ") + reason); }
+}
+
+void netplay::log(const std::string &line) const
+{
+	if (on_log) on_log(line.c_str());
 }
 
 void netplay::reset_state()
@@ -435,6 +440,7 @@ void netplay::reset_state()
 	m_desync = false;
 	m_roster.clear(); m_roster_t = 0; m_mesh_frames = 0;
 	m_seen_as = {}; m_host_links.clear(); m_report_t = 0; m_jitter = m_last_rtt = 0;
+	for (auto &nm : m_names) nm.clear();
 	m_target = {}; m_target6 = {}; m_relay = {}; m_relay_on = false; m_routes.clear(); m_flows.clear(); m_relayed = 0; m_also_public = 0; m_lan_t = 0; m_lan_found = false;
 }
 
@@ -668,6 +674,20 @@ netplay::platform_id netplay::this_platform()
 #endif
 }
 
+std::string netplay::clean_name(const std::string &s)
+{
+	std::string o;
+	for (char c : s) if (c >= 32 && c < 127 && o.size() < NICK_MAX && !(c == ' ' && (o.empty() || o.back() == ' '))) o += c;
+	while (!o.empty() && o.back() == ' ') o.pop_back();
+	return o;
+}
+
+std::string netplay::name_of(int slot) const
+{
+	if (slot >= 0 && slot < 4 && !m_names[slot].empty()) return m_names[slot];
+	return "Player " + std::to_string(slot + 1);
+}
+
 const char *netplay::platform_name(int p)
 {
 	static const char *n[] = { "", "Windows", "Linux", "macOS", "Android" };
@@ -860,7 +880,7 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 		if (!(who->addr == from))
 		{
 			who->addr = from;
-			m_moves++;
+			m_moves++; log("online: P" + std::to_string(who->slot + 1) + " moved to " + net_addr_str(from));
 			if (m_mode == mode::client) m_target6 = {};
 			if (m_mode == mode::host) m_roster_t = 0;   // tell the others where it is now
 		}
@@ -886,6 +906,7 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 		{
 			u16 ver = r.u16_();
 			u8 plat = r.i < n ? r.u8_() : 0;
+			std::string nick = r.i < n ? clean_name(r.str()) : std::string();
 			if (!pp)
 			{
 				wbuf w;
@@ -904,6 +925,8 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 			}
 			wbuf w;
 			w.u8_('w'); w.u8_(MAGIC); w.u32_(now); w.u32_(tsend);
+			if (pp->name != nick || pp->platform != plat) log("online: P" + std::to_string(pp->slot + 1) + " " + net_addr_str(from) + " on " + platform_name(plat) + (nick.empty() ? "" : ", called \"" + nick + "\""));
+			pp->name = nick;
 			pp->platform = plat < 5 ? plat : 0;
 			w.u8_(u8(pp->slot)); w.u8_(u8(m_nplayers));
 			w.u32_(m_key);                     // R7.7: to be found again after a network change
@@ -923,7 +946,7 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 		}
 		if (type == 'b')
 		{
-			std::string who = "P" + std::to_string(pp->slot + 1);
+			std::string who = "P" + std::to_string(pp->slot + 1) + (pp->name.empty() ? "" : " (" + pp->name + ")");
 			if (m_phase == phase::lobby)
 			{
 				// renumber remaining clients
@@ -962,7 +985,7 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 			if (r.ok && hf)
 			{
 				auto it = m_hash.find(hf);
-				if (it != m_hash.end() && it->second != h) m_desync = true;
+				if (it != m_hash.end() && it->second != h) { if (!m_desync) log("online: DESYNC at frame " + std::to_string(hf) + " with P" + std::to_string(slot + 1)); m_desync = true; }
 			}
 			try_merge();
 		}
@@ -1032,13 +1055,14 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 		}
 		case 'r': stop(("rejected: " + r.str()).c_str()); return;
 		case 'b': stop(m_phase == phase::running ? "the host has closed the game" : "the host has cancelled"); return;
-		case 'w': { m_slot = r.u8_(); m_nplayers = r.u8_(); u32 k = r.u32_(); if (r.ok) m_key = k; break; }
+		case 'w': { int was = m_slot; m_slot = r.u8_(); m_nplayers = r.u8_(); u32 k = r.u32_(); if (r.ok) m_key = k; if (r.ok && was != m_slot) log("online: welcomed by " + net_addr_str(from) + " as P" + std::to_string(m_slot + 1) + " of " + std::to_string(m_nplayers)); break; }
 		case 'l':
 		{
 			m_nplayers = r.u8_(); m_slot = r.u8_(); std::string mods = r.str(); if (r.ok) m_lobby_mods = mods;
 			u8 pl[4];
 			for (int s = 0; s < 4; s++) pl[s] = r.u8_();
 			if (r.ok) for (int s = 0; s < 4; s++) m_plat[s] = pl[s] < 5 ? pl[s] : 0;
+			if (r.ok && r.i < n) for (int s = 0; s < 4; s++) m_names[s] = clean_name(r.str());
 			break;
 		}
 		case 's':
@@ -1091,7 +1115,7 @@ void netplay::handle(const net_addr &from, const u8 *p, int n)
 				if (r.ok) m_merged.emplace(first + u32(k), v);
 			}
 			u8 flags = r.u8_();
-			if (r.ok && (flags & 1)) m_desync = true;
+			if (r.ok && (flags & 1)) { if (!m_desync) log("online: DESYNC reported by the host"); m_desync = true; }
 			u32 need = r.u32_();          // next input frame the host wants from us
 			if (r.ok) pp->acked_merged = need;
 			break;
@@ -1107,6 +1131,9 @@ void netplay::tick_host(u32 now)
 	m_plat[0] = u8(claimed_platform);
 	for (int s = 1; s < 4; s++) m_plat[s] = 0;
 	for (auto &q : m_peers) if (q.slot > 0 && q.slot < 4) m_plat[q.slot] = q.platform;
+	m_names[0] = m_nick;
+	for (int s = 1; s < 4; s++) m_names[s].clear();
+	for (auto &q : m_peers) if (q.slot > 0 && q.slot < 4) m_names[q.slot] = q.name;
 	// R7.7: a player silent for a moment: perhaps the host moved; say where it is now
 	if (m_key && m_phase != phase::lobby && now - m_moved_t >= 250)
 	{
@@ -1124,7 +1151,7 @@ void netplay::tick_host(u32 now)
 				for (auto &q : m_peers) q.slot = m_nplayers++;
 				return;
 			}
-			stop(("lost the connection with P" + std::to_string(m_peers[i].slot + 1)).c_str());
+			stop(("lost the connection with P" + std::to_string(m_peers[i].slot + 1) + (m_peers[i].name.empty() ? "" : " (" + m_peers[i].name + ")")).c_str());
 			return;
 		}
 
@@ -1154,6 +1181,7 @@ void netplay::tick_host(u32 now)
 		{
 			wbuf w; hdr(w, 'l'); w.u8_(u8(m_nplayers)); w.u8_(u8(p.slot)); w.str(m_lobby_mods);
 			for (int s = 0; s < 4; s++) w.u8_(platform_of(s));   // R8.1
+			for (int s = 0; s < 4; s++) w.str(m_names[s]);       // nicknames
 			send_raw(p.addr, w.b);
 		}
 		if (m_phase == phase::transfer && slow)
@@ -1265,7 +1293,7 @@ void netplay::tick_client(u32 now)
 		if (slow && (now - m_start_t >= 400 || m_slot < 0))
 		{
 			m_start_t = now;
-			wbuf w; hdr(w, 'h'); w.u16_(VERSION); w.u8_(u8(claimed_platform));
+			wbuf w; hdr(w, 'h'); w.u16_(VERSION); w.u8_(u8(claimed_platform)); w.str(m_nick);
 			// a code with both addresses: IPv6 first, for 1.5 s, then IPv4 (one at a time, so
 			// the host never sees the player twice)
 			if (m_target6.v6 && now - m_target6_t > 1500) m_target6 = {};

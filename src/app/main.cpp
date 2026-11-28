@@ -61,6 +61,111 @@ struct key_map
 };
 
 
+
+// ---------------------------------------------------------------------------
+// The log file (logs/nbajam_recomp.log in the data folder): everything the program logs
+// with SDL_Log, the scripts' messages and the online events, for a bug report. Small on
+// purpose: the session before is kept as nbajam_recomp.old.log, a file stops growing at
+// LOG_MAX bytes (it then starts over as .old), and the same line repeated is written once
+// with a count. Lines before the data folder is known wait in memory.
+// ---------------------------------------------------------------------------
+namespace applog
+{
+static constexpr long LOG_MAX = 512 * 1024;
+static SDL_mutex *g_mx = nullptr;
+static FILE *g_f = nullptr;
+static std::string g_path, g_last;
+static long g_bytes = 0;
+static int g_repeat = 0;
+static std::vector<std::string> g_early;
+static SDL_LogOutputFunction g_prev = nullptr;
+static void *g_prev_data = nullptr;
+static const auto g_t0 = std::chrono::steady_clock::now();
+
+static std::string old_path() { return g_path.substr(0, g_path.size() - 4) + ".old.log"; }
+
+static void write_raw(const std::string &line)
+{
+	if (!g_f) { if (g_early.size() < 300) g_early.push_back(line); return; }
+	if (g_bytes > LOG_MAX)
+	{
+		// full: this one becomes .old, a new one starts
+		fclose(g_f);
+		std::remove(old_path().c_str());
+		std::rename(g_path.c_str(), old_path().c_str());
+		g_f = fopen(g_path.c_str(), "w");
+		g_bytes = 0;
+		if (!g_f) return;
+		fputs("(the log was full: the earlier lines are in nbajam_recomp.old.log)\n", g_f);
+	}
+	g_bytes += long(line.size()) + 1;
+	fputs(line.c_str(), g_f);
+	fputc('\n', g_f);
+	fflush(g_f);
+}
+
+static void add(const char *prio, const char *msg)
+{
+	if (g_mx) SDL_LockMutex(g_mx);
+	std::string m = msg;
+	if (m == g_last) g_repeat++;
+	else
+	{
+		if (g_repeat) write_raw("        (the line above " + std::to_string(g_repeat) + " more time" + (g_repeat > 1 ? "s" : "") + ")");
+		g_repeat = 0;
+		g_last = m;
+		char t[32];
+		double sec = std::chrono::duration<double>(std::chrono::steady_clock::now() - g_t0).count();
+		snprintf(t, sizeof t, "%9.3f %s ", sec, prio);
+		write_raw(t + m);
+	}
+	if (g_mx) SDL_UnlockMutex(g_mx);
+}
+
+static void SDLCALL sdl_out(void *, int category, SDL_LogPriority priority, const char *message)
+{
+	static const char *names[] = { "     ", "VERB ", "DEBUG", "INFO ", "WARN ", "ERROR", "FATAL" };
+	add(names[std::clamp(int(priority), 0, 6)], message);
+	if (g_prev) g_prev(g_prev_data, category, priority, message);   // the console / Android log as before
+}
+
+static void line(const char *s) { SDL_Log("%s", s); }
+
+// before anything is logged
+static void install()
+{
+	g_mx = SDL_CreateMutex();
+	SDL_LogGetOutputFunction(&g_prev, &g_prev_data);
+	SDL_LogSetOutputFunction(sdl_out, nullptr);
+	g_mod_log = line;
+}
+
+// once the data folder is known: the last session's log becomes .old
+static void open(const std::string &data_dir)
+{
+	std::error_code ec;
+	const std::string dir = path_join(data_dir, "logs");
+	std::filesystem::create_directories(std::filesystem::u8path(dir), ec);
+	const std::string p = path_join(dir, "nbajam_recomp.log");
+	if (g_mx) SDL_LockMutex(g_mx);
+	g_path = p;
+	std::remove(old_path().c_str());
+	std::rename(g_path.c_str(), old_path().c_str());
+	g_f = fopen(g_path.c_str(), "w");
+	if (g_f)
+	{
+		std::time_t now = std::time(nullptr);
+		char stamp[64];
+		std::strftime(stamp, sizeof stamp, "%Y-%m-%d %H:%M:%S", std::localtime(&now));
+		std::string head = std::string("NBA JAM Recomp log, started ") + stamp + " (times in seconds from the start)";
+		write_raw(head);
+		for (const std::string &l : g_early) write_raw(l);
+	}
+	g_early.clear();
+	if (g_mx) SDL_UnlockMutex(g_mx);
+}
+}
+
 #ifdef _WIN32
 // A crash on Windows writes crashes/NBAJamRecomp-<time>.dmp (a minidump: the threads' stacks
 // and the modules) and crashes/NBAJamRecomp-<time>.txt (the exception, where it happened, the
@@ -131,6 +236,7 @@ struct config
 	int shader = 3;               // 0 sharp, 1 smooth, 2 scanlines, 3 CRT, 4 CRT curved
 	view_scaling scaling = view_scaling::fit;     // F5: integer, fit, smooth (view.h)
 	float scan_strength = 0.6f;
+	bool perf_hud = false;        // perf_hud=1: frame rate and frame times over the game (F10)
 	bool frame_log = false;       // frame_time_log=1: one line per 120 game frames in frame_times.log (W5.3)
 	int max_wide = 0;             // the widest true widescreen view (W5.2): 0 as wide as the window, 1 16:9, 2 21:9
 	int side_fill = 0;            // F8: around a 4:3 picture on a wider screen: 0 black, 1 blurred picture, 2 an overlay
@@ -144,6 +250,7 @@ struct config
 	int net_port = 7845;
 	int net_delay = 4;
 	std::string net_host;
+	std::string net_name;         // the nickname the other players see online
 	std::vector<std::string> net_recent;   // hosts joined before, the last one first (U4.2)
 	bool net_upnp = true;         // N2.1: ask the router to forward the port when hosting
 	bool net_stun = true;         // N2.2: ask a STUN server for this computer's public address (its code)
@@ -186,12 +293,12 @@ static void save_config(const std::string &path, config &c)
 	f << "# NBA JAM Recomp - configuration\n[general]\n# news=1 asks github.com once at start for the latest release (only to tell you; nothing is downloaded)\nnews=" << c.news << "\n# pause_button: held on a controller for the pause menu (Esc and Guide always work): start (one second; a quick press still goes to the game), start+back or l3+r3 (half a second)\npause_button=" << (c.pause_buttons == 2 ? "l3+r3" : c.pause_buttons == 1 ? "start+back" : "start") << "\n# save_states=1 adds Save and Load (three slots per game) to the pause menu of an offline game\nsave_states=" << c.save_states << "\n# the menus play the highlighted game's own music and sounds, from its ROMs\nmenu_music=" << c.menu_music << "\nmenu_sounds=" << c.menu_sounds << "\nmenu_volume=" << c.menu_volume << "\n\n[video]\n# scale: size of the window in multiples of 400x300; 0 = chosen from the screen size\nscale=" << c.scale << "\nfullscreen=" << c.fullscreen << "\n# tv_margins=1 keeps the menus 5% in from each edge, for TVs that cut the edges off\ntv_margins=" << c.tv_margins
 	  << "\n# shader: 0 sharp, 1 smooth, 2 scanlines, 3 CRT, 4 curved CRT\nshader=" << c.shader
 	  << "\n# view: original (4:3), widescreen (more of the court in play; all five games) or stretch (fills the window, distorted).\nview=" << view_shape_id(c.shape)
-	  << "\n# scaling: integer (whole multiples of the game's lines), fit (fills the height, crisp pixels), smooth (fills the height, filtered)\nscaling=" << view_scaling_id(c.scaling) << "\n# frame_time_log=1 writes how long each 120 game frames took to draw to frame_times.log in the data folder\nframe_time_log=" << c.frame_log << "\n# max_view_width: the widest the Widescreen view gets: widest (as wide as the window, up to 1000 columns), 16:9 or 21:9; a wider window gets sides\nmax_view_width=" << (c.max_wide == 1 ? "16:9" : c.max_wide == 2 ? "21:9" : "widest") << "\n# side_fill: around a 4:3 picture on a wider screen: black, blur (the picture, blurred and dimmed), overlay (an image from overlays/ in the data folder)\nside_fill=" << (c.side_fill == 1 ? "blur" : c.side_fill == 2 ? "overlay" : "black") << "\noverlay=" << c.overlay << "\n# overlay_opacity: 0.1 to 1, for overlays with a transparent opening\noverlay_opacity=" << c.overlay_opacity << "\nscanline_strength=" << c.scan_strength
+	  << "\n# scaling: integer (whole multiples of the game's lines), fit (fills the height, crisp pixels), smooth (fills the height, filtered)\nscaling=" << view_scaling_id(c.scaling) << "\n# frame_time_log=1 writes how long each 120 game frames took to draw to frame_times.log in the data folder\nframe_time_log=" << c.frame_log << "\n# perf_hud=1 shows the frame rate and frame times over the game (F10 switches it)\nperf_hud=" << c.perf_hud << "\n# max_view_width: the widest the Widescreen view gets: widest (as wide as the window, up to 1000 columns), 16:9 or 21:9; a wider window gets sides\nmax_view_width=" << (c.max_wide == 1 ? "16:9" : c.max_wide == 2 ? "21:9" : "widest") << "\n# side_fill: around a 4:3 picture on a wider screen: black, blur (the picture, blurred and dimmed), overlay (an image from overlays/ in the data folder)\nside_fill=" << (c.side_fill == 1 ? "blur" : c.side_fill == 2 ? "overlay" : "black") << "\noverlay=" << c.overlay << "\n# overlay_opacity: 0.1 to 1, for overlays with a transparent opening\noverlay_opacity=" << c.overlay_opacity << "\nscanline_strength=" << c.scan_strength
 	  << "\n# opengl=0 uses the basic SDL renderer (no shaders)\nopengl=" << c.use_opengl
 	  << "\n\n[touch]\n# touch_controls: auto (on a touch screen while no controller is connected), on or off\ntouch_controls=" << (c.touch_mode == 1 ? "on" : c.touch_mode == 2 ? "off" : "auto")
 	  << "\n# where each control is (x,y as fractions of the window: stick, shoot, pass, turbo, start, coin), then size and opacity\ntouch_layout=" << c.touch_layout
 	  << "\n\n[audio]\nvolume=" << c.volume
-	  << "\n\n[network]\nport=" << c.net_port << "\ninput_delay=" << c.net_delay << "\nupnp=" << c.net_upnp << "\nstun=" << c.net_stun << "\nstun_server=" << c.net_stun_server << "\nlast_host=" << c.net_host << "\nrecent_hosts=" << [&] { std::string r; for (auto &h : c.net_recent) r += (r.empty() ? "" : ",") + h; return r; }()
+	  << "\n\n[network]\nport=" << c.net_port << "\ninput_delay=" << c.net_delay << "\nupnp=" << c.net_upnp << "\nstun=" << c.net_stun << "\nstun_server=" << c.net_stun_server << "\n# nickname: what the other players see you as online (up to 16 characters)\nnickname=" << c.net_name << "\nlast_host=" << c.net_host << "\nrecent_hosts=" << [&] { std::string r; for (auto &h : c.net_recent) r += (r.empty() ? "" : ",") + h; return r; }()
 	  << "\n\n[dips]\nfree_play=" << c.dips.free_play << "\nfour_players=" << c.dips.four_players
 	  << "\ncountry=" << c.dips.country << "\nvideo_clips=" << c.dips.video_clips
 	  << "\n\n[controllers]\n# profile of each player's pad (files in controller_profiles/, edit them in the Controls menu)\n";
@@ -237,6 +344,8 @@ static void load_config(const std::string &path, config &c)
 		else if (k == "touch_controls") c.touch_mode = v == "on" ? 1 : v == "off" ? 2 : 0;
 		else if (k == "touch_layout") c.touch_layout = v;
 		else if (k == "frame_time_log") c.frame_log = atoi(v.c_str()) != 0;
+		else if (k == "perf_hud") c.perf_hud = atoi(v.c_str()) != 0;
+		else if (k == "nickname") c.net_name = netplay::clean_name(v);
 		else if (k == "max_view_width") c.max_wide = v == "16:9" ? 1 : v == "21:9" ? 2 : 0;
 		else if (k == "smooth") c.smooth = atoi(v.c_str()) != 0;
 		else if (k == "scanlines") c.scanlines = atoi(v.c_str()) != 0;
@@ -518,6 +627,18 @@ private:
 		double emu_sum = 0, emu_max = 0, gap_sum = 0, gap_max = 0;
 		std::chrono::steady_clock::time_point last{};
 	} m_perf;
+	// the frame time display (F10, Settings > Video "Show frame times"): the last kHud game
+	// frames, for its graph, and the frame rate over the last half second
+	static constexpr int kHud = 120;
+	struct perf_hud
+	{
+		float gap[kHud] = {}, emu[kHud] = {};
+		int at = 0, count = 0, frames = 0;
+		double fps = 0;
+		std::chrono::steady_clock::time_point since{};
+	} m_hud;
+	void draw_perf_hud(canvas &cv);
+	unsigned m_slow_logged = 0;        // ticks of the last "frames late" log line
 	int m_audio_dev_ms = 0;            // the audio device's own buffer
 	bool m_power_save = false;         // Android's battery saver: the shader is kept at Smooth at most
 	unsigned m_power_checked = 0;
@@ -838,7 +959,19 @@ void app::perf_frame(double emu_ms, double hz)
 			if (gap > 1500.0 / hz) p.late++;     // half a frame later than the game's rate
 			p.emu_sum += emu_ms; p.emu_max = std::max(p.emu_max, emu_ms);
 			p.frames++;
+			m_hud.gap[m_hud.at] = float(gap);
+			m_hud.emu[m_hud.at] = float(emu_ms);
+			m_hud.at = (m_hud.at + 1) % kHud;
+			m_hud.count = std::min(m_hud.count + 1, kHud);
 		}
+	}
+	m_hud.frames++;
+	if (m_hud.since == std::chrono::steady_clock::time_point{}) m_hud.since = now;
+	if (double el = std::chrono::duration<double>(now - m_hud.since).count(); el >= 0.5)
+	{
+		m_hud.fps = el < 2 ? m_hud.frames / el : 0;    // 0: across a pause
+		m_hud.frames = 0;
+		m_hud.since = now;
 	}
 	p.last = now;
 	if (p.frames < frame_guard::kWindow) return;
@@ -854,6 +987,12 @@ void app::perf_frame(double emu_ms, double hz)
 	{
 		if (FILE *f = fopen(path_join(m_base, "frame_times.log").c_str(), "a")) { fprintf(f, "%s\n", line); fclose(f); }
 		SDL_Log("frame times: %s", line);
+	}
+	else if (p.late * 10 > p.frames && SDL_GetTicks() - m_slow_logged > 60000)
+	{
+		// a tenth of the frames late: worth a line in the log file, at most once a minute
+		m_slow_logged = SDL_GetTicks();
+		SDL_Log("slow frames: %s", line);
 	}
 	const auto last = p.last;
 	p = perf_window{};
@@ -1014,9 +1153,16 @@ void app::poll_events()
 			case SDL_APP_WILLENTERBACKGROUND: went_background(); break;   // iOS and others: from the queue
 #endif
 			case SDL_CONTROLLERDEVICEADDED:
-				if (SDL_GameController *c = SDL_GameControllerOpen(e.cdevice.which)) m_pads.push_back(c);
+				if (SDL_GameController *c = SDL_GameControllerOpen(e.cdevice.which))
+				{
+					m_pads.push_back(c);
+					char guid[40];
+					SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(SDL_GameControllerGetJoystick(c)), guid, sizeof guid);
+					SDL_Log("controller connected: %s (%s)", SDL_GameControllerName(c) ? SDL_GameControllerName(c) : "unnamed", guid);
+				}
 				break;
 			case SDL_CONTROLLERDEVICEREMOVED:
+				SDL_Log("controller disconnected (instance %d)", int(e.cdevice.which));
 				for (size_t i = 0; i < m_pads.size(); i++)
 					if (SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(m_pads[i])) == e.cdevice.which)
 					{
@@ -1164,6 +1310,12 @@ void app::poll_events()
 					SDL_SetWindowFullscreen(m_win, m_cfg.fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
 				}
 				if (k == SDLK_F1) m_show_help = !m_show_help;
+				if (k == SDLK_F10)
+				{
+					m_cfg.perf_hud = !m_cfg.perf_hud;
+					save_config(m_cfgpath, m_cfg);
+					message(m_cfg.perf_hud ? "Frame times: shown" : "Frame times: hidden", 1500);
+				}
 				if (k == SDLK_F12 || k == SDLK_PRINTSCREEN) m_shot = true;
 				if (k == SDLK_F4)
 				{
@@ -1469,6 +1621,7 @@ bool app::start_game(int index, bool net_client)
 	SDL_SetWindowTitle(m_win, (std::string("NBA JAM Recomp - loading ") + g.title + "...").c_str());
 	m_wide.reset();          // it watches the machine being replaced
 	m_mach = m_cat->create(g, err);
+	SDL_Log("game: %s (%s)%s%s", g.title, g.id, net_client ? ", online as a player" : m_net_game ? ", online as the host" : "", m_mach ? "" : (", FAILED: " + err).c_str());
 	if (!m_mach)
 	{
 		message("Error: " + err, 5000);
@@ -1573,6 +1726,7 @@ void app::draw_overlay(canvas &cv)
 		line("F6   scanline strength", 0xffa0e0ff);
 		line(m_wide_possible ? "F7   shape: 4:3 / widescreen / stretch" : "F7   shape: original 4:3 / stretch", 0xffa0e0ff);
 		line("F8   sides: black / blur / overlays", 0xffa0e0ff);
+		line("F10  frame times (FPS)", 0xffa0e0ff);
 		line("F11  fullscreen            - / +  volume", 0xffa0e0ff);
 		line("F12  screenshot            9  service credit", 0xffa0e0ff);
 		y += 3;
@@ -1581,7 +1735,7 @@ void app::draw_overlay(canvas &cv)
 	}
 	if (m_net_game)
 	{
-		std::string tag = "NET P" + std::to_string(m_net.local_slot() + 1) + " " + std::to_string(m_net.ping_ms()) + "ms";
+		std::string tag = "NET P" + std::to_string(m_net.local_slot() + 1) + (m_cfg.net_name.empty() ? "" : " " + m_cfg.net_name) + " " + std::to_string(m_net.ping_ms()) + "ms";
 		cv.blend(cv.w - cv.text_w(tag) - 6, 0, cv.text_w(tag) + 6, 10, 0xff000000, 140);
 		cv.text(cv.w - cv.text_w(tag) - 3, 1, tag, 0xff80ff80, 1, false);
 		if (m_net.desynced())
@@ -1595,11 +1749,55 @@ void app::draw_overlay(canvas &cv)
 				cv.text(cv.w / 2 - cv.text_w(wt) / 2, cv.h / 2 - 4, wt, 0xffffff40);
 			}
 	}
+	if (m_cfg.perf_hud) draw_perf_hud(cv);
 	if (m_paused) { std::string pt = "PAUSED"; cv.text(cv.w / 2 - cv.text_w(pt, 2) / 2, cv.h / 2 - 8, pt, 0xffffff40, 2); }
 	if (!m_message.empty() && SDL_GetTicks() < m_message_until)
 	{
 		cv.blend(0, cv.h - 14, cv.w, 14, 0xff000000, 170);
 		cv.text(4, cv.h - 11, m_message.substr(0, size_t(cv.w / 8)), 0xffffffff);
+	}
+}
+
+// The frame time display, in the menus' colours and lettering: frame rate, the time between
+// frames against the game's own rate, the emulation time, the GPU time when measured, and a
+// graph of the last kHud frames (a bar per frame; a red one was half a frame or more late).
+void app::draw_perf_hud(canvas &cv)
+{
+	const ui::theme &t = m_theme;
+	const double hz = m_mach ? std::clamp(m_mach->refresh_hz(), 30.0, 120.0) : 60.0, target = 1000.0 / hz;
+	double gap_avg = 0, gap_max = 0, emu_avg = 0;
+	for (int i = 0; i < m_hud.count; i++) { gap_avg += m_hud.gap[i]; emu_avg += m_hud.emu[i]; gap_max = std::max(gap_max, double(m_hud.gap[i])); }
+	if (m_hud.count) { gap_avg /= m_hud.count; emu_avg /= m_hud.count; }
+	auto num = [](double v, int dec) { char b[24]; snprintf(b, sizeof b, "%.*f", dec, v); return std::string(b); };
+	const int W = 168, x0 = 3, y0 = 3, gh = 18, RH = 12;
+	const bool gpu = m_gl.ok() && m_gl.gpu_timing();
+	const int rows = gpu ? 4 : 3, H = 4 + rows * RH + gh + 4;
+	cv.blend(x0, y0, W, H, t.panel, 230);
+	cv.frame(x0, y0, W, H, t.panel_edge);
+	int y = y0 + 3;
+	auto row = [&](const std::string &label, const std::string &value, const std::string &unit, u32 vc)
+	{
+		cv.text(x0 + 5, y, label, t.header, 1, false);
+		cv.text(x0 + 56, y, value, vc, 1, false);
+		cv.text(x0 + 56 + cv.text_w(value) + 6, y, unit, t.status, 1, false);
+		y += RH;
+	};
+	const bool slow = m_hud.fps > 0 && m_hud.fps < hz * 0.95;
+	row("FPS", m_hud.fps > 0 ? num(m_hud.fps, 1) : "-", "/ " + num(hz, 1), slow ? 0xffff6060 : t.value);
+	row("FRAME", num(gap_avg, 1), "MS MAX " + num(gap_max, 0), gap_max > target * 1.5 ? 0xffff6060 : t.value);
+	row("EMU", num(emu_avg, 1), "MS", emu_avg > target ? 0xffff6060 : t.value);
+	if (gpu) row("GPU", num(m_guard.last_avg, 1), "MS", t.value);
+	// the graph: target frame time at the middle line, twice it at the top
+	const int gx = x0 + 4, gy = y + 1, gw = W - 8;
+	cv.blend(gx, gy, gw, gh, 0xff000000, 120);
+	cv.fill(gx, gy + gh / 2, gw, 1, t.text_off);
+	const int n = std::min(m_hud.count, gw);
+	for (int k = 0; k < n; k++)
+	{
+		int i = ((m_hud.at - n + k) % kHud + kHud) % kHud;
+		double v = m_hud.gap[i];
+		int bh = std::clamp(int(v / (2 * target) * gh + 0.5), 1, gh);
+		cv.fill(gx + gw - n + k, gy + gh - bh, 1, bh, v > target * 1.5 ? 0xffff4040 : t.bar);
 	}
 }
 
@@ -1877,6 +2075,7 @@ ui::settings_state app::settings_now()
 	st.fullscreen = m_cfg.fullscreen;
 	st.tv_margins = m_cfg.tv_margins;
 	st.frame_log = m_cfg.frame_log;
+	st.perf_hud = m_cfg.perf_hud;
 	st.volume = m_cfg.volume;
 	st.free_play = m_cfg.dips.free_play; st.four_players = m_cfg.dips.four_players; st.video_clips = m_cfg.dips.video_clips; st.country = m_cfg.dips.country;
 	st.news = m_cfg.news;
@@ -1904,6 +2103,7 @@ void app::apply_settings(const ui::settings_state &want)
 	m_cfg.menu_music = want.menu_music; m_cfg.menu_sounds = want.menu_sounds; m_cfg.menu_volume = std::clamp(want.menu_volume, 0.0f, 1.0f);
 	m_cfg.tv_margins = want.tv_margins;
 	m_cfg.frame_log = want.frame_log;
+	m_cfg.perf_hud = want.perf_hud;
 	m_cfg.touch_mode = std::clamp(want.touch_mode, 0, 2);
 	m_touch.layout.size = std::clamp(want.touch_size, touch_layout::kMinSize, touch_layout::kMaxSize);
 	m_touch.layout.opacity = std::clamp(want.touch_opacity, touch_layout::kMinOpacity, touch_layout::kMaxOpacity);
@@ -2446,6 +2646,7 @@ void app::net_menu_frame()
 		st.typing = m_editing ? m_edit_what : 0;
 		st.typed = m_edit;
 		st.recent = m_cfg.net_recent;
+		st.nickname = m_cfg.net_name;
 		st.upnp = m_cfg.net_upnp;
 		st.stun = m_cfg.net_stun;
 		st.stun_server = m_cfg.net_stun_server;
@@ -2455,6 +2656,7 @@ void app::net_menu_frame()
 	{
 		m_edit_what = what; m_edit_join = join;
 		if (what == 1) kbd_open(ui::layout::text, "The host's code or address", start, 60);
+		else if (what == 3) kbd_open(ui::layout::text, "Your nickname online", start, netplay::NICK_MAX);
 		else kbd_open(ui::layout::number, "UDP port (1024 to 65535)", start, 5);
 	};
 	if (m_online_scr.tabs.empty()) m_online_scr = ui::make_online(state());
@@ -2465,6 +2667,13 @@ void app::net_menu_frame()
 		if (kbd_step() == 1)
 		{
 			if (m_edit_what == 1) { m_cfg.net_host = m_edit; join_now = m_edit_join && !m_edit.empty(); }
+			else if (m_edit_what == 3)
+			{
+				m_cfg.net_name = netplay::clean_name(m_edit);
+				save_config(m_cfgpath, m_cfg);
+				SDL_Log("online: nickname \"%s\"", m_cfg.net_name.c_str());
+				message(m_cfg.net_name.empty() ? "No nickname: the others see \"Player n\"" : "Nickname: " + m_cfg.net_name, 3000);
+			}
 			else
 			{
 				int port = 0;
@@ -2494,8 +2703,8 @@ void app::net_menu_frame()
 			{
 				std::string err;
 				if (!m_avail[size_t(m_sel)]) message(m_why[size_t(m_sel)], 6000);
-				else if (!m_net.host(u16(m_cfg.net_port), err)) message("Network: " + err, 6000);
-				else { net_traversal_start(); m_lobby_scr = ui::screen(); m_screen = screen::net_lobby; return; }
+				else if ((m_net.set_nickname(m_cfg.net_name), !m_net.host(u16(m_cfg.net_port), err))) { SDL_Log("online: cannot host on port %d: %s", m_cfg.net_port, err.c_str()); message("Network: " + err, 6000); }
+				else { SDL_Log("online: hosting %s on UDP port %d, delay %d, UPnP %d, STUN %d", g.id, m_cfg.net_port, m_cfg.net_delay, int(m_cfg.net_upnp), int(m_cfg.net_stun)); net_traversal_start(); m_lobby_scr = ui::screen(); m_screen = screen::net_lobby; return; }
 			}
 			else if (r.id == ui::on_join)
 			{
@@ -2504,6 +2713,7 @@ void app::net_menu_frame()
 			}
 			else if (r.id == ui::on_address) { type(1, m_cfg.net_host, false); break; }
 			else if (r.id == ui::on_port) { type(2, std::to_string(m_cfg.net_port), false); break; }
+			else if (r.id == ui::on_name) { type(3, m_cfg.net_name, false); break; }
 			else if (r.id >= ui::on_recent0 && r.id < ui::on_recent0 + int(m_cfg.net_recent.size()))
 			{
 				m_cfg.net_host = m_cfg.net_recent[size_t(r.id - ui::on_recent0)];
@@ -2514,7 +2724,8 @@ void app::net_menu_frame()
 	if (join_now)
 	{
 		std::string err;
-		if (!m_net.join(m_cfg.net_host, u16(m_cfg.net_port), err)) message("Network: " + err, 6000);
+		m_net.set_nickname(m_cfg.net_name);
+		if (!m_net.join(m_cfg.net_host, u16(m_cfg.net_port), err)) { SDL_Log("online: cannot join %s: %s", m_cfg.net_host.c_str(), err.c_str()); message("Network: " + err, 6000); }
 		else
 		{
 			// remembered, the last one first, so it is typed once (U4.2)
@@ -2523,6 +2734,7 @@ void app::net_menu_frame()
 			rc.insert(rc.begin(), m_cfg.net_host);
 			if (rc.size() > 5) rc.resize(5);
 			save_config(m_cfgpath, m_cfg);
+			SDL_Log("online: joining %s (UDP port %d, STUN %d)", m_cfg.net_host.c_str(), m_cfg.net_port, int(m_cfg.net_stun));
 			net_traversal_start();
 			m_join_t = SDL_GetTicks();
 			m_lobby_scr = ui::screen();
@@ -2655,11 +2867,13 @@ void app::net_lobby_frame()
 		const auto links = m_net.links();
 		// R8.1: what each player plays on, after the name
 		auto on = [&](int slot) { const char *p = netplay::platform_name(m_net.platform_of(slot)); return *p ? std::string(" (") + p + ")" : std::string(); };
+		// nicknames: "P2 Rich", or "Player 2" for a player who chose none
+		auto who = [&](int slot) { std::string n = m_net.name_of(slot), def = "Player " + std::to_string(slot + 1); return n == def ? n : "P" + std::to_string(slot + 1) + " " + n; };
 		if (!host)
-			for (auto &l : links) st.links.push_back({ (l.slot == 0 ? std::string("Host") : "Player " + std::to_string(l.slot + 1)) + on(l.slot), path(l) });
+			for (auto &l : links) st.links.push_back({ (l.slot == 0 ? "Host, " + who(0) : who(l.slot)) + on(l.slot), path(l) });
 		if (host)
 		{
-			st.players.push_back({ "Player 1" + on(0), "you (host)" });
+			st.players.push_back({ who(0) + on(0), "you (host)" });
 			// a peer's line is its slot, then its address, ping and whether it is ready
 			for (const std::string &p : m_net.peer_list())
 			{
@@ -2668,7 +2882,7 @@ void app::net_lobby_frame()
 				int n = slot.size() > 1 ? atoi(slot.c_str() + 1) - 1 : -1;
 				for (auto &l : links)
 					if (l.slot == n) rest = path(l) + (rest.find("ready") != std::string::npos ? ", ready" : "");
-				st.players.push_back({ "Player " + (slot.size() > 1 ? slot.substr(1) : slot) + on(n), rest });
+				st.players.push_back({ (n >= 0 ? who(n) : "Player " + slot) + on(n), rest });
 			}
 		}
 		return st;
@@ -2718,6 +2932,7 @@ void app::net_lobby_frame()
 		if (!start_game(m_sel)) { m_net_game = false; m_net.stop(); m_screen = screen::net_menu; return; }
 		m_net.host_start(g.id, m_mach->fingerprint(), m_cfg.dips, m_mach->nvram(), m_cfg.net_delay, m_mods.net_description(g.id));
 		message("Online game: " + std::to_string(m_net.players()) + " players", 3000);
+		SDL_Log("online: game started, %d players, delay %d, connection %s", m_net.players(), m_cfg.net_delay, netplay::conn_name(m_net.connection(false)));
 		return;
 	}
 	if (!host && m_net.start_received())
@@ -3254,6 +3469,7 @@ void app::choose_data_folder()
 	install_crash_dumps(m_base);
 	// NBAJAM_CRASH_TEST=1: crash here on purpose, to check that a dump is written
 	if (const char *ct = getenv("NBAJAM_CRASH_TEST")) if (*ct == '1') *(volatile int *)nullptr = 1;
+	applog::open(m_base);
 	SDL_Log("data folder: %s%s", m_base.c_str(), m_paths.portable ? " (portable)" : "");
 #ifdef __ANDROID__
 	{
@@ -3393,6 +3609,8 @@ void app::rom_art_loop()
 
 int app::run()
 {
+	applog::install();
+	m_net.on_log = applog::line;
 	SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
 	// Windows: draw at the real resolution of each monitor instead of being enlarged by the
 	// system at 150% or 200% display scaling (W1.4)
@@ -3431,6 +3649,9 @@ int app::run()
 	want.samples = 1024;
 	m_audio = SDL_OpenAudioDevice(nullptr, 0, &want, &have, 0);
 	if (m_audio && have.freq > 0) m_audio_dev_ms = int(have.samples * 1000 / have.freq);
+	SDL_Log("system: %s, %d CPUs, %d MB RAM; video %s, audio %s (%s, %d Hz, %d ms buffer)", SDL_GetPlatform(), SDL_GetCPUCount(), SDL_GetSystemRAM(),
+	        SDL_GetCurrentVideoDriver() ? SDL_GetCurrentVideoDriver() : "none", SDL_GetCurrentAudioDriver() ? SDL_GetCurrentAudioDriver() : "none",
+	        m_audio ? "open" : SDL_GetError(), have.freq, m_audio_dev_ms);
 	if (m_audio) SDL_PauseAudioDevice(m_audio, 0);
 	if (m_audio)
 		m_msound = std::make_unique<menu_sound>(

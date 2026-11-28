@@ -88,6 +88,7 @@ CONTROLS
   F6   scanline strength
   F7   shape: Original 4:3 -> Widescreen -> Stretch
   F8   around the 4:3 picture on a wide screen: black -> blurred picture -> overlays
+  F10  frame times: frame rate, frame time and a graph (Settings, Video too)
   F11  fullscreen (or Alt+Enter; on a Mac also Ctrl+Cmd+F or Cmd+Return)
   F12  screenshot (PNG in the screenshots\ folder; Print Screen works too)
   P    pause without the menu        - / +  volume
@@ -212,6 +213,8 @@ FOLDERS
   overlays\     borders shown around the picture (F8)
   saves\        each game's NVRAM
   screenshots\  screenshots (F12)
+  logs\         nbajam_recomp.log (and .old.log, the session before): send
+                it with a bug report
   mods\         Lua mods (see LUA MODS)
   stats\        files Lua mods save (box scores, drafts, ladders)
   data\         (optional) games you built with tools/build_roms.sh

@@ -1186,7 +1186,7 @@ int main(int argc, char **argv)
 		screen on = make_online(os);
 		const item *r0 = on.find(on_recent0), *r1 = on.find(on_recent0 + 1);
 		on.cur_panel = 0;
-		for (int i = 0; i < 8; i++) on.handle(ev(act::down));
+		for (int i = 0; i < 9; i++) on.handle(ev(act::down));
 		result rj = on.handle(ev(act::confirm));
 		CHECK(r0 && r1 && r0->label == "192.168.1.20" && r1->label == "my-friend.example" && rj.what == result::activated && rj.id == on_recent0 + 1 && on.focus_ok(),
 		      "Online: hosts joined before are listed, last first, and one is rejoined from the list with Confirm");
@@ -1354,6 +1354,17 @@ int main(int argc, char **argv)
 		show_settings(s, a);
 		read_settings(s, b);
 		CHECK(s.find(st_frame_log) && b.frame_log, "Settings: the frame time log switch round-trips (R7.6)");
+		a.perf_hud = true;
+		show_settings(s, a);
+		read_settings(s, b);
+		CHECK(s.find(st_perf_hud) && b.perf_hud, "Settings: the frame time display switch round-trips");
+		{
+			online_state ns;
+			ns.nickname = "Rich";
+			screen nn = make_online(ns);
+			const item *ni = nn.find(on_name);
+			CHECK(ni && ni->value_text == "Rich", "Online: the nickname shows on the Online screen");
+		}
 
 		// "Music on" at the right of the status line, only when it is set
 		theme th5;

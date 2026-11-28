@@ -84,6 +84,16 @@ public:
 	int platform_of(int slot) const { return slot >= 0 && slot < 4 ? m_plat[slot] : 0; }
 	// tests: what this side says it plays on (a test plays every platform from one computer)
 	platform_id claimed_platform = this_platform();
+	// Nicknames: what each player chose to be called (Online menu). Sent with the hello; the
+	// host shares every seat's name with the lobby. Empty: "Player n".
+	static constexpr size_t NICK_MAX = 16;
+	static std::string clean_name(const std::string &s);   // printable ASCII, trimmed, at most NICK_MAX
+	void set_nickname(const std::string &n) { m_nick = clean_name(n); }
+	const std::string &nickname() const { return m_nick; }
+	std::string name_of(int slot) const;             // the seat's nickname, or "Player n"
+	// where netplay writes the events worth having in a bug report (the program's log file);
+	// null: nowhere (the tests)
+	void (*on_log)(const char *line) = nullptr;
 	std::string error() const { return m_error; }
 	int ping_ms() const { return m_ping; }
 	bool desynced() const { return m_desync; }
@@ -190,9 +200,12 @@ private:
 		bool start_acked = false;
 		int ping = 0, jitter = 0, last_rtt = 0;
 		u8 platform = 0;         // R8.1: as it said in its hello
+		std::string name;        // its nickname, from its hello
 	};
 	u8 m_plat[4] = { 0, 0, 0, 0 };   // R8.1: each seat's platform
+	std::string m_nick, m_names[4];
 	void reset_state();
+	void log(const std::string &line) const;
 	void handle(const net_addr &from, const u8 *p, int n);
 	void send_raw(const net_addr &to, const std::vector<u8> &b);
 	void tick_host(u32 now);

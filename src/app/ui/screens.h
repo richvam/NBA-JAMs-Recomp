@@ -70,6 +70,7 @@ struct settings_state
 	bool fullscreen = false;
 	bool tv_margins = false;              // the menus kept inside the safe area of a TV (U7.2)
 	bool frame_log = false;               // frame_times.log in the data folder (W5.3, R7.6)
+	bool perf_hud = false;                // frame rate and frame times drawn over the game (F10)
 	float volume = 0.8f;
 	bool free_play = true, four_players = true, video_clips = true;
 	int country = 0;
@@ -82,7 +83,7 @@ struct settings_state
 	float touch_size = 1.0f, touch_opacity = 0.5f;
 };
 
-enum settings_id { st_shape = 1, st_scaling, st_shader, st_scanlines, st_sides, st_fullscreen, st_volume, st_free_play, st_players, st_country, st_clips, st_news, st_pause, st_menu_music, st_menu_sounds, st_menu_volume, st_tv, st_save_states, st_max_wide, st_touch, st_touch_size, st_touch_opacity, st_touch_arrange, st_touch_reset, st_frame_log };
+enum settings_id { st_shape = 1, st_scaling, st_shader, st_scanlines, st_sides, st_fullscreen, st_volume, st_free_play, st_players, st_country, st_clips, st_news, st_pause, st_menu_music, st_menu_sounds, st_menu_volume, st_tv, st_save_states, st_max_wide, st_touch, st_touch_size, st_touch_opacity, st_touch_arrange, st_touch_reset, st_frame_log, st_perf_hud };
 
 // The controller buttons held for half a second to open the pause menu (U5.1). There is no
 // "none": Esc and the Guide button always open it as well, so it can never be unbound.
@@ -152,14 +153,15 @@ struct online_state
 	std::string address;                 // of the host to join
 	int port = 7845, delay = 4;
 	std::vector<std::string> local_ips;
-	int typing = 0;                      // 1: the address is being typed, 2: the port
+	int typing = 0;                      // 1: the address is being typed, 2: the port, 3: the nickname
 	std::string typed;
+	std::string nickname;                // what the other players see this player as
 	std::vector<std::string> recent;     // hosts joined before, the last one first (U4.2)
 	bool upnp = true, stun = true;       // N2: ask the router to open the port; ask a STUN server for the public address
 	std::string stun_server;
 };
 
-enum online_id { on_host = 1, on_join, on_address, on_port, on_delay, on_upnp, on_stun, on_recent0 = 20 };
+enum online_id { on_host = 1, on_join, on_address, on_port, on_delay, on_upnp, on_stun, on_name, on_recent0 = 20 };
 
 screen make_online(const online_state &st);
 void update_online(screen &s, const online_state &st);

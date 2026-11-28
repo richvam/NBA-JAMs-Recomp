@@ -12,6 +12,9 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 ## Unreleased
 
 ### Added
+- A log file for bug reports: logs/nbajam_recomp.log in the data folder (the session before is kept as nbajam_recomp.old.log). It holds the version, the system, controllers, games started, Lua script messages and online events (joins, nicknames, address changes, disconnects, desyncs); each file stays under about 512 KB.
+- Frame time display, like MangoHUD, in the menus' lettering and colours: frame rate against the game's own rate, frame time with the longest, emulation time, GPU time and a graph of the last 120 frames. F10 or Settings, Video, "Show frame times".
+- CPU vs CPU: "Label players: CPU" (on by default) shows "CPU VS CPU" during play, and on Hangtime and Maximum Hangtime keeps player 1 from being tagged as a person over the court.
 - Releases include the Android APK (64-bit ARM, Android 5 or later), listed on the release page with how to add ROMs on Android.
 - Settings, Video: "Log frame times" writes how long frames take, late frames and the audio delay to frame_times.log. On Android the CRT looks now step down by themselves on a slow phone, and the battery saver keeps the picture at Smooth.
 - Android: putting the app away pauses the game and stops its sound; if Android closes the app meanwhile, the game goes on from the same place on the next start. An online game is left instead of freezing the others.
@@ -203,6 +206,7 @@ Sections, in this order: **Added**, **Changed**, **Fixed**, **Online**, **Known 
 - With a controller in use, moving or resizing the window under a still mouse pointer no longer takes the focus away from the controller.
 
 ### Online
+- Nicknames: Online, "Nickname" (up to 16 characters). Everyone in the lobby sees each player's nickname, and the in-game tag shows yours.
 - The lobby shows what each player plays on: Windows, Linux, macOS or Android.
 - An online game goes on when a player's network changes mid-game (a phone moving from Wi-Fi to mobile data), when the other side's router lets the new address in.
 - Widescreen and 4:3 players can play each other online: each player's choice only changes
